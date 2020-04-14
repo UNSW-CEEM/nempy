@@ -1,5 +1,5 @@
 import pandas as pd
-from nempy import markets
+from nempy import RealTimeMarket
 
 # Volume of each bid, number of bands must equal number of bands in price_bids.
 volume_bids = pd.DataFrame({
@@ -38,7 +38,7 @@ demand = pd.DataFrame({
     'demand': [100]  # MW
 })
 
-simple_market = markets.RealTime(unit_info=unit_info, dispatch_interval=5)
+simple_market = RealTimeMarket(unit_info=unit_info, dispatch_interval=5)
 simple_market.set_unit_energy_volume_bids(volume_bids)
 simple_market.set_unit_capacity_constraints(unit_limits)
 simple_market.set_unit_energy_price_bids(price_bids)
