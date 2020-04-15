@@ -10,7 +10,8 @@ Welcome to nempy's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-
+   intro
+   examples
 
 Indices and tables
 ==================

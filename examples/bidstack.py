@@ -41,6 +41,14 @@ simple_market.dispatch()
 # Return the total dispatch of each unit in MW.
 simple_market.get_energy_dispatch()
 
-# Return the price of energy in each region.
-print(simple_market.get_energy_prices())
+# returns pandas DataFrame
+#   unit  dispatch
+# 0    A      40.0
+# 1    B      80.0
 
+# Return the price of energy in each region.
+simple_market.get_energy_prices()
+
+# returns pandas DataFrame
+#   region  price
+# 0    NSW   60.0

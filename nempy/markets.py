@@ -123,7 +123,7 @@ class RealTime:
         :return:
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = unit_constraints.ramp_up(self.decision_variables['energy_units'], unit_limits,
+        lhs_coefficients, rhs_and_type = unit_constraints.ramp_down(self.decision_variables['energy_units'], unit_limits,
                                                                   self.next_constraint_id, self.dispatch_interval)
         # 2. Save constraint details.
         self.constraints_lhs_coefficients['ramp_down'] = lhs_coefficients
