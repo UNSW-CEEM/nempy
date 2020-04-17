@@ -4,6 +4,9 @@ Market. The idea is that you can start simple, like in the example below, and gr
 features such as ramping constraints, interconnectors and FCAS markets. Not all these feature are available yet, see 
 the examples to get an idea of what it can do already.
 
+## Documentation
+Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
+
 ## A very simple example
 ```python
 import pandas as pd
