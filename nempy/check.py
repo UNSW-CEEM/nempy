@@ -1,4 +1,3 @@
-import math
 
 
 def keep_details(fn):
@@ -10,6 +9,7 @@ def keep_details(fn):
 
 
 def energy_bid_ids_exist(func):
+    @keep_details(func)
     def wrapper(*args):
         if 'energy_units' not in args[0].decision_variables:
             raise ModelBuildError('Market energy constraints cannot be built before unit energy constraints.')

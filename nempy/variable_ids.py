@@ -9,22 +9,35 @@ def energy(capacity_bids, next_variable_id):
     variable is created. There is no limit on the number of bid bands and each column in the capacity_bids DataFrame
     other than unit is treated as a bid band. Volume bids should be positive numeric values only.
 
-    :param capacity_bids: DataFrame
-        unit: str
-        1: float
-        2: float
-        .
-        .
-        .
-        n: float
-    :param next_variable_id: int
-    :return: DataFrame
-        unit: str
-        capacity_band: str
-        upper_bound: float
-        variable_id: int
-        lower_bound: float
-        type: str
+    Parameters
+    ----------
+    volume_bids : pd.DataFrame
+        Bids by unit, in MW, can contain up to n bid bands.
+
+        ========  ======================================================
+        Columns:  Description:
+        unit      unique identifier of a dispatch unit (as `str`)
+        1         bid volume in the 1st band, in MW (as `float`)
+        2         bid volume in the 2nd band, in MW (as `float`)
+        n         bid volume in the nth band, in MW (as `float`)
+        ========  ======================================================
+
+    next_variable_id : int
+        The next integer to start using for variables ids.
+
+    Returns
+    -------
+    pd.DataFrame
+
+        =============  ===============================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        capacity_band  the bid band of the variable (as `str`)
+        variable_id    the id of the variable (as `int`)
+        lower_bound    the lower bound of the variable, is zero for bids (as `float`)
+        upper_bound    the upper bound of the variable, the volume bid (as `float`)
+        type           the type of variable, is continuous for bids  (as `str`)
+        =============  ===============================================================
     """
     # Get the list of columns that are bid bands.
     bid_bands = [col for col in capacity_bids.columns if col != 'unit']

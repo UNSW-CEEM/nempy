@@ -19,13 +19,15 @@ class RealTime:
         """
         Control layer method, handles the creation of decision variables corresponding to energy bids.
 
-        Create unit variable ids, a decision variable for each units bid, bids of zero MW are dropped. Updates the
-        variable id counter, the next available integer to be used as an id.
+        Creates unit variable ids, a decision variable for each units bid. Bids of zero MW are dropped. Updates the
+        variable id counter.
+
+        The data manipulation is handled by the sub function :func:`nempy.variable_ids.energy`.
 
         Parameters
         ----------
         volume_bids : pd.DataFrame
-            Volume bids by unit, can contain up to n bid bands.
+            Bids by unit, in MW, can contain up to n bid bands.
 
             ========  ======================================================
             Columns:  Description:
@@ -48,21 +50,38 @@ class RealTime:
     @check.energy_bid_ids_exist
     @check.one_one_row_per_unit
     def set_unit_energy_price_bids(self, price_bids):
-        """Control layer method, handles the creation of objective function costs corresponding to energy bids.
-
-        :param price_bids: DataFrame
-            unit: str
-                The unique name of each unit
-            1: float
-                First bid band volume in MW
-            2: float
-                second bid band volume in MW
-            n: float
-                n th bid band volume in MW
-        :return:
         """
-        self.objective_function_components['energy_bids'] = objective_function.energy(
-            self.decision_variables['energy_units'], price_bids, self.unit_info)
+        Control layer method, handles the creation of objective function costs corresponding to energy bids.
+
+        If no loss factors have been provided as part of the unit information when the model was initialised then the
+        costs in the objective function are as bid. If loss factors are provided then the bid costs are referred to the
+        regional reference node by dividing by the loss factor.
+
+        The data manipulation is handled by the sub functions :func:`nempy.objective_function.energy` and
+        :func:`nempy.objective_function.scale_by_loss_factors`.
+
+        Parameters
+        ----------
+        price_bids : pd.DataFrame
+            Bids by unit, in $/MW, can contain up to n bid bands.
+
+            ========  ======================================================
+            Columns:  Description:
+            unit      unique identifier of a dispatch unit (as `str`)
+            1         bid price in the 1st band, in $/MW (as `float`)
+            2         bid price in the 2nd band, in $/MW (as `float`)
+            n         bid price in the nth band, in $/MW (as `float`)
+            ========  ======================================================
+
+        Returns
+        -------
+        None
+        """
+        energy_objective_function = objective_function.energy(self.decision_variables['energy_units'], price_bids)
+        if 'loss_factor' in self.unit_info.columns:
+            energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function,
+                                                                                 self.unit_info)
+        self.objective_function_components['energy_bids'] = energy_objective_function.loc[:, ['variable_id', 'cost']]
 
     @check.energy_bid_ids_exist
     @check.one_one_row_per_unit
