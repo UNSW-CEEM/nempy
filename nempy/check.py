@@ -1,6 +1,14 @@
 import math
 
 
+def keep_details(fn):
+    def wrapper(inner):
+        inner.__name__ = fn.__name__
+        inner.__doc__ = fn.__doc__
+        return inner
+    return wrapper
+
+
 def energy_bid_ids_exist(func):
     def wrapper(*args):
         if 'energy_units' not in args[0].decision_variables:
@@ -22,6 +30,7 @@ def pre_dispatch(func):
 
 
 def one_one_row_per_unit(func):
+    @keep_details(func)
     def wrapper(*args):
         if len(args[1].index) != len(args[1]['unit'].unique()):
             InputError('Unit DataFrames should only have one entry for each unit.')

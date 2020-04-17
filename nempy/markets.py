@@ -16,25 +16,33 @@ class RealTime:
 
     @check.one_one_row_per_unit
     def set_unit_energy_volume_bids(self, volume_bids):
-        """Control layer method, handles the creation of decision variables corresponding to energy bids.
-
-        1. Create unit variable ids: create a decision variable for each units bid, bids of zero MW are dropped.
-        2. Update the variable id counter: the next available integer to be used as an id.
-
-        :param volume_bids: DataFrame
-            unit: str
-                The unique name of each unit
-            1: float
-                First bid band volume in MW
-            2: float
-                second bid band volume in MW
-            n: float
-                n th bid band volume in MW
-        :return:
         """
-        # 1. Create unit variable ids
+        Control layer method, handles the creation of decision variables corresponding to energy bids.
+
+        Create unit variable ids, a decision variable for each units bid, bids of zero MW are dropped. Updates the
+        variable id counter, the next available integer to be used as an id.
+
+        Parameters
+        ----------
+        volume_bids : pd.DataFrame
+            Volume bids by unit, can contain up to n bid bands.
+
+            ========  ======================================================
+            Columns:  Description:
+            unit      unique identifier of a dispatch unit (as `str`)
+            1         bid volume in the 1st band, in MW (as `float`)
+            2         bid volume in the 2nd band, in MW (as `float`)
+            n         bid volume in the nth band, in MW (as `float`)
+            ========  ======================================================
+
+        Returns
+        -------
+        None
+        """
+
+        # Create unit variable ids
         self.decision_variables['energy_units'] = variable_ids.energy(volume_bids, self.next_variable_id)
-        # 2. Update the variable id counter:
+        # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['energy_units']['variable_id']) + 1
 
     @check.energy_bid_ids_exist
@@ -174,6 +182,3 @@ class RealTime:
     def get_energy_prices(self):
         prices = self.market_constraints_rhs_and_type['energy_market'].loc[:, ['region', 'price']]
         return prices
-
-
-

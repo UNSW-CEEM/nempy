@@ -8,8 +8,4 @@ volume and price bids from generators, generator capacity and ramp rate constrai
 markets. Planned features included interconnectors, FCAS markets, load dispatch and generic network constraints. A
 minimal worked example is shown below.
 
-Minimal worked example
------------------------
-.. literalinclude:: ../../examples/bidstack.py
-    :linenos:
-    :language: python
+
