@@ -172,7 +172,7 @@ class Spot:
         :return:
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = unit_constraints.capacity(self.decision_variables['energy_units'], unit_limits,
+        lhs_coefficients, rhs_and_type = unit_constraints.capacity(self.decision_variables['energy_bids'], unit_limits,
                                                                    self.next_constraint_id)
         # 2. Save constraint details.
         self.constraints_lhs_coefficients['unit_capacity'] = lhs_coefficients
@@ -197,7 +197,7 @@ class Spot:
         :return:
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = unit_constraints.ramp_up(self.decision_variables['energy_units'], unit_limits,
+        lhs_coefficients, rhs_and_type = unit_constraints.ramp_up(self.decision_variables['energy_bids'], unit_limits,
                                                                   self.next_constraint_id, self.dispatch_interval)
         # 2. Save constraint details.
         self.constraints_lhs_coefficients['ramp_up'] = lhs_coefficients

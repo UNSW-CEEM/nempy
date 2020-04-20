@@ -11,7 +11,7 @@ def test_energy():
     })
     demand = pd.DataFrame({
         'region': ['X', 'Y'],
-        'demand': [16, 23],
+        'demand': [16.0, 23.0],
     })
     unit_info = pd.DataFrame({
         'unit': ['A', 'B'],
@@ -27,7 +27,7 @@ def test_energy():
         'region': ['X', 'Y'],
         'constraint_id': [0, 1],
         'type': ['=', '='],
-        'rhs': [16, 23]
+        'rhs': [16.0, 23.0]
     })
     expected_lhs.index = list(expected_lhs.index)
     expected_rhs.index = list(expected_rhs.index)

@@ -7,21 +7,21 @@ def test_one_region_energy_market():
     # Volume of each bid, number of bid bands must equal number of bands in price_bids.
     volume_bids = pd.DataFrame({
         'unit': ['A', 'B'],
-        '1': [20, 20],  # MW
-        '2': [50, 30],  # MW
+        '1': [20.0, 20.0],  # MW
+        '2': [50.0, 30.0],  # MW
     })
 
     # Price of each bid, bids must be monotonically increasing.
     price_bids = pd.DataFrame({
         'unit': ['A', 'B'],
-        '1': [50, 52],  # $/MW
-        '2': [53, 60],  # $/MW
+        '1': [50.0, 52.0],  # $/MW
+        '2': [53.0, 60.0],  # $/MW
     })
 
     # Factors limiting unit output
     unit_limits = pd.DataFrame({
         'unit': ['A', 'B'],
-        'capacity': [55, 90],  # MW
+        'capacity': [55.0, 90.0],  # MW
     })
 
     # Other unit properties
@@ -33,7 +33,7 @@ def test_one_region_energy_market():
 
     demand = pd.DataFrame({
         'region': ['NSW'],
-        'demand': [60]  # MW
+        'demand': [60.0]  # MW
     })
 
     simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
@@ -55,7 +55,7 @@ def test_one_region_energy_market():
 
     assert_frame_equal(simple_market.market_constraints_rhs_and_type['energy_market'].loc[:, ['region', 'price']],
                        expected_prices)
-    assert_frame_equal(simple_market.decision_variables['energy_units'].loc[:, ['variable_id', 'value']],
+    assert_frame_equal(simple_market.decision_variables['energy_bids'].loc[:, ['variable_id', 'value']],
                        expected_variable_values)
 
 
@@ -63,21 +63,21 @@ def test_two_region_energy_market():
     # Volume of each bid, number of bid bands must equal number of bands in price_bids.
     volume_bids = pd.DataFrame({
         'unit': ['A', 'B'],
-        '1': [20, 20],  # MW
-        '2': [50, 100],  # MW
+        '1': [20.0, 20.0],  # MW
+        '2': [50.0, 100.0],  # MW
     })
 
     # Price of each bid, bids must be monotonically increasing.
     price_bids = pd.DataFrame({
         'unit': ['A', 'B'],
-        '1': [50, 52],  # $/MW
-        '2': [53, 60],  # $/MW
+        '1': [50.0, 52.0],  # $/MW
+        '2': [53.0, 60.0],  # $/MW
     })
 
     # Factors limiting unit output
     unit_limits = pd.DataFrame({
         'unit': ['A', 'B'],
-        'capacity': [70, 120],  # MW
+        'capacity': [70.0, 120.0],  # MW
     })
 
     # Other unit properties
@@ -89,10 +89,10 @@ def test_two_region_energy_market():
 
     demand = pd.DataFrame({
         'region': ['NSW', 'VIC'],
-        'demand': [60, 80]  # MW
+        'demand': [60.0, 80.0]  # MW
     })
 
-    simple_market = markets.RealTime(unit_info=unit_info, dispatch_interval=5)
+    simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
     simple_market.set_unit_energy_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)
     simple_market.set_unit_energy_price_bids(price_bids)
@@ -111,5 +111,5 @@ def test_two_region_energy_market():
 
     assert_frame_equal(simple_market.market_constraints_rhs_and_type['energy_market'].loc[:, ['region', 'price']],
                        expected_prices)
-    assert_frame_equal(simple_market.decision_variables['energy_units'].loc[:, ['variable_id', 'value']],
+    assert_frame_equal(simple_market.decision_variables['energy_bids'].loc[:, ['variable_id', 'value']],
                        expected_variable_values)
