@@ -7,7 +7,7 @@ the examples to get an idea of what it can do already.
 ## Documentation
 Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
 
-## A very simple example
+## A simple example
 ```python
 import pandas as pd
 from nempy import markets
@@ -15,17 +15,17 @@ from nempy import markets
 # Volume of each bid, number of bands must equal number of bands in price_bids.
 volume_bids = pd.DataFrame({
     'unit': ['A', 'B'],
-    '1': [20, 50],  # MW
-    '2': [20, 30],  # MW
-    '3': [5, 10]  # More bid bands could be added.
+    '1': [20.0, 50.0],  # MW
+    '2': [20.0, 30.0],  # MW
+    '3': [5.0, 10.0]  # More bid bands could be added.
 })
 
 # Price of each bid, bids must be monotonically increasing.
 price_bids = pd.DataFrame({
     'unit': ['A', 'B'],
-    '1': [50, 50],  # $/MW
-    '2': [60, 55],  # $/MW
-    '3': [100, 80]  # . . .
+    '1': [50.0, 50.0],  # $/MW
+    '2': [60.0, 55.0],  # $/MW
+    '3': [100.0, 80.0]  # . . .
 })
 
 # Other unit properties
@@ -37,11 +37,11 @@ unit_info = pd.DataFrame({
 # The demand in the region\s being dispatched
 demand = pd.DataFrame({
     'region': ['NSW'],
-    'demand': [120]  # MW
+    'demand': [120.0]  # MW
 })
 
 # Create the market model
-simple_market = markets.RealTime(unit_info=unit_info)
+simple_market = markets.Spot(unit_info=unit_info)
 simple_market.set_unit_energy_volume_bids(volume_bids)
 simple_market.set_unit_energy_price_bids(price_bids)
 simple_market.set_demand_constraints(demand)

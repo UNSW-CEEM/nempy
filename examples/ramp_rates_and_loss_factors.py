@@ -4,26 +4,26 @@ from nempy import markets
 # Volume of each bid, number of bands must equal number of bands in price_bids.
 volume_bids = pd.DataFrame({
     'unit': ['A', 'B'],
-    '1': [20, 50],  # MW
-    '2': [20, 30],  # MW
-    '3': [5, 10]  # More bid bands could be added.
+    '1': [20.0, 50.0],  # MW
+    '2': [20.0, 30.0],  # MW
+    '3': [5.0, 10.0]  # More bid bands could be added.
 })
 
 # Price of each bid, bids must be monotonically increasing.
 price_bids = pd.DataFrame({
     'unit': ['A', 'B'],
-    '1': [50, 50],  # $/MW
-    '2': [60, 55],  # $/MW
-    '3': [100, 80]  # . . .
+    '1': [50.0, 50.0],  # $/MW
+    '2': [60.0, 55.0],  # $/MW
+    '3': [100.0, 80.0]  # . . .
 })
 
 # Factors limiting unit output
 unit_limits = pd.DataFrame({
     'unit': ['A', 'B'],
-    'initial_output': [55, 90],  # MW
-    'capacity': [55, 90],  # MW
-    'ramp_up_rate': [1000, 1500],  # MW/h
-    'ramp_down_rate': [1000, 1500]  # MW/h
+    'initial_output': [55.0, 90.0],  # MW
+    'capacity': [55.0, 90.0],  # MW
+    'ramp_up_rate': [1000.0, 1500.0],  # MW/h
+    'ramp_down_rate': [1000.0, 1500.0]  # MW/h
 })
 
 # Other unit properties
@@ -36,7 +36,7 @@ unit_info = pd.DataFrame({
 # The demand in the region\s being dispatched
 demand = pd.DataFrame({
     'region': ['NSW'],
-    'demand': [100]  # MW
+    'demand': [100.0]  # MW
 })
 
 # Create the market model

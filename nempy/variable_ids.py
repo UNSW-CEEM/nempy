@@ -64,4 +64,4 @@ def energy(capacity_bids, next_variable_id):
     stacked_bids = hf.save_index(stacked_bids, 'variable_id', next_variable_id)
     stacked_bids['lower_bound'] = 0.0
     stacked_bids['type'] = 'continuous'
-    return stacked_bids
+    return stacked_bids.loc[:, ['variable_id', 'unit', 'capacity_band', 'lower_bound', 'upper_bound', 'type']]
