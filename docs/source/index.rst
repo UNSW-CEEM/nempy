@@ -12,7 +12,7 @@ Welcome to nempy's documentation!
 
    intro
    examples
-   RealTime
+   Spot
 
 Indices and tables
 ==================

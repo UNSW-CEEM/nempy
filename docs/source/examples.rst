@@ -1,6 +1,6 @@
 .. _Examples
 
-Usage Examples
+Examples
 ==============
 
 Bid stack equivalent market

@@ -40,7 +40,7 @@ demand = pd.DataFrame({
 })
 
 # Create the market model
-simple_market = markets.RealTime(unit_info=unit_info, dispatch_interval=5)
+simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
 simple_market.set_unit_energy_volume_bids(volume_bids)
 simple_market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
 simple_market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])

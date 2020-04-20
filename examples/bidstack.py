@@ -30,7 +30,7 @@ demand = pd.DataFrame({
 })
 
 # Create the market model
-simple_market = markets.RealTime(unit_info=unit_info)
+simple_market = markets.Spot(unit_info=unit_info)
 simple_market.set_unit_energy_volume_bids(volume_bids)
 simple_market.set_unit_energy_price_bids(price_bids)
 simple_market.set_demand_constraints(demand)

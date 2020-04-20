@@ -36,7 +36,7 @@ def test_one_region_energy_market():
         'demand': [60]  # MW
     })
 
-    simple_market = markets.RealTime(unit_info=unit_info, dispatch_interval=5)
+    simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
     simple_market.set_unit_energy_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)
     simple_market.set_unit_energy_price_bids(price_bids)
