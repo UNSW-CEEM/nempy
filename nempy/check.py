@@ -1,4 +1,6 @@
 import numpy as np
+import pandas as pd
+
 
 def keep_details(fn):
     def wrapper(inner):
@@ -13,6 +15,21 @@ def energy_bid_ids_exist(func):
     def wrapper(*args):
         if 'energy_bids' not in args[0].decision_variables:
             raise ModelBuildError('This cannot be performed before energy volume bids are set.')
+        func(*args)
+    return wrapper
+
+
+def bid_prices_monotonic_increasing(func):
+    @keep_details(func)
+    def wrapper(*args):
+        bids = args[1].copy()
+        bids = bids.set_index('unit', drop=True)
+        bids = bids.transpose()
+        bids.index = pd.to_numeric(bids.index)
+        bids = bids.sort_index()
+        for col in bids.columns:
+            if not bids[col].is_monotonic:
+                raise BidsNotMonotonicIncreasing('Bids of each unit are not monotonic increasing.')
         func(*args)
     return wrapper
 
@@ -85,7 +102,7 @@ def allowed_columns(name, allowed):
     return decorator
 
 
-def column_values(name, cols_to_check):
+def column_values_must_be_real(name, cols_to_check):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
@@ -94,13 +111,26 @@ def column_values(name, cols_to_check):
                     if column not in args[1].columns:
                         continue
                     if np.inf in args[1][column].values:
-                        raise UnexpectedColumn("Value inf not allowed in column '{}' in {}.".format(column, name))
-                    if args[1][column].min() < 0.0:
-                        raise UnexpectedColumn("Negative values not allowed in column '{}' in {}.".\
-                                               format(column, name))
+                        raise ColumnValues("Value inf not allowed in column '{}' in {}.".format(column, name))
+                    if np.NINF in args[1][column].values:
+                        raise ColumnValues("Value -inf not allowed in column '{}' in {}.".format(column, name))
                     if args[1][column].isnull().any():
-                        raise UnexpectedColumn("Null values not allowed in column '{}' in {}.".\
-                                               format(column, name))
+                        raise ColumnValues("Null values not allowed in column '{}' in {}.".format(column, name))
+            func(*args)
+        return wrapper
+    return decorator
+
+
+def column_values_not_negative(name, cols_to_check):
+    def decorator(func):
+        @keep_details(func)
+        def wrapper(*args):
+            if args[0].check:
+                for column in cols_to_check:
+                    if column not in args[1].columns:
+                        continue
+                    if args[1][column].min() < 0.0:
+                        raise ColumnValues("Negative values not allowed in column '{}' in {}.".format(column, name))
             func(*args)
         return wrapper
     return decorator
@@ -119,10 +149,17 @@ class ColumnDataTypeError(Exception):
 
 
 class MissingColumnError(Exception):
-    """Raise for required column missing"""
+    """Raise for required column missing."""
 
 
 class UnexpectedColumn(Exception):
-    """Raise for unexpected column"""
+    """Raise for unexpected column."""
 
+
+class ColumnValues(Exception):
+    """Raise for unexpected column."""
+
+
+class BidsNotMonotonicIncreasing(Exception):
+    """Raise for non monotonic increasing bids."""
 

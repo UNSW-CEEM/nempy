@@ -44,7 +44,7 @@ dispatch and pricing. The examples below give an overview of how method calls bu
     simple_market.set_unit_capacity_constraints(unit_limits)
 
 *   Providing regional energy demand creates a constraint for each region that forces supply from units and
-    interconnectors to equal deman
+    interconnectors to equal demand
 
 .. code-block:: python
 

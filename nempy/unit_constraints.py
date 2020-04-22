@@ -49,7 +49,8 @@ def capacity(energy_bid_ids, unit_limits, next_constraint_id):
     """
     capacity_constraints = create_constraints(energy_bid_ids, unit_limits, next_constraint_id, 'capacity', '<=')
     constraints_lhs = capacity_constraints.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
-    constraints_rhs = capacity_constraints.loc[:, ['constraint_id', 'type', 'rhs']].drop_duplicates('constraint_id')
+    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']].\
+        drop_duplicates('constraint_id')
     return constraints_lhs, constraints_rhs
 
 
