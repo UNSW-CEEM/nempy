@@ -59,4 +59,6 @@ Reference
     .. automethod:: set_unit_energy_volume_bids(self, volume_bids)
     .. automethod:: set_unit_energy_price_bids(self, price_bids)
     .. automethod:: set_unit_capacity_constraints(self, unit_limits)
+    .. automethod:: set_unit_ramp_up_constraints(self, unit_limits)
+    .. automethod:: set_unit_ramp_down_constraints(self, unit_limits)
 
