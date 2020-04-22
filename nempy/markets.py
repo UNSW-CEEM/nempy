@@ -239,12 +239,12 @@ class Spot:
             energy_objective_function.loc[:, ['variable_id', 'unit', 'capacity_band', 'cost']]
 
     @check.energy_bid_ids_exist
-    @check.required_columns('volume_bids', ['unit', 'capacity'])
+    @check.required_columns('unit_limits', ['unit', 'capacity'])
     @check.allowed_columns('unit_limits', ['unit', 'capacity'])
-    @check.repeated_rows('price_bids', ['unit'])
-    @check.column_data_types('price_bids', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('price_bids', ['capacity'])
-    @check.column_values_not_negative('price_bids', ['capacity'])
+    @check.repeated_rows('unit_limits', ['unit'])
+    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
+    @check.column_values_must_be_real('unit_limits', ['capacity'])
+    @check.column_values_not_negative('unit_limits', ['capacity'])
     def set_unit_capacity_constraints(self, unit_limits):
         """Creates constraints that limit unit output based on capacity.
 
@@ -346,20 +346,106 @@ class Spot:
         self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
 
     @check.energy_bid_ids_exist
+    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
+    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
     @check.repeated_rows('unit_limits', ['unit'])
+    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
+    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_up_rate'])
+    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_up_rate'])
     def set_unit_ramp_up_constraints(self, unit_limits):
-        """Control layer method, handles the implementation of constraints on unit output based on ramp up rate.
+        """Creates constraints on unit output based on ramp up rate.
 
-        1. Create the constraints: see unit_constraints.ramp_up docstring for details.
-        2. Save constraint details.
-        3. Update the constraint and variable id counter: the next available integer to be used as an id.
+        Will constraint the unit output to be <= initial_output + (ramp_up_rate / (dispatch_interval / 60)).
 
-        :param unit_limits:
-            unit: str
-                The unique name of each unit
-            ramp_up_rate: float
-                The maximum rate at which the unit can increase output, in MW/h
-        :return:
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of unit ramp up rates.
+
+        >>> unit_limits = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'initial_output': [20.0, 50.0],
+        ...     'ramp_up_rate': [30.0, 100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_unit_ramp_up_constraints(unit_limits)
+
+        The market should now have a set of constraints.
+
+        >>> print(simple_market.constraints_rhs_and_type['ramp_up'])
+          unit  constraint_id type    rhs
+        0    A              0   <=   35.0
+        3    B              1   <=  100.0
+
+        >>> print(simple_market.constraints_lhs_coefficients['ramp_up'])
+           variable_id  constraint_id  coefficient
+        0            0              0            1
+        1            1              0            1
+        2            2              0            1
+        3            3              1            1
+        4            4              1            1
+        5            5              1            1
+
+        Parameters
+        ----------
+        unit_limits : pd.DataFrame
+            Capacity by unit.
+
+            ========        =====================================================================================
+            Columns:        Description:
+            unit            unique identifier of a dispatch unit (as `str`)
+            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
+            ==============  =====================================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If the volume bids have not been set yet.
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If the column 'units' or 'capacity is missing.
+            UnexpectedColumn
+                There is a column that is not 'units' or 'capacity'.
+            ColumnValues
+                If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
         lhs_coefficients, rhs_and_type = unit_constraints.ramp_up(self.decision_variables['energy_bids'], unit_limits,
@@ -371,20 +457,107 @@ class Spot:
         self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
 
     @check.energy_bid_ids_exist
+    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
+    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
     @check.repeated_rows('unit_limits', ['unit'])
+    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
+    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_down_rate'])
+    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_down_rate'])
     def set_unit_ramp_down_constraints(self, unit_limits):
-        """Control layer method, handles the implementation of constraints on unit output based on ramp down rate.
+        """Creates constraints on unit output based on ramp down rate.
 
-        2. Create the constraints: see unit_constraints.ramp_up docstring for details.
-        3. Save constraint details.
-        4. Update the constraint and variable id counter: the next available integer to be used as an id.
+        Will constraint the unit output to be >= initial_output - (ramp_down_rate / (dispatch_interval / 60)).
 
-        :param unit_limits:
-            unit: str
-                The unique name of each unit
-            ramp_down_rate: float
-                The maximum rate at which the unit can decrease output, in MW/h
-        :return:
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of unit ramp down rates, also need to provide the initial output of the units at the start of
+        dispatch interval.
+
+        >>> unit_limits = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'initial_output': [20.0, 50.0],
+        ...     'ramp_down_rate': [20.0, 10.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_unit_ramp_down_constraints(unit_limits)
+
+        The market should now have a set of constraints.
+
+        >>> print(simple_market.constraints_rhs_and_type['ramp_down'])
+           constraint_id type   rhs
+        0              0   >=  10.0
+        3              1   >=  45.0
+
+        >>> print(simple_market.constraints_lhs_coefficients['ramp_down'])
+           variable_id  constraint_id  coefficient
+        0            0              0            1
+        1            1              0            1
+        2            2              0            1
+        3            3              1            1
+        4            4              1            1
+        5            5              1            1
+
+        Parameters
+        ----------
+        unit_limits : pd.DataFrame
+            Capacity by unit.
+
+            ========        =====================================================================================
+            Columns:        Description:
+            unit            unique identifier of a dispatch unit (as `str`)
+            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
+            ==============  =====================================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If the volume bids have not been set yet.
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If the column 'units' or 'capacity is missing.
+            UnexpectedColumn
+                There is a column that is not 'units' or 'capacity'.
+            ColumnValues
+                If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
         lhs_coefficients, rhs_and_type = unit_constraints.ramp_down(self.decision_variables['energy_bids'],

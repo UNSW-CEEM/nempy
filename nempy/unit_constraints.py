@@ -102,7 +102,8 @@ def ramp_up(bidding_ids, unit_limits, next_constraint_id, dispatch_interval):
     unit_limits['max_output'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (dispatch_interval / 60)
     capacity_constraints = create_constraints(bidding_ids, unit_limits, next_constraint_id, 'max_output', '<=')
     constraints_lhs = capacity_constraints.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
-    constraints_rhs = capacity_constraints.loc[:, ['constraint_id', 'type', 'rhs']].drop_duplicates('constraint_id')
+    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']].\
+        drop_duplicates('constraint_id')
     return constraints_lhs, constraints_rhs
 
 
