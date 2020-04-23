@@ -1,28 +1,70 @@
 import numpy as np
 from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids
 
+
 class Spot:
-    """Class for constructing and dispatch the spot market on an interval basis."""
+    """Class for constructing and dispatch the spot market on an interval basis.
+
+    Initialises the spot market with general information required.
+
+    Examples
+    --------
+    This is an example of the minimal set of steps for using this method.
+
+    Import required packages.
+
+    >>> import pandas as pd
+    >>> from nempy import markets
+
+    Define the unit information data set needed to initialise the market, in this example all units are in the same
+    region.
+
+    >>> unit_info = pd.DataFrame({
+    ...     'unit': ['A', 'B'],
+    ...     'region': ['NSW', 'NSW']})
+
+    Initialise the market instance.
+
+    >>> simple_market = markets.Spot(unit_info)
+
+    Parameters
+    ----------
+    unit_info : pd.DataFrame
+        Information on a unit basis, not all columns are required.
+
+        ===========  ==============================================================================================
+        Columns:     Description:
+        unit         unique identifier of a dispatch unit, required (as `str`)
+        region       location of unit, required (as `str`)
+        loss_factor  marginal, average or combined loss factors, \n
+                     :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
+                     optional (as `np.int64`)
+        ===========  ==============================================================================================
+
+    dispatch_interval : int
+        The length of the dispatch interval in minutes.
+
+    Raises
+    ------
+        RepeatedRowError
+            If there is more than one row for any unit.
+        ColumnDataTypeError
+            If columns are not of the require type.
+        MissingColumnError
+            If the column 'units' or 'regions' is missing.
+        UnexpectedColumn
+            There is a column that is not 'units', 'regions' or 'loss_factor'.
+        ColumnValues
+            If there are inf, null or negative values in the 'loss_factor' column.
+    """
+
+    @check.required_columns('unit_info', ['unit'])
+    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.int64})
+    @check.required_columns('unit_info', ['unit', 'region', 'loss_factor'])
+    @check.allowed_columns('unit_info', ['unit', 'region'])
+    @check.column_values_must_be_real('unit_info', ['loss_factor'])
+    @check.column_values_not_negative('unit_info', ['loss_factor'])
     def __init__(self, unit_info, dispatch_interval=5):
-        """Initialises the spot market with general information required.
-
-        Parameters
-        ----------
-        unit_info : pd.DataFrame
-            Information on a unit basis, not all columns are required.
-
-            ===========  ==============================================================================================
-            Columns:     Description:
-            unit         unique identifier of a dispatch unit, required (as `str`)
-            region       location of unit, required (as `str`)
-            loss_factor  marginal, average or combined loss factors, \n
-                         :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
-                         optional (as `float`)
-            ===========  ==============================================================================================
-
-        dispatch_interval : int
-            The length of the dispatch interval in minutes."""
-
         self.dispatch_interval = dispatch_interval
         self.unit_info = unit_info
         self.decision_variables = {}

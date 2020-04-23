@@ -58,7 +58,6 @@ Reference
     :nosignatures:
 
     Spot
-    Spot.__init__
     Spot.set_unit_energy_volume_bids
     Spot.set_unit_energy_price_bids
     Spot.set_unit_capacity_constraints

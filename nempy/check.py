@@ -66,9 +66,12 @@ def column_data_types(name, dtypes):
                 for column in args[1].columns:
                     if column in dtypes and dtypes[column] == str and not hasattr(args[1][column], 'str'):
                         raise ColumnDataTypeError('Column {} in {} should have type str'.format(column, name))
+                    if column in dtypes and dtypes[column] != args[1][column].dtype:
+                        raise ColumnDataTypeError('Column {} in {} should have type {}'.
+                                                  format(column, name, dtypes[column]))
                     elif column not in dtypes and dtypes['else'] != args[1][column].dtype:
-                        raise ColumnDataTypeError('Column {} in {} should have type {}'.format(column, name,
-                                                                                               dtypes['else']))
+                        raise ColumnDataTypeError('Column {} in {} should have type {}'.
+                                                  format(column, name, dtypes['else']))
             func(*args)
         return wrapper
     return decorator
