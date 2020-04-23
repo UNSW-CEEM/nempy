@@ -52,9 +52,11 @@ dispatch and pricing. The examples below give an overview of how method calls bu
 
 Reference
 ---------
-.. py:currentmodule:: nempy.markets
-.. autosummary::
+.. currentmodule:: nempy.markets
+
+.. autosummary:: nempy.markets
     Spot
+    Spot.__init__
     Spot.set_unit_energy_volume_bids
     Spot.set_unit_energy_price_bids
     Spot.set_unit_capacity_constraints
@@ -65,16 +67,9 @@ Reference
     Spot.get_energy_dispatch
     Spot.get_energy_prices
 
-.. autoclass:: nempy.markets.Spot
 
-    .. automethod:: __init__(self, unit_info, dispatch_interval=5)
-    .. automethod:: set_unit_energy_volume_bids(self, volume_bids)
-    .. automethod:: set_unit_energy_price_bids(self, price_bids)
-    .. automethod:: set_unit_capacity_constraints(self, unit_limits)
-    .. automethod:: set_unit_ramp_up_constraints(self, unit_limits)
-    .. automethod:: set_unit_ramp_down_constraints(self, unit_limits)
-    .. automethod:: set_demand_constraints(self, demand)
-    .. automethod:: dispatch(self)
-    .. automethod:: get_energy_dispatch(self)
-    .. automethod:: get_energy_prices(self)
+.. autoclass:: nempy.markets.Spot
+    :members:
+
+
 

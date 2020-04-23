@@ -767,7 +767,7 @@ class Spot:
         self.decision_variables = decision_variables
 
     def get_energy_dispatch(self):
-        """Combines the elements of the linear program and solves to find optimal dispatch.
+        """Retrieves the energy dispatch for each unit.
 
         Examples
         --------
