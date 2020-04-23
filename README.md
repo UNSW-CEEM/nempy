@@ -4,6 +4,12 @@ Market. The idea is that you can start simple, like in the example below, and gr
 features such as ramping constraints, interconnectors and FCAS markets. Not all these feature are available yet, see 
 the examples to get an idea of what it can do already.
 
+## In development
+No stable version released yet.
+
+## Install
+Not added to pypi yet, you need to download the source to use.
+
 ## Documentation
 Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
 
