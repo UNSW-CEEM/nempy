@@ -90,6 +90,9 @@ class Spot:
         have a variable created. The lower bound of the variables are set to zero and the upper bound to the bid
         volume, the variable type is set to continuous.
 
+        Also clears any preexisting constraints sets or objective functions that depend on the energy bid decision
+        variables.
+
         Examples
         --------
         This is an example of the minimal set of steps for using this method.
@@ -168,6 +171,17 @@ class Spot:
         self.decision_variables['energy_bids'] = variable_ids.energy(volume_bids, self.next_variable_id)
         # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['energy_bids']['variable_id']) + 1
+        # Clear existing program elements that depend on volume bid decision variables.
+        for constraint_set in ['capacity', 'ramp_up', 'ramp_down']:
+            if constraint_set in self.constraints_lhs_coefficients:
+                del self.constraints_lhs_coefficients[constraint_set]
+                del self.constraints_rhs_and_type[constraint_set]
+        for constraint_set in ['demand']:
+            if constraint_set in self.constraints_lhs_coefficients:
+                del self.market_constraints_lhs_coefficients[constraint_set]
+                del self.market_constraints_rhs_and_type[constraint_set]
+        if 'energy_bids' in self.objective_function_components:
+            del self.objective_function_components['energy_bids']
 
     @check.energy_bid_ids_exist
     @check.required_columns('volume_bids', ['unit'])
