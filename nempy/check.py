@@ -37,10 +37,10 @@ def bid_prices_monotonic_increasing(func):
 def pre_dispatch(func):
     @keep_details(func)
     def wrapper(*args):
-        if 'energy_units' in args[0].constraints_lhs_coefficients and 'energy_bids' not in \
+        if 'energy_bids' in args[0].decision_variables and 'energy_bids' not in \
                 args[0].objective_function_components:
             raise ModelBuildError('No unit energy bids provided.')
-        if 'energy_units' in args[0].constraints_lhs_coefficients and 'energy_market' not in \
+        if 'energy_bids' in args[0].decision_variables and 'demand' not in \
                 args[0].market_constraints_lhs_coefficients:
             raise ModelBuildError('No energy market constraints provided.')
         func(*args)

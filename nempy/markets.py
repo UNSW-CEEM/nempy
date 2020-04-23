@@ -314,7 +314,7 @@ class Spot:
             ========  =====================================================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
-            capacity  The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64)
+            capacity  The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
             ========  =====================================================================================
 
         Returns
@@ -330,7 +330,7 @@ class Spot:
             ColumnDataTypeError
                 If columns are not of the require type.
             MissingColumnError
-                If the column 'units' or 'capacity is missing.
+                If the column 'units' or 'capacity' is missing.
             UnexpectedColumn
                 There is a column that is not 'units' or 'capacity'.
             ColumnValues
@@ -355,7 +355,7 @@ class Spot:
     def set_unit_ramp_up_constraints(self, unit_limits):
         """Creates constraints on unit output based on ramp up rate.
 
-        Will constraint the unit output to be <= initial_output + (ramp_up_rate / (dispatch_interval / 60)).
+        Will constrain the unit output to be <= initial_output + (ramp_up_rate / (dispatch_interval / 60)).
 
         Examples
         --------
@@ -421,7 +421,7 @@ class Spot:
         unit_limits : pd.DataFrame
             Capacity by unit.
 
-            ========        =====================================================================================
+            ==============  =====================================================================================
             Columns:        Description:
             unit            unique identifier of a dispatch unit (as `str`)
             initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
@@ -441,9 +441,9 @@ class Spot:
             ColumnDataTypeError
                 If columns are not of the require type.
             MissingColumnError
-                If the column 'units' or 'capacity is missing.
+                If the column 'units', 'initial_output' or 'ramp_up_rate' is missing.
             UnexpectedColumn
-                There is a column that is not 'units' or 'capacity'.
+                There is a column that is not 'units', 'initial_output' or 'ramp_up_rate'.
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
@@ -466,7 +466,7 @@ class Spot:
     def set_unit_ramp_down_constraints(self, unit_limits):
         """Creates constraints on unit output based on ramp down rate.
 
-        Will constraint the unit output to be >= initial_output - (ramp_down_rate / (dispatch_interval / 60)).
+        Will constrain the unit output to be >= initial_output - (ramp_down_rate / (dispatch_interval / 60)).
 
         Examples
         --------
@@ -533,7 +533,7 @@ class Spot:
         unit_limits : pd.DataFrame
             Capacity by unit.
 
-            ========        =====================================================================================
+            ==============  =====================================================================================
             Columns:        Description:
             unit            unique identifier of a dispatch unit (as `str`)
             initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
@@ -553,9 +553,9 @@ class Spot:
             ColumnDataTypeError
                 If columns are not of the require type.
             MissingColumnError
-                If the column 'units' or 'capacity is missing.
+                If the column 'units', 'initial_output' or 'ramp_down_rate' is missing.
             UnexpectedColumn
-                There is a column that is not 'units' or 'capacity'.
+                There is a column that is not 'units', 'initial_output' or 'ramp_down_rate'.
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
@@ -570,33 +570,195 @@ class Spot:
         self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
 
     @check.energy_bid_ids_exist
+    @check.required_columns('demand', ['region', 'demand'])
+    @check.allowed_columns('demand', ['region', 'demand'])
     @check.repeated_rows('demand', ['region'])
+    @check.column_data_types('demand', {'region': str, 'else': np.float64})
+    @check.column_values_must_be_real('demand', ['demand'])
+    @check.column_values_not_negative('demand', ['demand'])
     def set_demand_constraints(self, demand):
-        """Control layer method, handles the implementation of the constraints that create the energy market.
+        """Creates constraints that force supply to equal to demand.
 
-        1. Create the constraints: see market_constraints.energy docstring for details.
-        2. Save constraint details.
-        3. Update the constraint id counter: the next available integer to be used as a constraint id.
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
 
-        :param demand: DataFrame
-            region: string
-                The regions to create energy markets for.
-            demand: float
-                The demand in each region in MW.
-        :return:
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a demand level in each region.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW'],
+        ...     'demand': [100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        The market should now have a set of constraints.
+
+        >>> print(simple_market.market_constraints_rhs_and_type['demand'])
+          region  constraint_id type    rhs
+        0    NSW              0    =  100.0
+
+        >>> print(simple_market.market_constraints_lhs_coefficients['demand'])
+           constraint_id  variable_id  coefficient
+        0              0            0          1.0
+        1              0            1          1.0
+        2              0            2          1.0
+        3              0            3          1.0
+        4              0            4          1.0
+        5              0            5          1.0
+
+        Parameters
+        ----------
+        demand : pd.DataFrame
+            Demand by region.
+
+            ========  =====================================================================================
+            Columns:  Description:
+            region    unique identifier of a region (as `str`)
+            demand    the non dispatchable demand, in MW (as `np.float64`)
+            ========  =====================================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If the volume bids have not been set yet.
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If the column 'region' or 'demand' is missing.
+            UnexpectedColumn
+                There is a column that is not 'region' or 'demand'.
+            ColumnValues
+                If there are inf, null or negative values in the bid band columns.
         """
-
         # 1. Create the constraints
         lhs_coefficients, rhs_and_type = market_constraints.energy(self.decision_variables['energy_bids'],
                                                                    demand, self.unit_info, self.next_constraint_id)
         # 2. Save constraint details
-        self.market_constraints_lhs_coefficients['energy_market'] = lhs_coefficients
-        self.market_constraints_rhs_and_type['energy_market'] = rhs_and_type
+        self.market_constraints_lhs_coefficients['demand'] = lhs_coefficients
+        self.market_constraints_rhs_and_type['demand'] = rhs_and_type
         # 3. Update the constraint id
         self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
 
     @check.pre_dispatch
     def dispatch(self):
+        """Combines the elements of the linear program and solves to find optimal dispatch.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [50.0, 100.0],
+        ...     '2': [100.0, 130.0],
+        ...     '3': [100.0, 150.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_energy_price_bids(price_bids)
+
+        Define a demand level in each region.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW'],
+        ...     'demand': [100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the market dispatch can be retrieved.
+
+        >>> print(simple_market.get_energy_dispatch())
+          unit  dispatch
+        0    A      45.0
+        1    B      55.0
+
+        And the market prices can be retrieved.
+
+        >>> print(simple_market.get_energy_prices())
+          region  price
+        0    NSW  130.0
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
+        """
         decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
             self.decision_variables, self.constraints_lhs_coefficients, self.constraints_rhs_and_type,
             self.market_constraints_lhs_coefficients, self.market_constraints_rhs_and_type,
@@ -605,10 +767,163 @@ class Spot:
         self.decision_variables = decision_variables
 
     def get_energy_dispatch(self):
+        """Combines the elements of the linear program and solves to find optimal dispatch.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [50.0, 100.0],
+        ...     '2': [100.0, 130.0],
+        ...     '3': [100.0, 150.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_energy_price_bids(price_bids)
+
+        Define a demand level in each region.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW'],
+        ...     'demand': [100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the market dispatch can be retrieved.
+
+        >>> print(simple_market.get_energy_dispatch())
+          unit  dispatch
+        0    A      45.0
+        1    B      55.0
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
+        """
         dispatch = self.decision_variables['energy_bids'].loc[:, ['unit', 'value']]
         dispatch.columns = ['unit', 'dispatch']
         return dispatch.groupby('unit', as_index=False).sum()
 
     def get_energy_prices(self):
-        prices = self.market_constraints_rhs_and_type['energy_market'].loc[:, ['region', 'price']]
+        """Retrieves the energy price in each market region.
+
+        Energy prices are the shadow prices of the demand constraint in each market region.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [50.0, 100.0],
+        ...     '2': [100.0, 130.0],
+        ...     '3': [100.0, 150.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_energy_price_bids(price_bids)
+
+        Define a demand level in each region.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW'],
+        ...     'demand': [100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the market prices can be retrieved.
+
+        >>> print(simple_market.get_energy_prices())
+          region  price
+        0    NSW  130.0
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
+        """
+        prices = self.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
         return prices
