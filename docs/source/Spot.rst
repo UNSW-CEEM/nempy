@@ -55,6 +55,8 @@ Reference
 .. currentmodule:: nempy.markets
 
 .. autosummary:: nempy.markets
+    :nosignatures:
+
     Spot
     Spot.__init__
     Spot.set_unit_energy_volume_bids

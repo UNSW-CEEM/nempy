@@ -56,4 +56,4 @@ html_static_path = ['_static']
 
 master_doc = 'index'
 
-autodoc_mock_imports = ["pandas", "numpy", "mip", "nempy.markets"]
+autodoc_mock_imports = ["pandas", "numpy", "mip"]
