@@ -3,79 +3,85 @@ from nempy import check, market_constraints, objective_function, solver_interfac
 
 
 class Spot:
-    """Class for constructing and dispatch the spot market on an interval basis.
+    """Class for constructing and dispatch the spot market on an interval basis."""
 
-    Initialises the spot market with general information required.
-
-    Examples
-    --------
-    This is an example of the minimal set of steps for using this method.
-
-    Import required packages.
-
-    >>> import pandas as pd
-    >>> from nempy import markets
-
-    Define the unit information data set needed to initialise the market, in this example all units are in the same
-    region.
-
-    >>> unit_info = pd.DataFrame({
-    ...     'unit': ['A', 'B'],
-    ...     'region': ['NSW', 'NSW']})
-
-    Initialise the market instance.
-
-    >>> simple_market = markets.Spot(unit_info)
-
-    Parameters
-    ----------
-    unit_info : pd.DataFrame
-        Information on a unit basis, not all columns are required.
-
-        ===========  ==============================================================================================
-        Columns:     Description:
-        unit         unique identifier of a dispatch unit, required (as `str`)
-        region       location of unit, required (as `str`)
-        loss_factor  marginal, average or combined loss factors, \n
-                     :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
-                     optional (as `np.int64`)
-        ===========  ==============================================================================================
-
-    dispatch_interval : int
-        The length of the dispatch interval in minutes.
-
-    Raises
-    ------
-        RepeatedRowError
-            If there is more than one row for any unit.
-        ColumnDataTypeError
-            If columns are not of the require type.
-        MissingColumnError
-            If the column 'units' or 'regions' is missing.
-        UnexpectedColumn
-            There is a column that is not 'units', 'regions' or 'loss_factor'.
-        ColumnValues
-            If there are inf, null or negative values in the 'loss_factor' column.
-    """
-
-    @check.required_columns('unit_info', ['unit'])
-    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.int64})
-    @check.required_columns('unit_info', ['unit', 'region', 'loss_factor'])
-    @check.allowed_columns('unit_info', ['unit', 'region'])
-    @check.column_values_must_be_real('unit_info', ['loss_factor'])
-    @check.column_values_not_negative('unit_info', ['loss_factor'])
-    def __init__(self, unit_info, dispatch_interval=5):
+    def __init__(self, dispatch_interval=5):
         self.dispatch_interval = dispatch_interval
-        self.unit_info = unit_info
+        self.unit_info = None
         self.decision_variables = {}
         self.constraints_lhs_coefficients = {}
         self.constraints_rhs_and_type = {}
+        self.constraints_dynamic_rhs_and_type = {}
         self.market_constraints_lhs_coefficients = {}
         self.market_constraints_rhs_and_type = {}
         self.objective_function_components = {}
         self.next_variable_id = 0
         self.next_constraint_id = 0
         self.check = True
+
+    @check.required_columns('unit_info', ['unit'])
+    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.int64})
+    @check.required_columns('unit_info', ['unit', 'region'])
+    @check.allowed_columns('unit_info', ['unit', 'region', 'loss_factor'])
+    @check.column_values_must_be_real('unit_info', ['loss_factor'])
+    @check.column_values_not_negative('unit_info', ['loss_factor'])
+    def set_unit_info(self, unit_info):
+        """Add general information required.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Parameters
+        ----------
+        unit_info : pd.DataFrame
+            Information on a unit basis, not all columns are required.
+
+            ===========  ==============================================================================================
+            Columns:     Description:
+            unit         unique identifier of a dispatch unit, required (as `str`)
+            region       location of unit, required (as `str`)
+            loss_factor  marginal, average or combined loss factors, \n
+                         :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
+                         optional (as `np.int64`)
+            ===========  ==============================================================================================
+
+        dispatch_interval : int
+            The length of the dispatch interval in minutes.
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If the column 'units' or 'regions' is missing.
+            UnexpectedColumn
+                There is a column that is not 'units', 'regions' or 'loss_factor'.
+            ColumnValues
+                If there are inf, null or negative values in the 'loss_factor' column."""
+        self.unit_info = unit_info
 
     @check.required_columns('volume_bids', ['unit'])
     @check.allowed_columns('volume_bids', ['unit', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
@@ -102,6 +108,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -109,9 +119,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -206,17 +216,20 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
-        region. A loss factor is provided, but this is optional.
+        region.
 
         >>> unit_info = pd.DataFrame({
         ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW'],
-        ...     'loss_factor': [0.95, 1.1]})
+        ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -313,6 +326,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -320,9 +337,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -422,6 +439,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot(dispatch_interval=30)
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -429,9 +450,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -533,6 +554,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -540,9 +565,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -644,6 +669,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -651,9 +680,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -729,7 +758,7 @@ class Spot:
         self.market_constraints_lhs_coefficients['demand'] = lhs_coefficients
         self.market_constraints_rhs_and_type['demand'] = rhs_and_type
         # 3. Update the constraint id
-        self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.pre_dispatch
     def dispatch(self):
@@ -744,6 +773,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -751,9 +784,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -818,7 +851,7 @@ class Spot:
         decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
             self.decision_variables, self.constraints_lhs_coefficients, self.constraints_rhs_and_type,
             self.market_constraints_lhs_coefficients, self.market_constraints_rhs_and_type,
-            self.objective_function_components)
+            self.objective_function_components, self.constraints_dynamic_rhs_and_type)
         self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
         self.decision_variables = decision_variables
 
@@ -834,6 +867,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -841,9 +878,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -917,6 +954,10 @@ class Spot:
         >>> import pandas as pd
         >>> from nempy import markets
 
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -924,9 +965,9 @@ class Spot:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
+        Add unit information
 
-        >>> simple_market = markets.Spot(unit_info, dispatch_interval=30)
+        >>> simple_market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
