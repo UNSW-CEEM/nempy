@@ -114,3 +114,24 @@ def test_interconnector_hard_code():
     assert_frame_equal(simple_market.decision_variables['inter_flow'].loc[:, ['variable_id', 'value']],
                        expected_variable_values)
 
+    def test_create_interconnector_constraints():
+
+        def losses(flow):
+            return flow * 0.05
+
+        break_points = pd.DataFrame({
+            'interconnector_id': ['A', 'A', 'A', 'B', 'B', 'B'],
+            'segment_number': [1, 2, 3, 1, 2, 3],
+            'break_point': [-120, 0, 100, -50, 0, 80]
+        })
+
+        inter_directions = pd.DataFrame({
+            'interconnector_id': ['A', 'B'],
+            'to_region': ['NSW', 'VIC'],
+            'from_region': ['QLD', 'QLD']
+        })
+
+
+
+
+
