@@ -40,9 +40,6 @@ def pre_dispatch(func):
         if 'energy_bids' in args[0].decision_variables and 'energy_bids' not in \
                 args[0].objective_function_components:
             raise ModelBuildError('No unit energy bids provided.')
-        if 'energy_bids' in args[0].decision_variables and 'demand' not in \
-                args[0].market_constraints_lhs_coefficients:
-            raise ModelBuildError('No energy market constraints provided.')
         func(*args)
     return wrapper
 

@@ -36,7 +36,8 @@ def test_one_region_energy_market():
         'demand': [60.0]  # MW
     })
 
-    simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
+    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market.set_unit_info(unit_info)
     simple_market.set_unit_energy_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)
     simple_market.set_unit_energy_price_bids(price_bids)
@@ -53,7 +54,7 @@ def test_one_region_energy_market():
         'value': [20.0, 20.0, 20.0, 0.0]
     })
 
-    assert_frame_equal(simple_market.market_constraints_rhs_and_type['energy_market'].loc[:, ['region', 'price']],
+    assert_frame_equal(simple_market.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']],
                        expected_prices)
     assert_frame_equal(simple_market.decision_variables['energy_bids'].loc[:, ['variable_id', 'value']],
                        expected_variable_values)
@@ -92,7 +93,8 @@ def test_two_region_energy_market():
         'demand': [60.0, 80.0]  # MW
     })
 
-    simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
+    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market.set_unit_info(unit_info)
     simple_market.set_unit_energy_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)
     simple_market.set_unit_energy_price_bids(price_bids)
@@ -109,7 +111,7 @@ def test_two_region_energy_market():
         'value': [20.0, 40.0, 20.0, 60.0]
     })
 
-    assert_frame_equal(simple_market.market_constraints_rhs_and_type['energy_market'].loc[:, ['region', 'price']],
+    assert_frame_equal(simple_market.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']],
                        expected_prices)
     assert_frame_equal(simple_market.decision_variables['energy_bids'].loc[:, ['variable_id', 'value']],
                        expected_variable_values)

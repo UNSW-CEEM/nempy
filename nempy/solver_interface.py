@@ -3,9 +3,8 @@ import pandas as pd
 from mip import Model, xsum, minimize, INTEGER, CONTINUOUS, OptimizationStatus, LinExpr, BINARY
 
 
-def dispatch(decision_variables, constraints_lhs_coefficient, constraints_rhs_and_type,
-             market_constraints_lhs_coefficients, market_rhs_and_type, objective_function,
-             constraints_dynamic_rhs_and_type):
+def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, market_rhs_and_type,
+             constraints_dynamic_rhs_and_type, objective_function):
     """Create and solve a linear program, returning prices of the market constraints and decision variables values.
 
     0. Create the problem instance as a mip-python object instance
@@ -88,9 +87,7 @@ def dispatch(decision_variables, constraints_lhs_coefficient, constraints_rhs_an
                                    list(objective_function.index)))
 
     # 3. Create the constraints
-    combined_constraints = pd.concat(list(constraints_lhs_coefficient.values()) +
-                                     list(market_constraints_lhs_coefficients.values()))
-    constraint_matrix = combined_constraints.pivot('constraint_id', 'variable_id', 'coefficient')
+    constraint_matrix = constraints_lhs.pivot('constraint_id', 'variable_id', 'coefficient')
     constraint_matrix = constraint_matrix.sort_index(axis=1)
     constraint_ids = np.asarray(constraint_matrix.index)
     constraint_matrix_np = np.asarray(constraint_matrix)

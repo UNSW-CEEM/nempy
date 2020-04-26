@@ -1,6 +1,6 @@
 import pandas as pd
 from pandas._testing import assert_frame_equal
-from nempy import markets
+from nempy import markets, interconnectors
 
 
 def test_create_interconnector_sos():
@@ -11,6 +11,28 @@ def test_create_interconnector_sos():
         'segment_number': [1, 2, 3],
         'break_point': [-100, 0, 100]
     })
+
+
+def test_lossless():
+    input = pd.DataFrame({
+        'interconnector': ['dummy'],
+        'to_region': ['A'],
+        'from_region': ['B'],
+        'max': [100.0],
+        'min': [-120.0],
+    })
+    output = interconnectors.create(input, 0)
+    expected_output = pd.DataFrame({
+        'variable_id': [0, 0],
+        'interconnector': ['dummy', 'dummy'],
+        'region': ['A', 'B'],
+        'lower_bound': [-120.0, -120.0],
+        'upper_bound': [ 100.0, 100.0],
+        'type': ['continuous', 'continuous'],
+        'service': ['energy', 'energy'],
+        'coefficient': [1.0, -1.0]
+    })
+    assert_frame_equal(output, expected_output)
 
 
 def test_interconnector_hard_code():

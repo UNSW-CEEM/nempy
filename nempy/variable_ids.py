@@ -1,7 +1,8 @@
+import pandas as pd
 from nempy import helper_functions as hf
 
 
-def energy(capacity_bids, next_variable_id):
+def energy(capacity_bids, unit_info, next_variable_id):
     """Create decision variables that correspond to unit bids, for use in the linear program.
 
     This function defines the needed parameters for each variable, with a lower bound equal to zero, an upper bound
@@ -64,4 +65,8 @@ def energy(capacity_bids, next_variable_id):
     stacked_bids = hf.save_index(stacked_bids, 'variable_id', next_variable_id)
     stacked_bids['lower_bound'] = 0.0
     stacked_bids['type'] = 'continuous'
-    return stacked_bids.loc[:, ['variable_id', 'unit', 'capacity_band', 'lower_bound', 'upper_bound', 'type']]
+    stacked_bids['service'] = 'energy'
+    stacked_bids['coefficient'] = 1.0
+    stacked_bids = pd.merge(stacked_bids, unit_info.loc[:, ['unit', 'region']], 'inner', on='unit')
+    return stacked_bids.loc[:, ['variable_id', 'unit', 'capacity_band', 'lower_bound', 'upper_bound', 'type', 'region',
+                                'service', 'coefficient']]

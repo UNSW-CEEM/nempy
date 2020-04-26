@@ -2,7 +2,7 @@ from nempy import helper_functions as hf
 import pandas as pd
 
 
-def energy(energy_bid_ids, demand, unit_info, next_constraint_id):
+def energy(demand, next_constraint_id):
     """Create the constraints that ensure the amount of supply dispatched in each region equals demand.
 
     If only one region exists then the constraint will be of the form:
@@ -60,14 +60,8 @@ def energy(energy_bid_ids, demand, unit_info, next_constraint_id):
     # Set constraint level values.
     constraints_rhs['type'] = '='
     constraints_rhs['rhs'] = constraints_rhs['demand']
-    # Get the ids of the lhs terms and set their coefficients.
-    constraints_lhs = energy_bid_ids.loc[:, ['variable_id', 'unit']]
-    constraints_lhs['coefficient'] = 1.0
-    # Find the region that each unit is in.
-    constraints_lhs = pd.merge(constraints_lhs, unit_info, how='inner', on='unit')
-    # Using each units region find its appropriate constraint id
-    constraints_lhs = pd.merge(constraints_lhs, constraints_rhs.loc[:, ['constraint_id', 'region']])
+    constraints_rhs['service'] = 'energy'
+    constraints_rhs['coefficient'] = 1.0
     # Return just the needed columns.
-    constraints_lhs = constraints_lhs.loc[:, ['constraint_id', 'variable_id', 'coefficient']]
-    constraints_rhs = constraints_rhs.loc[:, ['region', 'constraint_id', 'type', 'rhs']]
-    return constraints_lhs, constraints_rhs
+    constraints_rhs = constraints_rhs.loc[:, ['region', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']]
+    return constraints_rhs

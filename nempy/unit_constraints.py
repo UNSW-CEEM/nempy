@@ -2,7 +2,7 @@ import pandas as pd
 from nempy import helper_functions as hf
 
 
-def capacity(energy_bid_ids, unit_limits, next_constraint_id):
+def capacity(unit_limits, next_constraint_id):
     """Create the constraints that ensure the dispatch of a unit is capped by its capacity.
 
     A constraint of the following form will be created for each unit:
@@ -47,14 +47,13 @@ def capacity(energy_bid_ids, unit_limits, next_constraint_id):
             type: str
             rhs: float
     """
-    capacity_constraints = create_constraints(energy_bid_ids, unit_limits, next_constraint_id, 'capacity', '<=')
-    constraints_lhs = capacity_constraints.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
-    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']].\
+    capacity_constraints = create_constraints(unit_limits, next_constraint_id, 'capacity', '<=')
+    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']].\
         drop_duplicates('constraint_id')
-    return constraints_lhs, constraints_rhs
+    return constraints_rhs
 
 
-def ramp_up(bidding_ids, unit_limits, next_constraint_id, dispatch_interval):
+def ramp_up(unit_limits, next_constraint_id, dispatch_interval):
     """Create the constraints that ensure the dispatch of a unit is capped by its ramp up rate.
 
     A constraint of the following form will be created for each unit:
@@ -100,14 +99,13 @@ def ramp_up(bidding_ids, unit_limits, next_constraint_id, dispatch_interval):
             rhs: float
     """
     unit_limits['max_output'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (dispatch_interval / 60)
-    capacity_constraints = create_constraints(bidding_ids, unit_limits, next_constraint_id, 'max_output', '<=')
-    constraints_lhs = capacity_constraints.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
-    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']].\
+    capacity_constraints = create_constraints(unit_limits, next_constraint_id, 'max_output', '<=')
+    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']].\
         drop_duplicates('constraint_id')
-    return constraints_lhs, constraints_rhs
+    return constraints_rhs
 
 
-def ramp_down(bidding_ids, unit_limits, next_constraint_id, dispatch_interval):
+def ramp_down(unit_limits, next_constraint_id, dispatch_interval):
     """Create the constraints that ensure the dispatch of a unit is capped by its ramp down rate.
 
     A constraint of the following form will be created for each unit:
@@ -154,20 +152,19 @@ def ramp_down(bidding_ids, unit_limits, next_constraint_id, dispatch_interval):
             rhs: float
     """
     unit_limits['min_output'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (dispatch_interval / 60)
-    capacity_constraints = create_constraints(bidding_ids, unit_limits, next_constraint_id, 'min_output', '>=')
-    constraints_lhs = capacity_constraints.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
-    constraints_rhs = capacity_constraints.loc[:, ['constraint_id', 'type', 'rhs']].drop_duplicates('constraint_id')
-    return constraints_lhs, constraints_rhs
+    capacity_constraints = create_constraints(unit_limits, next_constraint_id, 'min_output', '>=')
+    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']].\
+        drop_duplicates('constraint_id')
+    return constraints_rhs
 
 
-def create_constraints(bidding_ids, unit_limits, next_constraint_id, rhs_col, direction):
+def create_constraints(unit_limits, next_constraint_id, rhs_col, direction):
     # Create constraint row indexes for each unit.
     constraint_rows = hf.save_index(unit_limits.reset_index(drop=True), 'constraint_id', next_constraint_id)
     constraint_rows = constraint_rows.loc[:, ['unit', 'constraint_id', rhs_col]]
-    # Merge in bidding data to constraint row data.
-    constraints = pd.merge(constraint_rows, bidding_ids, how='inner', on='unit')
-    constraints['rhs'] = constraints[rhs_col]
-    constraints = constraints.loc[:, ['variable_id', 'constraint_id', 'unit', 'rhs']]
-    constraints['coefficient'] = 1
-    constraints['type'] = direction
-    return constraints
+    constraint_rows['rhs'] = constraint_rows[rhs_col]
+    constraint_rows = constraint_rows.loc[:, ['constraint_id', 'unit', 'rhs']]
+    constraint_rows['coefficient'] = 1.0
+    constraint_rows['type'] = direction
+    constraint_rows['service'] = 'energy'
+    return constraint_rows

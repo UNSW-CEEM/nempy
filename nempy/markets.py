@@ -1,5 +1,8 @@
 import numpy as np
-from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids
+import pandas as pd
+from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
+    create_lhs, interconnectors
+
 
 
 class Spot:
@@ -9,10 +12,8 @@ class Spot:
         self.dispatch_interval = dispatch_interval
         self.unit_info = None
         self.decision_variables = {}
-        self.constraints_lhs_coefficients = {}
         self.constraints_rhs_and_type = {}
         self.constraints_dynamic_rhs_and_type = {}
-        self.market_constraints_lhs_coefficients = {}
         self.market_constraints_rhs_and_type = {}
         self.objective_function_components = {}
         self.next_variable_id = 0
@@ -20,7 +21,7 @@ class Spot:
         self.check = True
 
     @check.required_columns('unit_info', ['unit'])
-    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.int64})
+    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.float64})
     @check.required_columns('unit_info', ['unit', 'region'])
     @check.allowed_columns('unit_info', ['unit', 'region', 'loss_factor'])
     @check.column_values_must_be_real('unit_info', ['loss_factor'])
@@ -138,13 +139,13 @@ class Spot:
         The market should now have the variables.
 
         >>> print(simple_market.decision_variables['energy_bids'])
-           variable_id unit capacity_band  lower_bound  upper_bound        type
-        0            0    A             1          0.0           20  continuous
-        1            1    A             2          0.0           20  continuous
-        2            2    A             3          0.0            5  continuous
-        3            3    B             1          0.0           50  continuous
-        4            4    B             2          0.0           30  continuous
-        5            5    B             3          0.0           10  continuous
+           variable_id unit capacity_band  ...  region  service coefficient
+        0            0    A             1  ...     NSW   energy         1.0
+        1            1    A             2  ...     NSW   energy         1.0
+        2            2    A             3  ...     NSW   energy         1.0
+        3            3    B             1  ...     NSW   energy         1.0
+        4            4    B             2  ...     NSW   energy         1.0
+        5            5    B             3  ...     NSW   energy         1.0
 
         Parameters
         ----------
@@ -156,7 +157,8 @@ class Spot:
             unit      unique identifier of a dispatch unit (as `str`)
             1         bid volume in the 1st band, in MW (as `np.float64`)
             2         bid volume in the 2nd band, in MW (as `np.float64`)
-            n         bid volume in the nth band, in MW (as `np.float64`)
+              :
+            10         bid volume in the nth band, in MW (as `np.float64`)
             ========  ======================================================
 
         Returns
@@ -178,20 +180,9 @@ class Spot:
         """
 
         # Create unit variable ids
-        self.decision_variables['energy_bids'] = variable_ids.energy(volume_bids, self.next_variable_id)
+        self.decision_variables['energy_bids'] = variable_ids.energy(volume_bids, self.unit_info, self.next_variable_id)
         # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['energy_bids']['variable_id']) + 1
-        # Clear existing program elements that depend on volume bid decision variables.
-        for constraint_set in ['capacity', 'ramp_up', 'ramp_down']:
-            if constraint_set in self.constraints_lhs_coefficients:
-                del self.constraints_lhs_coefficients[constraint_set]
-                del self.constraints_rhs_and_type[constraint_set]
-        for constraint_set in ['demand']:
-            if constraint_set in self.constraints_lhs_coefficients:
-                del self.market_constraints_lhs_coefficients[constraint_set]
-                del self.market_constraints_rhs_and_type[constraint_set]
-        if 'energy_bids' in self.objective_function_components:
-            del self.objective_function_components['energy_bids']
 
     @check.energy_bid_ids_exist
     @check.required_columns('volume_bids', ['unit'])
@@ -258,13 +249,13 @@ class Spot:
         The market should now have costs. Note the bid costs have been divided by the loss factors provided.
 
         >>> print(simple_market.objective_function_components['energy_bids'])
-           variable_id unit capacity_band        cost
-        0            0    A             1   52.631579
-        1            1    A             2  105.263158
-        2            2    A             3  105.263158
-        3            3    B             1   90.909091
-        4            4    B             2  118.181818
-        5            5    B             3  136.363636
+           variable_id unit capacity_band   cost
+        0            0    A             1   50.0
+        1            1    A             2  100.0
+        2            2    A             3  100.0
+        3            3    B             1  100.0
+        4            4    B             2  130.0
+        5            5    B             3  150.0
 
         Parameters
         ----------
@@ -366,18 +357,9 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.constraints_rhs_and_type['unit_capacity'])
-          unit  constraint_id type    rhs
-        0    A              0   <=   60.0
-        3    B              1   <=  100.0
-
-        >>> print(simple_market.constraints_lhs_coefficients['unit_capacity'])
-           variable_id  constraint_id  coefficient
-        0            0              0            1
-        1            1              0            1
-        2            2              0            1
-        3            3              1            1
-        4            4              1            1
-        5            5              1            1
+          unit  constraint_id type    rhs  coefficient service
+        0    A              0   <=   60.0          1.0  energy
+        1    B              1   <=  100.0          1.0  energy
 
         Parameters
         ----------
@@ -410,13 +392,11 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = unit_constraints.capacity(self.decision_variables['energy_bids'], unit_limits,
-                                                                   self.next_constraint_id)
+        rhs_and_type = unit_constraints.capacity(unit_limits, self.next_constraint_id)
         # 2. Save constraint details.
-        self.constraints_lhs_coefficients['unit_capacity'] = lhs_coefficients
         self.constraints_rhs_and_type['unit_capacity'] = rhs_and_type
         # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.energy_bid_ids_exist
     @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
@@ -480,18 +460,9 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.constraints_rhs_and_type['ramp_up'])
-          unit  constraint_id type    rhs
-        0    A              0   <=   35.0
-        3    B              1   <=  100.0
-
-        >>> print(simple_market.constraints_lhs_coefficients['ramp_up'])
-           variable_id  constraint_id  coefficient
-        0            0              0            1
-        1            1              0            1
-        2            2              0            1
-        3            3              1            1
-        4            4              1            1
-        5            5              1            1
+          unit  constraint_id type    rhs  coefficient service
+        0    A              0   <=   35.0          1.0  energy
+        1    B              1   <=  100.0          1.0  energy
 
         Parameters
         ----------
@@ -525,13 +496,11 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = unit_constraints.ramp_up(self.decision_variables['energy_bids'], unit_limits,
-                                                                  self.next_constraint_id, self.dispatch_interval)
+        rhs_and_type = unit_constraints.ramp_up(unit_limits, self.next_constraint_id, self.dispatch_interval)
         # 2. Save constraint details.
-        self.constraints_lhs_coefficients['ramp_up'] = lhs_coefficients
         self.constraints_rhs_and_type['ramp_up'] = rhs_and_type
         # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.energy_bid_ids_exist
     @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
@@ -596,18 +565,9 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.constraints_rhs_and_type['ramp_down'])
-           constraint_id type   rhs
-        0              0   >=  10.0
-        3              1   >=  45.0
-
-        >>> print(simple_market.constraints_lhs_coefficients['ramp_down'])
-           variable_id  constraint_id  coefficient
-        0            0              0            1
-        1            1              0            1
-        2            2              0            1
-        3            3              1            1
-        4            4              1            1
-        5            5              1            1
+          unit  constraint_id type        rhs  coefficient service
+        0    A              0   >=  18.333333          1.0  energy
+        1    B              1   >=  49.166667          1.0  energy
 
         Parameters
         ----------
@@ -641,14 +601,11 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = unit_constraints.ramp_down(self.decision_variables['energy_bids'],
-                                                                    unit_limits, self.next_constraint_id,
-                                                                    self.dispatch_interval)
+        rhs_and_type = unit_constraints.ramp_down(unit_limits, self.next_constraint_id, self.dispatch_interval)
         # 2. Save constraint details.
-        self.constraints_lhs_coefficients['ramp_down'] = lhs_coefficients
         self.constraints_rhs_and_type['ramp_down'] = rhs_and_type
         # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(lhs_coefficients['constraint_id']) + 1
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.energy_bid_ids_exist
     @check.required_columns('demand', ['region', 'demand'])
@@ -709,17 +666,8 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.market_constraints_rhs_and_type['demand'])
-          region  constraint_id type    rhs
-        0    NSW              0    =  100.0
-
-        >>> print(simple_market.market_constraints_lhs_coefficients['demand'])
-           constraint_id  variable_id  coefficient
-        0              0            0          1.0
-        1              0            1          1.0
-        2              0            2          1.0
-        3              0            3          1.0
-        4              0            4          1.0
-        5              0            5          1.0
+          region  constraint_id type    rhs  coefficient service
+        0    NSW              0    =  100.0          1.0  energy
 
         Parameters
         ----------
@@ -752,13 +700,143 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        lhs_coefficients, rhs_and_type = market_constraints.energy(self.decision_variables['energy_bids'],
-                                                                   demand, self.unit_info, self.next_constraint_id)
+        rhs_and_type = market_constraints.energy(demand,  self.next_constraint_id)
         # 2. Save constraint details
-        self.market_constraints_lhs_coefficients['demand'] = lhs_coefficients
         self.market_constraints_rhs_and_type['demand'] = rhs_and_type
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    @check.required_columns('interconnector_directions_and_limits',
+                            ['interconnector', 'to_region', 'from_region', 'max', 'min'])
+    @check.allowed_columns('interconnector_directions_and_limits',
+                           ['interconnector', 'to_region', 'from_region', 'max', 'min'])
+    @check.repeated_rows('interconnector_directions_and_limits', ['interconnector'])
+    @check.column_data_types('interconnector_directions_and_limits',
+                             {'interconnector': str, 'to_region': str, 'from_region' : str, 'max' : np.float64,
+                              'min': np.float64})
+    @check.column_values_must_be_real('interconnector_directions_and_limits', ['min', 'max'])
+    def set_interconnectors(self, interconnector_directions_and_limits):
+        """Creates a lossless link between specified regions.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Define a set of bids, in this example we have just one unit that can provide 100 MW in NSW.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     '1': [100.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     '1': [80.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_energy_price_bids(price_bids)
+
+        Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW', 'VIC'],
+        ...     'demand': [0.0, 90.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
+
+        >>> interconnector = pd.DataFrame({
+        ...     'interconnector': ['inter_one'],
+        ...     'to_region': ['VIC'],
+        ...     'from_region': ['NSW'],
+        ...     'max': [100.0],
+        ...     'min': [-100.0]})
+
+        Create the interconnector.
+
+        >>> simple_market.set_interconnectors(interconnector)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the market dispatch can be retrieved.
+
+        >>> print(simple_market.get_energy_dispatch())
+          unit  dispatch
+        0    A      90.0
+
+        And the interconnector flows can be retrieved.
+
+        >>> print(simple_market.get_interconnector_flows())
+          interconnector  flow
+        0      inter_one  90.0
+
+        Parameters
+        ----------
+        interconnector_directions_and_limits : pd.DataFrame
+            Interconnector definition.
+
+            ==============  =====================================================================================
+            Columns:        Description:
+            interconnector  unique identifier of a interconnector (as `str`)
+            to_region       the region that receives power when flow is in the positive direction (as `str`)
+            from_region     the region that power is drawn from when flow is in the positive direction (as `str`)
+            max             the maximum power flow in the positive direction, in MW (as `np.float64`)
+            min             the maximum power flow in the negative direction, in MW (as `np.float64`)
+            ==============  ====================================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any interconnector.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If any columns are missing.
+            UnexpectedColumn
+                If there are any additional columns in the input DataFrame.
+            ColumnValues
+                If there are inf, null values in the max and min columns.
+        """
+        # Create unit variable ids
+        self.decision_variables['interconnectors'] = interconnectors.create(interconnector_directions_and_limits,
+                                                                            self.next_variable_id)
+        # Update the variable id counter:
+        self.next_variable_id = max(self.decision_variables['interconnectors']['variable_id']) + 1
 
     @check.pre_dispatch
     def dispatch(self):
@@ -848,10 +926,17 @@ class Spot:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
+        constraints_lhs = create_lhs.create(self.market_constraints_rhs_and_type, self.decision_variables,
+                                                   ['region', 'service'])
+        if len(self.constraints_rhs_and_type) > 0:
+            unit_constraints_lhs = create_lhs.create(self.constraints_rhs_and_type, self.decision_variables,
+                                                     ['unit', 'service'])
+            constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
+
         decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
-            self.decision_variables, self.constraints_lhs_coefficients, self.constraints_rhs_and_type,
-            self.market_constraints_lhs_coefficients, self.market_constraints_rhs_and_type,
-            self.objective_function_components, self.constraints_dynamic_rhs_and_type)
+            self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
+            self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
+            self.objective_function_components)
         self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
         self.decision_variables = decision_variables
 
@@ -1024,3 +1109,102 @@ class Spot:
         """
         prices = self.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
         return prices
+
+    def get_interconnector_flows(self):
+        """Retrieves the  flows for each interconnector.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Define a set of bids, in this example we have just one unit that can provide 100 MW in NSW.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     '1': [100.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     '1': [80.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_energy_price_bids(price_bids)
+
+        Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW', 'VIC'],
+        ...     'demand': [0.0, 90.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
+
+        >>> interconnector = pd.DataFrame({
+        ...     'interconnector': ['inter_one'],
+        ...     'to_region': ['VIC'],
+        ...     'from_region': ['NSW'],
+        ...     'max': [100.0],
+        ...     'min': [-100.0]})
+
+        Create the interconnector.
+
+        >>> simple_market.set_interconnectors(interconnector)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the market dispatch can be retrieved.
+
+        >>> print(simple_market.get_energy_dispatch())
+          unit  dispatch
+        0    A      90.0
+
+        And the interconnector flows can be retrieved.
+
+        >>> print(simple_market.get_interconnector_flows())
+          interconnector  flow
+        0      inter_one  90.0
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
+        """
+        dispatch = self.decision_variables['interconnectors'].loc[:, ['interconnector', 'value']]
+        dispatch.columns = ['interconnector', 'flow']
+        return dispatch.drop_duplicates('interconnector').reset_index(drop=True)
