@@ -838,6 +838,9 @@ class Spot:
         # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['interconnectors']['variable_id']) + 1
 
+    def set_interconnector_losses(self):
+        pass
+
     @check.pre_dispatch
     def dispatch(self):
         """Combines the elements of the linear program and solves to find optimal dispatch.

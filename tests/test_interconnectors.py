@@ -4,12 +4,72 @@ from nempy import markets, interconnectors
 
 
 def test_create_interconnector_sos():
-    def loss_function(loss):
-        return 1 - loss
+    def loss_function(flow):
+        return flow * 0.05
+
+    losses = pd.DataFrame({
+        'interconnector': ['A'],
+        'from_region_loss_share': [0.5],
+        'loss_function': [loss_function]
+    })
 
     break_points = pd.DataFrame({
+        'interconnector': ['A', 'A', 'A'],
         'segment_number': [1, 2, 3],
         'break_point': [-100, 0, 100]
+    })
+
+    inter_variables = pd.DataFrame({
+        'variable_id': [0, 0],
+        'interconnector': ['A', 'A'],
+        'region': ['X', 'Y'],
+        'lower_bound': [0.0, 0.0],
+        'upper_bound': [100.0, 100.0],
+        'type': ['continuous', 'continuous'],
+        'service': ['energy', 'energy'],
+        'coefficient': [1.0, -1.0]
+    })
+
+    nv = 1
+    nc = 1
+
+    decision_variables, lhs, weights_sum_rhs, dynamic_rhs = \
+       interconnectors.add_losses(break_points, inter_variables, losses, nv, nc)
+
+    loss_variables = pd.DataFrame({
+        'variable_id': [0, 0],
+        'interconnector': ['dummy', 'dummy'],
+        'region': ['A', 'B'],
+        'lower_bound': [0.0, 0.0],
+        'upper_bound': [100.0, 100.0],
+        'type': ['continuous', 'continuous'],
+        'service': ['energy', 'energy'],
+        'coefficient': [0.5, 0.5]
+    })
+
+    weights = pd.DataFrame({
+        'variable_id': [nv + 2, nv + 3, nv + 4],
+        'lower_bound': [0, 0, 0],
+        'upper_bound': [1, 1, 1],
+        'type': ['continuous', 'continuous', 'continuous']
+    })
+
+    constraints_lhs = pd.DataFrame({
+        'variable_id': [nv + 2, nv + 3, nv + 4, nv + 2, nv + 3, nv + 4, nv + 2, nv + 3, nv + 4],
+        'constraint_id': [nc, nc, nc, nc + 1, nc + 1, nc + 1, nc + 2, nc + 2, nc + 2],
+        'coefficient': [1, 1, 1, -100, 0, 100, 100 * 0.05, 0, 100 * 0.05]
+    })
+
+    constraints_rhs = pd.DataFrame({
+        'constraint_id': [nc],
+        'rhs': [1],
+        'type': ['='],
+    })
+
+    constraints_dynamic_rhs = pd.DataFrame({
+        'constraint_id': [nc + 1, nc + 2],
+        'rhs_variable_id': [nv, nv + 1],
+        'type': ['=', '='],
     })
 
 
@@ -27,7 +87,7 @@ def test_lossless():
         'interconnector': ['dummy', 'dummy'],
         'region': ['A', 'B'],
         'lower_bound': [-120.0, -120.0],
-        'upper_bound': [ 100.0, 100.0],
+        'upper_bound': [100.0, 100.0],
         'type': ['continuous', 'continuous'],
         'service': ['energy', 'energy'],
         'coefficient': [1.0, -1.0]

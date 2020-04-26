@@ -3,6 +3,8 @@ import pandas as pd
 
 
 def save_index(dataframe, new_col_name, offset=0):
+    # Make sure index starts at zero.
+    dataframe = dataframe.reset_index(drop=True)
     # Save the indexes of the data frame as an np array.
     index_list = np.array(dataframe.index.values)
     # Add an offset to each element of the array.
