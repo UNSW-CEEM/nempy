@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
-    create_lhs, interconnectors
+    create_lhs, interconnectors as inter
 
 
 
@@ -835,26 +835,192 @@ class Spot:
                 If there are inf, null values in the max and min columns.
         """
         # Create unit variable ids
-        self.decision_variables['interconnectors'] = interconnectors.create(interconnector_directions_and_limits,
-                                                                            self.next_variable_id)
+        self.decision_variables['interconnectors'] = inter.create(interconnector_directions_and_limits,
+                                                                  self.next_variable_id)
         # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['interconnectors']['variable_id']) + 1
 
-    @check.required_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=1)
-    @check.allowed_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=1)
-    @check.repeated_rows('interpolation_break_point', ['interconnector', 'break_point'], arg=1)
-    @check.column_data_types('interpolation_break_point', {'interconnector': str, 'break_point': np.float64}, arg=1)
-    @check.column_values_must_be_real('interpolation_break_point', ['break_point'], arg=1)
-    @check.required_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=2)
-    @check.allowed_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=2)
-    @check.repeated_rows('loss_functions', ['interconnector'], arg=2)
+    @check.interconnectors_exist
+    @check.required_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=1)
+    @check.allowed_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=1)
+    @check.repeated_rows('loss_functions', ['interconnector'], arg=1)
     @check.column_data_types('loss_functions', {'interconnector': str, 'from_region_loss_share': np.float64,
-                                                'loss_function': 'callable'}, arg=2)
-    @check.column_values_must_be_real('loss_functions', ['break_point'], arg=2)
-    def set_interconnector_losses(self, interpolation_break_points, loss_functions):
-        loss_variables, weight_variables, lhs, weights_sum_rhs, dynamic_rhs = \
-            interconnectors.add_losses(interpolation_break_points, self.decision_variables['interconnectors'],
-                                       loss_functions, self.next_variable_id, self.next_constraint_id)
+                                                'loss_function': 'callable'}, arg=1)
+    @check.column_values_must_be_real('loss_functions', ['break_point'], arg=1)
+    @check.column_values_outside_range('loss_functions', {'from_region_loss_share': [0.0, 1.0]}, arg=1)
+    @check.required_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=2)
+    @check.allowed_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=2)
+    @check.repeated_rows('interpolation_break_point', ['interconnector', 'break_point'], arg=2)
+    @check.column_data_types('interpolation_break_point', {'interconnector': str, 'break_point': np.float64}, arg=2)
+    @check.column_values_must_be_real('interpolation_break_point', ['break_point'], arg=2)
+    def set_interconnector_losses(self, loss_functions, interpolation_break_points):
+        """Creates linearised loss functions for interconnectors.
+
+        Creates a loss variable for each interconnector, this variable models losses by adding demand to each region.
+        The losses are proportioned to each region according to the from_region_loss_share. In a region with one
+        interconnector, where the region is the nominal from region, the impact on the supply equals demand constraint
+        would be:
+
+            generation - interconnector flow - interconnector losses * from_region_loss_share = demand
+
+        If the region was the nominal to region, then:
+
+            generation + interconnector flow - interconnector losses *  (1 - from_region_loss_share) = demand
+
+        The loss variable is constrained to be a linear interpolation of the loss function between the two break points
+        either side of to the actual line flow. This is achieved using a type 2 Special ordered set, where each
+        variable is bound between 0 and 1, only 2 variables can be greater than 0 and all variables must sum to 1.
+        The actual loss function is evaluated at each break point, the variables of the special order set are
+        constrained such that their values weight the distance of the actual flow from the break points on either side
+        e.g.
+
+
+
+        Examples
+        --------
+            This is an example of the minimal set of steps for using this method.
+
+            Import required packages.
+
+            >>> import pandas as pd
+            >>> from nempy import markets
+
+            Create a market instance.
+
+            >>> simple_market = markets.Spot()
+
+            The only generator is located in NSW.
+
+            >>> unit_info = pd.DataFrame({
+            ...    'unit': ['A'],
+            ...    'region': ['NSW']})
+
+            >>> simple_market.set_unit_info(unit_info)
+
+            Volume of each bids.
+
+            >>> volume_bids = pd.DataFrame({
+            ...    'unit': ['A'],
+            ...    '1': [100.0]})
+
+            >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+
+            Price of each bid.
+
+            >>> price_bids = pd.DataFrame({
+            ...    'unit': ['A'],
+            ...    '1': [50.0]})
+
+            >>> simple_market.set_unit_energy_price_bids(price_bids)
+
+            NSW has no demand but VIC has 90 MW.
+
+            >>> demand = pd.DataFrame({
+            ...    'region': ['NSW', 'VIC'],
+            ...    'demand': [0.0, 90.0]})
+
+            >>> simple_market.set_demand_constraints(demand)
+
+            There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
+
+            >>> interconnectors = pd.DataFrame({
+            ...    'interconnector': ['little_link'],
+            ...    'to_region': ['VIC'],
+            ...    'from_region': ['NSW'],
+            ...    'max': [100.0],
+            ...    'min': [-120.0]})
+
+            >>> simple_market.set_interconnectors(interconnectors)
+
+            The interconnector loss function. In this case losses are always 5 % of line flow.
+
+            >>> def constant_losses(flow):
+            ...     return abs(flow) * 0.05
+
+            The loss function on a per interconnector basis. Also details how the losses should be proportioned to the
+            connected regions.
+
+            >>> loss_functions = pd.DataFrame({
+            ...    'interconnector': ['little_link'],
+            ...    'from_region_loss_share': [0.5],  # losses are shared equally.
+            ...    'loss_function': [constant_losses]})
+
+            The points to linearly interpolate the loss function bewteen. In this example the loss function is linear
+            so only three points are needed, but if a non linear loss function was used then more points would be better.
+
+            >>> interpolation_break_points = pd.DataFrame({
+            ...    'interconnector': ['little_link', 'little_link', 'little_link'],
+            ...    'break_point': [-120.0, 0.0, 100]})
+
+            >>> simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
+
+            Calculate dispatch.
+
+            >>> simple_market.dispatch()
+
+            Inspect resulting line flows.
+
+            >>> print(simple_market.get_interconnector_flows())
+              interconnector       flow
+            0    little_link  92.307692
+
+        Parameters
+        ----------
+        loss_functions : pd.DataFrame
+            ======================  ==============================================================================
+            Columns:                Description:
+            interconnector          unique identifier of a interconnector (as `str`)
+            from_region_loss_share  The fraction of loss occuring in the from region, 0.0 to 1.0 (as `np.float64`)
+            loss_function           A function that takes a flow, in MW as a float and returns the losses in MW
+                                    (as `callable`)
+            ======================  ==============================================================================
+
+        interpolation_break_points : pd.DataFrame
+            ==============  ============================================================================================
+            Columns:        Description:
+            interconnector  unique identifier of a interconnector (as `str`)
+            break_point     points between which the loss function will be linearly interpolated, in MW
+                            (as `np.float64`)
+            ==============  ============================================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ModelBuildError
+            If all the interconnectors in the input data have not already been added to the model.
+        RepeatedRowError
+            If there is more than one row for any interconnector in loss_functions. Or if there is a repeated break
+            point for an interconnector in interpolation_break_points.
+        ColumnDataTypeError
+            If columns are not of the required type.
+        MissingColumnError
+            If any columns are missing.
+        UnexpectedColumn
+            If there are any additional columns in the input DataFrames.
+        ColumnValues
+            If there are inf or null values in the numeric columns of either input DataFrames. Or if
+            from_region_loss_share are outside the range of 0.0 to 1.0
+        """
+        loss_variables = inter.create_loss_variables(self.decision_variables['interconnectors'], loss_functions,
+                                                     self.next_variable_id)
+        next_variable_id = loss_variables['variable_id'].max() + 1
+        weight_variables = inter.create_weights(interpolation_break_points, next_variable_id)
+        weights_sum_lhs, weights_sum_rhs = inter.create_weights_must_sum_to_one(weight_variables,
+                                                                                self.next_constraint_id)
+        next_constraint_id = weights_sum_rhs['constraint_id'].max() + 1
+        link_to_flow_lhs, link_to_flow_rhs = inter.link_weights_to_inter_flow(weight_variables,
+                                                                              self.decision_variables['interconnectors'],
+                                                                              next_constraint_id)
+        next_constraint_id = link_to_flow_rhs['constraint_id'].max() + 1
+        link_to_loss_lhs, link_to_loss_rhs = inter.link_weights_to_inter_loss(weight_variables, loss_variables,
+                                                                              loss_functions, next_constraint_id)
+        lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs])
+        dynamic_rhs = pd.concat([link_to_flow_rhs, link_to_loss_rhs])
+        weight_variables = weight_variables.loc[:,
+                           ['variable_id', 'interconnector', 'lower_bound', 'upper_bound', 'type']]
         self.decision_variables['interconnector_losses'] = loss_variables
         self.decision_variables['interpolation_weights'] = weight_variables
         self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
@@ -862,7 +1028,6 @@ class Spot:
         self.constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
         self.next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
         self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
-
 
     @check.pre_dispatch
     def dispatch(self):

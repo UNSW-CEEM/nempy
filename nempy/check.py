@@ -7,6 +7,7 @@ def keep_details(fn):
         inner.__name__ = fn.__name__
         inner.__doc__ = fn.__doc__
         return inner
+
     return wrapper
 
 
@@ -15,6 +16,20 @@ def energy_bid_ids_exist(func):
     def wrapper(*args):
         if 'energy_bids' not in args[0].decision_variables:
             raise ModelBuildError('This cannot be performed before energy volume bids are set.')
+        func(*args)
+
+    return wrapper
+
+
+def interconnectors_exist(func):
+    @keep_details(func)
+    def wrapper(*args):
+        if 'interconnectors' not in args[0].decision_variables:
+            raise ModelBuildError('Losses cannot be added to interconnectors because they do not exist yet.')
+        existing_inters = args[0].decision_variables['interconnectors']['interconnector'].unique()
+        new_inters = args[1]['interconnector'].unique()
+        if not all(inter in existing_inters for inter in new_inters):
+            raise ModelBuildError('Losses cannot be added to interconnectors because they do not exist yet.')
         func(*args)
     return wrapper
 
@@ -31,6 +46,7 @@ def bid_prices_monotonic_increasing(func, arg=1):
             if not bids[col].is_monotonic:
                 raise BidsNotMonotonicIncreasing('Bids of each unit are not monotonic increasing.')
         func(*args)
+
     return wrapper
 
 
@@ -41,6 +57,7 @@ def pre_dispatch(func):
                 args[0].objective_function_components:
             raise ModelBuildError('No unit energy bids provided.')
         func(*args)
+
     return wrapper
 
 
@@ -51,7 +68,9 @@ def repeated_rows(name, cols, arg=1):
             if args[0].check and len(args[arg].index) != len(args[arg].drop_duplicates(cols)):
                 raise RepeatedRowError('{} should only have one row for each {}.'.format(name, ' '.join(cols)))
             func(*args)
+
         return wrapper
+
     return decorator
 
 
@@ -62,11 +81,11 @@ def column_data_types(name, dtypes, arg=1):
             if args[0].check:
                 for column in args[arg].columns:
                     if column in dtypes and dtypes[column] == str:
-                            if not all(args[arg].apply(lambda x: type(x[column]) == str, axis=1)):
-                                raise ColumnDataTypeError('Column {} in {} should have type str'.format(column, name))
+                        if not all(args[arg].apply(lambda x: type(x[column]) == str, axis=1)):
+                            raise ColumnDataTypeError('Column {} in {} should have type str'.format(column, name))
                     elif column in dtypes and dtypes[column] == 'callable':
-                            if not all(args[arg].apply(lambda x: callable(x[column]), axis=1)):
-                                raise ColumnDataTypeError('Column {} in {} should be a function'.format(column, name))
+                        if not all(args[arg].apply(lambda x: callable(x[column]), axis=1)):
+                            raise ColumnDataTypeError('Column {} in {} should be a function'.format(column, name))
                     elif column in dtypes and dtypes[column] != args[arg][column].dtype:
                         raise ColumnDataTypeError('Column {} in {} should have type {}'.
                                                   format(column, name, dtypes[column]))
@@ -74,7 +93,9 @@ def column_data_types(name, dtypes, arg=1):
                         raise ColumnDataTypeError('Column {} in {} should have type {}'.
                                                   format(column, name, dtypes['else']))
             func(*args)
+
         return wrapper
+
     return decorator
 
 
@@ -89,7 +110,9 @@ def required_columns(name, required, arg=1):
                 if len(args[arg].columns) < 2:
                     raise MissingColumnError("No bid bands provided.")
             func(*args)
+
         return wrapper
+
     return decorator
 
 
@@ -102,7 +125,9 @@ def allowed_columns(name, allowed, arg=1):
                     if column not in allowed:
                         raise UnexpectedColumn("Column '{}' not allowed in {}.".format(column, name))
             func(*args)
+
         return wrapper
+
     return decorator
 
 
@@ -121,7 +146,9 @@ def column_values_must_be_real(name, cols_to_check, arg=1):
                     if args[arg][column].isnull().any():
                         raise ColumnValues("Null values not allowed in column '{}' in {}.".format(column, name))
             func(*args)
+
         return wrapper
+
     return decorator
 
 
@@ -136,7 +163,28 @@ def column_values_not_negative(name, cols_to_check, arg=1):
                     if args[arg][column].min() < 0.0:
                         raise ColumnValues("Negative values not allowed in column '{}' in {}.".format(column, name))
             func(*args)
+
         return wrapper
+
+    return decorator
+
+
+def column_values_outside_range(name, column_ranges, arg=1):
+    def decorator(func):
+        @keep_details(func)
+        def wrapper(*args):
+            if args[0].check:
+                for column, allowed_range in column_ranges.items():
+                    if not all(args[arg].apply(
+                            lambda x: allowed_range[0] <= x[column] <= allowed_range[1], axis=1)):
+                        raise ColumnValues(
+                            "Values in {} in column '{}' outside the range {} to {}.".format(name, column,
+                                                                                             allowed_range[0],
+                                                                                             allowed_range[1]))
+            func(*args)
+
+        return wrapper
+
     return decorator
 
 
@@ -166,4 +214,3 @@ class ColumnValues(Exception):
 
 class BidsNotMonotonicIncreasing(Exception):
     """Raise for non monotonic increasing bids."""
-

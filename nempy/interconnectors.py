@@ -19,23 +19,6 @@ def create(definitions, next_variable_id):
     return definitions
 
 
-def add_losses(break_points, inter_variables, loss_functions, next_variable_id, next_constraint_id):
-    loss_variables = create_loss_variables(inter_variables, loss_functions, next_variable_id)
-    next_variable_id = loss_variables['variable_id'].max() + 1
-    weight_variables = create_weights(break_points, next_variable_id)
-    weights_sum_lhs, weights_sum_rhs = create_weights_must_sum_to_one(weight_variables, next_constraint_id)
-    next_constraint_id = weights_sum_rhs['constraint_id'].max() + 1
-    link_to_flow_lhs, link_to_flow_rhs = link_weights_to_inter_flow(weight_variables, inter_variables,
-                                                                    next_constraint_id)
-    next_constraint_id = link_to_flow_rhs['constraint_id'].max() + 1
-    link_to_loss_lhs, link_to_loss_rhs = link_weights_to_inter_loss(weight_variables, loss_variables, loss_functions,
-                                                                    next_constraint_id)
-    lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs])
-    dynamic_rhs = pd.concat([link_to_flow_rhs, link_to_loss_rhs])
-    weight_variables = weight_variables.loc[:, ['variable_id', 'interconnector', 'lower_bound', 'upper_bound', 'type']]
-    return loss_variables, weight_variables, lhs, weights_sum_rhs, dynamic_rhs
-
-
 def link_weights_to_inter_loss(weight_variables, loss_variables, loss_functions, next_constraint_id):
     constraint_ids = weight_variables.loc[:, ['interconnector']].drop_duplicates('interconnector')
     constraint_ids = hf.save_index(constraint_ids, 'constraint_id', next_constraint_id)

@@ -124,7 +124,7 @@ def test_one_interconnector():
     # The only generator is located in NSW.
     unit_info = pd.DataFrame({
         'unit': ['A'],
-        'region': ['NSW'],  # MW
+        'region': ['NSW']  # MW
     })
 
     simple_market.set_unit_info(unit_info)
@@ -132,7 +132,7 @@ def test_one_interconnector():
     # Volume of each bids.
     volume_bids = pd.DataFrame({
         'unit': ['A'],
-        '1': [100.0],  # MW
+        '1': [100.0]  # MW
     })
 
     simple_market.set_unit_energy_volume_bids(volume_bids)
@@ -159,7 +159,7 @@ def test_one_interconnector():
         'to_region': ['VIC'],
         'from_region': ['NSW'],
         'max': [100.0],
-        'min': [-120.0],
+        'min': [-120.0]
     })
 
     simple_market.set_interconnectors(interconnectors)
@@ -183,7 +183,7 @@ def test_one_interconnector():
         'break_point': [-120.0, 0.0, 100]
     })
 
-    simple_market.set_interconnector_losses(interpolation_break_points, loss_functions)
+    simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
     # Calculate dispatch.
     simple_market.dispatch()
