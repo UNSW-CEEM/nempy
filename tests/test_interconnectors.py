@@ -5,7 +5,7 @@ from nempy import markets, interconnectors
 
 def test_create_interconnector_sos():
     def loss_function(flow):
-        return flow * 0.05
+        return abs(flow) * 0.05
 
     losses = pd.DataFrame({
         'interconnector': ['A'],
@@ -15,7 +15,6 @@ def test_create_interconnector_sos():
 
     break_points = pd.DataFrame({
         'interconnector': ['A', 'A', 'A'],
-        'segment_number': [1, 2, 3],
         'break_point': [-100, 0, 100]
     })
 
@@ -36,10 +35,10 @@ def test_create_interconnector_sos():
     decision_variables, lhs, weights_sum_rhs, dynamic_rhs = \
        interconnectors.add_losses(break_points, inter_variables, losses, nv, nc)
 
-    loss_variables = pd.DataFrame({
-        'variable_id': [0, 0],
-        'interconnector': ['dummy', 'dummy'],
-        'region': ['A', 'B'],
+    expected_loss_variables = pd.DataFrame({
+        'variable_id': [nc, nc],
+        'interconnector': ['A', 'A'],
+        'region': ['X', 'Y'],
         'lower_bound': [0.0, 0.0],
         'upper_bound': [100.0, 100.0],
         'type': ['continuous', 'continuous'],
@@ -47,30 +46,39 @@ def test_create_interconnector_sos():
         'coefficient': [0.5, 0.5]
     })
 
-    weights = pd.DataFrame({
-        'variable_id': [nv + 2, nv + 3, nv + 4],
+    expected_weights = pd.DataFrame({
+        'variable_id': [nv + 1, nv + 2, nv + 3],
+        'interconnector': ['A', 'A', 'A'],
         'lower_bound': [0, 0, 0],
         'upper_bound': [1, 1, 1],
         'type': ['continuous', 'continuous', 'continuous']
     })
 
-    constraints_lhs = pd.DataFrame({
-        'variable_id': [nv + 2, nv + 3, nv + 4, nv + 2, nv + 3, nv + 4, nv + 2, nv + 3, nv + 4],
+    expected_constraints_lhs = pd.DataFrame({
+        'variable_id': [nv + 1, nv + 2, nv + 3, nv + 1, nv + 2, nv + 3, nv + 1, nv + 2, nv + 3],
         'constraint_id': [nc, nc, nc, nc + 1, nc + 1, nc + 1, nc + 2, nc + 2, nc + 2],
         'coefficient': [1, 1, 1, -100, 0, 100, 100 * 0.05, 0, 100 * 0.05]
     })
+    expected_constraints_lhs.index = list(expected_constraints_lhs.index)
 
-    constraints_rhs = pd.DataFrame({
+    expected_constraints_rhs = pd.DataFrame({
+        'interconnector': ['A'],
         'constraint_id': [nc],
         'rhs': [1],
         'type': ['='],
     })
 
-    constraints_dynamic_rhs = pd.DataFrame({
+    expected_constraints_dynamic_rhs = pd.DataFrame({
+        'interconnector': ['A', 'A'],
         'constraint_id': [nc + 1, nc + 2],
-        'rhs_variable_id': [nv, nv + 1],
+        'rhs_variable_id': [0, 1],
         'type': ['=', '='],
     })
+
+    assert_frame_equal(decision_variables, pd.concat([expected_loss_variables, expected_weights]))
+    assert_frame_equal(lhs.reset_index(drop=True), expected_constraints_lhs)
+    assert_frame_equal(weights_sum_rhs.reset_index(drop=True), expected_constraints_rhs)
+    assert_frame_equal(dynamic_rhs.reset_index(drop=True), expected_constraints_dynamic_rhs)
 
 
 def test_lossless():
@@ -143,7 +151,7 @@ def test_interconnector_hard_code():
         'coefficient': [1.0, -1.0]
     })
 
-    simple_market.constraints_lhs_coefficients['inter_flow'] = expected_demand_contribution
+    simple_market.lhs_coefficients['inter_flow'] = expected_demand_contribution
 
     expected_loss_contribution = pd.DataFrame({
         'constraint_id': [0, 1],
@@ -151,7 +159,7 @@ def test_interconnector_hard_code():
         'coefficient': [0.0, -1.0]
     })
 
-    simple_market.constraints_lhs_coefficients['inter_losses'] = expected_loss_contribution
+    simple_market.lhs_coefficients['inter_losses'] = expected_loss_contribution
 
     weights = pd.DataFrame({
         'variable_id': [nv + 2, nv + 3, nv + 4],
@@ -168,7 +176,7 @@ def test_interconnector_hard_code():
         'coefficient': [1, 1, 1, -120, 0, 100, 120 * 0.05, 0, 100 * 0.05]
     })
 
-    simple_market.constraints_lhs_coefficients['interconnectors'] = constraints_lhs
+    simple_market.lhs_coefficients['interconnectors'] = constraints_lhs
 
     constraints_rhs = pd.DataFrame({
         'constraint_id': [nc],
@@ -176,7 +184,7 @@ def test_interconnector_hard_code():
         'type': ['='],
     })
 
-    simple_market.constraints_rhs_and_type['interconnectors'] = constraints_rhs
+    simple_market.constraints_rhs_and_type_no_lhs_yet['interconnectors'] = constraints_rhs
 
     constraints_dynamic_rhs = pd.DataFrame({
         'constraint_id': [nc + 1, nc + 2],

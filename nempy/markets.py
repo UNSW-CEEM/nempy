@@ -12,9 +12,11 @@ class Spot:
         self.dispatch_interval = dispatch_interval
         self.unit_info = None
         self.decision_variables = {}
+        self.lhs_coefficients = pd.DataFrame()
         self.constraints_rhs_and_type = {}
         self.constraints_dynamic_rhs_and_type = {}
-        self.market_constraints_rhs_and_type = {}
+        self.constraints_rhs_and_type_no_lhs_yet = {}
+        self.market_constraints_rhs_and_type_no_lhs_yet = {}
         self.objective_function_components = {}
         self.next_variable_id = 0
         self.next_constraint_id = 0
@@ -394,7 +396,7 @@ class Spot:
         # 1. Create the constraints
         rhs_and_type = unit_constraints.capacity(unit_limits, self.next_constraint_id)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type['unit_capacity'] = rhs_and_type
+        self.constraints_rhs_and_type_no_lhs_yet['unit_capacity'] = rhs_and_type
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -498,7 +500,7 @@ class Spot:
         # 1. Create the constraints
         rhs_and_type = unit_constraints.ramp_up(unit_limits, self.next_constraint_id, self.dispatch_interval)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type['ramp_up'] = rhs_and_type
+        self.constraints_rhs_and_type_no_lhs_yet['ramp_up'] = rhs_and_type
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -603,7 +605,7 @@ class Spot:
         # 1. Create the constraints
         rhs_and_type = unit_constraints.ramp_down(unit_limits, self.next_constraint_id, self.dispatch_interval)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type['ramp_down'] = rhs_and_type
+        self.constraints_rhs_and_type_no_lhs_yet['ramp_down'] = rhs_and_type
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -702,7 +704,7 @@ class Spot:
         # 1. Create the constraints
         rhs_and_type = market_constraints.energy(demand,  self.next_constraint_id)
         # 2. Save constraint details
-        self.market_constraints_rhs_and_type['demand'] = rhs_and_type
+        self.market_constraints_rhs_and_type_no_lhs_yet['demand'] = rhs_and_type
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -838,8 +840,29 @@ class Spot:
         # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['interconnectors']['variable_id']) + 1
 
-    def set_interconnector_losses(self):
-        pass
+    @check.required_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=1)
+    @check.allowed_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=1)
+    @check.repeated_rows('interpolation_break_point', ['interconnector', 'break_point'], arg=1)
+    @check.column_data_types('interpolation_break_point', {'interconnector': str, 'break_point': np.float64}, arg=1)
+    @check.column_values_must_be_real('interpolation_break_point', ['break_point'], arg=1)
+    @check.required_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=2)
+    @check.allowed_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=2)
+    @check.repeated_rows('loss_functions', ['interconnector'], arg=2)
+    @check.column_data_types('loss_functions', {'interconnector': str, 'from_region_loss_share': np.float64,
+                                                'loss_function': 'callable'}, arg=2)
+    @check.column_values_must_be_real('loss_functions', ['break_point'], arg=2)
+    def set_interconnector_losses(self, interpolation_break_points, loss_functions):
+        loss_variables, weight_variables, lhs, weights_sum_rhs, dynamic_rhs = \
+            interconnectors.add_losses(interpolation_break_points, self.decision_variables['interconnectors'],
+                                       loss_functions, self.next_variable_id, self.next_constraint_id)
+        self.decision_variables['interconnector_losses'] = loss_variables
+        self.decision_variables['interpolation_weights'] = weight_variables
+        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
+        self.constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
+        self.constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
+        self.next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
+        self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
+
 
     @check.pre_dispatch
     def dispatch(self):
@@ -929,18 +952,23 @@ class Spot:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        constraints_lhs = create_lhs.create(self.market_constraints_rhs_and_type, self.decision_variables,
-                                                   ['region', 'service'])
-        if len(self.constraints_rhs_and_type) > 0:
-            unit_constraints_lhs = create_lhs.create(self.constraints_rhs_and_type, self.decision_variables,
+        constraints_lhs = pd.concat([self.lhs_coefficients,
+            create_lhs.create(self.market_constraints_rhs_and_type_no_lhs_yet, self.decision_variables,
+                              ['region', 'service'])])
+
+        if len(self.constraints_rhs_and_type_no_lhs_yet) > 0:
+            unit_constraints_lhs = create_lhs.create(self.constraints_rhs_and_type_no_lhs_yet, self.decision_variables,
                                                      ['unit', 'service'])
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
 
+        constraints_rhs_and_type = pd.concat(list(self.constraints_rhs_and_type.values()) +
+                                             list(self.constraints_rhs_and_type_no_lhs_yet.values()))
+
         decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
-            self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
-            self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
+            self.decision_variables, constraints_lhs, constraints_rhs_and_type,
+            self.market_constraints_rhs_and_type_no_lhs_yet, self.constraints_dynamic_rhs_and_type,
             self.objective_function_components)
-        self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
+        self.market_constraints_rhs_and_type_no_lhs_yet = market_constraints_rhs_and_type
         self.decision_variables = decision_variables
 
     def get_energy_dispatch(self):
@@ -1017,7 +1045,7 @@ class Spot:
 
         Returns
         -------
-        None
+        pd.DataFrame
 
         Raises
         ------
@@ -1103,14 +1131,14 @@ class Spot:
 
         Returns
         -------
-        None
+        pd.DateFrame
 
         Raises
         ------
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        prices = self.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
+        prices = self.market_constraints_rhs_and_type_no_lhs_yet['demand'].loc[:, ['region', 'price']]
         return prices
 
     def get_interconnector_flows(self):
@@ -1201,7 +1229,7 @@ class Spot:
 
         Returns
         -------
-        None
+        pd.DataFrame
 
         Raises
         ------

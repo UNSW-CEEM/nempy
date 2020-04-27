@@ -19,10 +19,10 @@ def energy_bid_ids_exist(func):
     return wrapper
 
 
-def bid_prices_monotonic_increasing(func):
+def bid_prices_monotonic_increasing(func, arg=1):
     @keep_details(func)
     def wrapper(*args):
-        bids = args[1].copy()
+        bids = args[arg].copy()
         bids = bids.set_index('unit', drop=True)
         bids = bids.transpose()
         bids.index = pd.to_numeric(bids.index)
@@ -44,30 +44,33 @@ def pre_dispatch(func):
     return wrapper
 
 
-def repeated_rows(name, cols):
+def repeated_rows(name, cols, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
-            if args[0].check and len(args[1].index) != len(args[1].drop_duplicates(cols)):
+            if args[0].check and len(args[arg].index) != len(args[arg].drop_duplicates(cols)):
                 raise RepeatedRowError('{} should only have one row for each {}.'.format(name, ' '.join(cols)))
             func(*args)
         return wrapper
     return decorator
 
 
-def column_data_types(name, dtypes):
+def column_data_types(name, dtypes, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
             if args[0].check:
-                for column in args[1].columns:
+                for column in args[arg].columns:
                     if column in dtypes and dtypes[column] == str:
-                            if not hasattr(args[1][column], 'str'):
+                            if not all(args[arg].apply(lambda x: type(x[column]) == str, axis=1)):
                                 raise ColumnDataTypeError('Column {} in {} should have type str'.format(column, name))
-                    elif column in dtypes and dtypes[column] != args[1][column].dtype:
+                    elif column in dtypes and dtypes[column] == 'callable':
+                            if not all(args[arg].apply(lambda x: callable(x[column]), axis=1)):
+                                raise ColumnDataTypeError('Column {} in {} should be a function'.format(column, name))
+                    elif column in dtypes and dtypes[column] != args[arg][column].dtype:
                         raise ColumnDataTypeError('Column {} in {} should have type {}'.
                                                   format(column, name, dtypes[column]))
-                    elif column not in dtypes and dtypes['else'] != args[1][column].dtype:
+                    elif column not in dtypes and dtypes['else'] != args[arg][column].dtype:
                         raise ColumnDataTypeError('Column {} in {} should have type {}'.
                                                   format(column, name, dtypes['else']))
             func(*args)
@@ -75,27 +78,27 @@ def column_data_types(name, dtypes):
     return decorator
 
 
-def required_columns(name, required):
+def required_columns(name, required, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
             if args[0].check:
                 for column in required:
-                    if column not in args[1].columns:
+                    if column not in args[arg].columns:
                         raise MissingColumnError("Column '{}' not in {}.".format(column, name))
-                if len(args[1].columns) < 2:
+                if len(args[arg].columns) < 2:
                     raise MissingColumnError("No bid bands provided.")
             func(*args)
         return wrapper
     return decorator
 
 
-def allowed_columns(name, allowed):
+def allowed_columns(name, allowed, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
             if args[0].check:
-                for column in args[1].columns:
+                for column in args[arg].columns:
                     if column not in allowed:
                         raise UnexpectedColumn("Column '{}' not allowed in {}.".format(column, name))
             func(*args)
@@ -103,34 +106,34 @@ def allowed_columns(name, allowed):
     return decorator
 
 
-def column_values_must_be_real(name, cols_to_check):
+def column_values_must_be_real(name, cols_to_check, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
             if args[0].check:
                 for column in cols_to_check:
-                    if column not in args[1].columns:
+                    if column not in args[arg].columns:
                         continue
-                    if np.inf in args[1][column].values:
+                    if np.inf in args[arg][column].values:
                         raise ColumnValues("Value inf not allowed in column '{}' in {}.".format(column, name))
-                    if np.NINF in args[1][column].values:
+                    if np.NINF in args[arg][column].values:
                         raise ColumnValues("Value -inf not allowed in column '{}' in {}.".format(column, name))
-                    if args[1][column].isnull().any():
+                    if args[arg][column].isnull().any():
                         raise ColumnValues("Null values not allowed in column '{}' in {}.".format(column, name))
             func(*args)
         return wrapper
     return decorator
 
 
-def column_values_not_negative(name, cols_to_check):
+def column_values_not_negative(name, cols_to_check, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
             if args[0].check:
                 for column in cols_to_check:
-                    if column not in args[1].columns:
+                    if column not in args[arg].columns:
                         continue
-                    if args[1][column].min() < 0.0:
+                    if args[arg][column].min() < 0.0:
                         raise ColumnValues("Negative values not allowed in column '{}' in {}.".format(column, name))
             func(*args)
         return wrapper
