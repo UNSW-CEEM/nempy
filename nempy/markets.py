@@ -12,6 +12,7 @@ class Spot:
         self.dispatch_interval = dispatch_interval
         self.unit_info = None
         self.decision_variables = {}
+        self.variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
         self.lhs_coefficients = pd.DataFrame()
         self.constraints_rhs_and_type = {}
         self.constraints_dynamic_rhs_and_type = {}
@@ -834,10 +835,10 @@ class Spot:
             ColumnValues
                 If there are inf, null values in the max and min columns.
         """
-        # Create unit variable ids
-        self.decision_variables['interconnectors'] = inter.create(interconnector_directions_and_limits,
-                                                                  self.next_variable_id)
-        # Update the variable id counter:
+        # Create unit variable ids and map variables to regional constraints
+        self.decision_variables['interconnectors'], self.variable_to_constraint_map['regional']['interconnectors'] \
+            = inter.create(interconnector_directions_and_limits, self.next_variable_id)
+
         self.next_variable_id = max(self.decision_variables['interconnectors']['variable_id']) + 1
 
     @check.interconnectors_exist
@@ -1404,3 +1405,4 @@ class Spot:
         dispatch = self.decision_variables['interconnectors'].loc[:, ['interconnector', 'value']]
         dispatch.columns = ['interconnector', 'flow']
         return dispatch.drop_duplicates('interconnector').reset_index(drop=True)
+
