@@ -162,18 +162,31 @@ def create_weights(break_points, next_variable_id):
     return weight_variables
 
 
-def create_loss_variables(inter_variables, loss_function, next_variable_id):
+def create_loss_variables(inter_variables, inter_constraint_map, loss_function, next_variable_id):
+    # Preserve the interconnector variable id for merging later.
+    columns_for_loss_variables = \
+        inter_variables.loc[:, ['interconnector', 'variable_id', 'lower_bound', 'upper_bound', 'type']]
+    columns_for_loss_variables.columns = ['interconnector', 'inter_variable_id', 'lower_bound', 'upper_bound', 'type']
+    inter_constraint_map = inter_constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
+    inter_constraint_map.columns = ['inter_variable_id', 'region', 'service', 'coefficient']
+
+    # Create a variable id for loss variables
     loss_variables = hf.save_index(loss_function.loc[:, ['interconnector', 'from_region_loss_share']], 'variable_id',
                                    next_variable_id)
-    columns_for_loss_variables = inter_variables.loc[:, ['interconnector', 'region', 'lower_bound', 'upper_bound',
-                                                         'type', 'service', 'coefficient']]
+    # Use interconnector variable definitions to formulate loss variable definitions.
     columns_for_loss_variables['upper_bound'] = \
         columns_for_loss_variables.loc[:, ['lower_bound', 'upper_bound']].abs().max(axis=1)
     columns_for_loss_variables['lower_bound'] = 0.0
-    loss_variables = pd.merge(loss_variables, columns_for_loss_variables)
-    loss_variables['coefficient'] = np.where(loss_variables['coefficient'] < 0.0,
-                                             - 1 * loss_variables['from_region_loss_share'],
-                                             - 1 * (1 - loss_variables['from_region_loss_share']))
-    loss_variables = loss_variables.loc[:, ['variable_id', 'interconnector', 'region', 'lower_bound', 'upper_bound',
-                                            'type', 'service', 'coefficient']]
-    return loss_variables
+    loss_variables = pd.merge(loss_variables, columns_for_loss_variables, 'inner', on='interconnector')
+
+    constraint_map = pd.merge(
+        loss_variables.loc[:, ['variable_id', 'inter_variable_id', 'interconnector', 'from_region_loss_share']],
+        inter_constraint_map, 'inner', on='inter_variable_id')
+
+    constraint_map['coefficient'] = np.where(constraint_map['coefficient'] < 0.0,
+                                             - 1 * constraint_map['from_region_loss_share'],
+                                             - 1 * (1 - constraint_map['from_region_loss_share']))
+
+    loss_variables = loss_variables.loc[:, ['interconnector', 'variable_id', 'lower_bound', 'upper_bound', 'type']]
+    constraint_map = constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
+    return loss_variables, constraint_map

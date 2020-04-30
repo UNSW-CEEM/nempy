@@ -13,11 +13,11 @@ class Spot:
         self.unit_info = None
         self.decision_variables = {}
         self.variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
+        self.constraint_to_variable_map = {'regional': {}, 'unit_level': {}}
         self.lhs_coefficients = pd.DataFrame()
         self.constraints_rhs_and_type = {}
         self.constraints_dynamic_rhs_and_type = {}
-        self.constraints_rhs_and_type_no_lhs_yet = {}
-        self.market_constraints_rhs_and_type_no_lhs_yet = {}
+        self.market_constraints_rhs_and_type = {}
         self.objective_function_components = {}
         self.next_variable_id = 0
         self.next_constraint_id = 0
@@ -142,13 +142,35 @@ class Spot:
         The market should now have the variables.
 
         >>> print(simple_market.decision_variables['energy_bids'])
-           variable_id unit capacity_band  ...  region  service coefficient
-        0            0    A             1  ...     NSW   energy         1.0
-        1            1    A             2  ...     NSW   energy         1.0
-        2            2    A             3  ...     NSW   energy         1.0
-        3            3    B             1  ...     NSW   energy         1.0
-        4            4    B             2  ...     NSW   energy         1.0
-        5            5    B             3  ...     NSW   energy         1.0
+          unit capacity_band  variable_id  lower_bound  upper_bound        type
+        0    A             1            0          0.0         20.0  continuous
+        1    A             2            1          0.0         20.0  continuous
+        2    A             3            2          0.0          5.0  continuous
+        3    B             1            3          0.0         50.0  continuous
+        4    B             2            4          0.0         30.0  continuous
+        5    B             3            5          0.0         10.0  continuous
+
+        A mapping of these variables to constraints acting on that unit and service should also exist.
+
+        >>> print(simple_market.variable_to_constraint_map['unit_level']['energy_bids'])
+           variable_id unit service  coefficient
+        0            0    A  energy          1.0
+        1            1    A  energy          1.0
+        2            2    A  energy          1.0
+        3            3    B  energy          1.0
+        4            4    B  energy          1.0
+        5            5    B  energy          1.0
+
+        A mapping of these variables to constraints acting on the units region and service should also exist.
+
+        >>> print(simple_market.variable_to_constraint_map['regional']['energy_bids'])
+           variable_id region service  coefficient
+        0            0    NSW  energy          1.0
+        1            1    NSW  energy          1.0
+        2            2    NSW  energy          1.0
+        3            3    NSW  energy          1.0
+        4            4    NSW  energy          1.0
+        5            5    NSW  energy          1.0
 
         Parameters
         ----------
@@ -182,8 +204,16 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
 
-        # Create unit variable ids
-        self.decision_variables['energy_bids'] = variable_ids.energy(volume_bids, self.unit_info, self.next_variable_id)
+        # Create unit variable ids and their mapping into constraints.
+        self.decision_variables['energy_bids'], variable_to_constraint_map = \
+            variable_ids.energy(volume_bids, self.unit_info, self.next_variable_id)
+
+        # Split constraint mapping up on a regional and unit level basis.
+        self.variable_to_constraint_map['regional']['energy_bids'] = \
+            variable_to_constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
+        self.variable_to_constraint_map['unit_level']['energy_bids'] = \
+            variable_to_constraint_map.loc[:, ['variable_id', 'unit', 'service', 'coefficient']]
+
         # Update the variable id counter:
         self.next_variable_id = max(self.decision_variables['energy_bids']['variable_id']) + 1
 
@@ -360,9 +390,17 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.constraints_rhs_and_type['unit_capacity'])
-          unit  constraint_id type    rhs  coefficient service
-        0    A              0   <=   60.0          1.0  energy
-        1    B              1   <=  100.0          1.0  energy
+          unit  constraint_id type    rhs
+        0    A              0   <=   60.0
+        1    B              1   <=  100.0
+
+        ... and a mapping of those constraints to the variable types on the lhs.
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['unit_capacity'])
+           constraint_id unit service  coefficient
+        0              0    A  energy          1.0
+        1              1    B  energy          1.0
+
 
         Parameters
         ----------
@@ -395,9 +433,10 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        rhs_and_type = unit_constraints.capacity(unit_limits, self.next_constraint_id)
+        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self.next_constraint_id)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type_no_lhs_yet['unit_capacity'] = rhs_and_type
+        self.constraints_rhs_and_type['unit_capacity'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['unit_capacity'] = variable_map
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -463,9 +502,16 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.constraints_rhs_and_type['ramp_up'])
-          unit  constraint_id type    rhs  coefficient service
-        0    A              0   <=   35.0          1.0  energy
-        1    B              1   <=  100.0          1.0  energy
+          unit  constraint_id type    rhs
+        0    A              0   <=   35.0
+        1    B              1   <=  100.0
+
+        ... and a mapping of those constraints to variable type for the lhs.
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['ramp_up'])
+           constraint_id unit service  coefficient
+        0              0    A  energy          1.0
+        1              1    B  energy          1.0
 
         Parameters
         ----------
@@ -499,9 +545,11 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        rhs_and_type = unit_constraints.ramp_up(unit_limits, self.next_constraint_id, self.dispatch_interval)
+        rhs_and_type, variable_map = unit_constraints.ramp_up(unit_limits, self.next_constraint_id,
+                                                              self.dispatch_interval)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type_no_lhs_yet['ramp_up'] = rhs_and_type
+        self.constraints_rhs_and_type['ramp_up'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['ramp_up'] = variable_map
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -568,9 +616,16 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.constraints_rhs_and_type['ramp_down'])
-          unit  constraint_id type        rhs  coefficient service
-        0    A              0   >=  18.333333          1.0  energy
-        1    B              1   >=  49.166667          1.0  energy
+          unit  constraint_id type        rhs
+        0    A              0   >=  18.333333
+        1    B              1   >=  49.166667
+
+        ... and a mapping of those constraints to variable type for the lhs.
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['ramp_down'])
+           constraint_id unit service  coefficient
+        0              0    A  energy          1.0
+        1              1    B  energy          1.0
 
         Parameters
         ----------
@@ -604,9 +659,11 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        rhs_and_type = unit_constraints.ramp_down(unit_limits, self.next_constraint_id, self.dispatch_interval)
+        rhs_and_type, variable_map = unit_constraints.ramp_down(unit_limits, self.next_constraint_id,
+                                                                self.dispatch_interval)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type_no_lhs_yet['ramp_down'] = rhs_and_type
+        self.constraints_rhs_and_type['ramp_down'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['ramp_down'] = variable_map
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -669,8 +726,14 @@ class Spot:
         The market should now have a set of constraints.
 
         >>> print(simple_market.market_constraints_rhs_and_type['demand'])
-          region  constraint_id type    rhs  coefficient service
-        0    NSW              0    =  100.0          1.0  energy
+          region  constraint_id type    rhs
+        0    NSW              0    =  100.0
+
+        ... and a mapping of those constraints to variable type for the lhs.
+
+        >>> print(simple_market.constraint_to_variable_map['regional']['demand'])
+           constraint_id region service  coefficient
+        0              0    NSW  energy          1.0
 
         Parameters
         ----------
@@ -703,9 +766,10 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        rhs_and_type = market_constraints.energy(demand,  self.next_constraint_id)
+        rhs_and_type, variable_map = market_constraints.energy(demand,  self.next_constraint_id)
         # 2. Save constraint details
-        self.market_constraints_rhs_and_type_no_lhs_yet['demand'] = rhs_and_type
+        self.market_constraints_rhs_and_type['demand'] = rhs_and_type
+        self.constraint_to_variable_map['regional']['demand'] = variable_map
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -734,47 +798,6 @@ class Spot:
 
         >>> simple_market = markets.Spot()
 
-        Define the unit information data set needed to initialise the market, in this example all units are in the same
-        region.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A'],
-        ...     'region': ['NSW']})
-
-        Add unit information
-
-        >>> simple_market.set_unit_info(unit_info)
-
-        Define a set of bids, in this example we have just one unit that can provide 100 MW in NSW.
-
-        >>> volume_bids = pd.DataFrame({
-        ...     'unit': ['A'],
-        ...     '1': [100.0]})
-
-        Create energy unit bid decision variables.
-
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
-
-        Define a set of prices for the bids.
-
-        >>> price_bids = pd.DataFrame({
-        ...     'unit': ['A'],
-        ...     '1': [80.0]})
-
-        Create the objective function components corresponding to the the energy bids.
-
-        >>> simple_market.set_unit_energy_price_bids(price_bids)
-
-        Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
-
-        >>> demand = pd.DataFrame({
-        ...     'region': ['NSW', 'VIC'],
-        ...     'demand': [0.0, 90.0]})
-
-        Create unit capacity based constraints.
-
-        >>> simple_market.set_demand_constraints(demand)
-
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
         >>> interconnector = pd.DataFrame({
@@ -788,21 +811,18 @@ class Spot:
 
         >>> simple_market.set_interconnectors(interconnector)
 
-        Call the dispatch method.
+        The market should now have a decision variable defined for each interconnector.
 
-        >>> simple_market.dispatch()
+        >>> print(simple_market.decision_variables['interconnectors'])
+          interconnector  variable_id  lower_bound  upper_bound        type
+        0      inter_one            0       -100.0        100.0  continuous
 
-        Now the market dispatch can be retrieved.
+        ... and a mapping of those variables to to regional energy constraints.
 
-        >>> print(simple_market.get_energy_dispatch())
-          unit  dispatch
-        0    A      90.0
-
-        And the interconnector flows can be retrieved.
-
-        >>> print(simple_market.get_interconnector_flows())
-          interconnector  flow
-        0      inter_one  90.0
+        >>> print(simple_market.variable_to_constraint_map['regional']['interconnectors'])
+           variable_id region service  coefficient
+        0            0    VIC  energy          1.0
+        1            0    NSW  energy         -1.0
 
         Parameters
         ----------
@@ -859,8 +879,7 @@ class Spot:
 
         Creates a loss variable for each interconnector, this variable models losses by adding demand to each region.
         The losses are proportioned to each region according to the from_region_loss_share. In a region with one
-        interconnector, where the region is the nominal from region, the impact on the supply equals demand constraint
-        would be:
+        interconnector, where the region is the nominal from region, the impact on the demand constraint would be:
 
             generation - interconnector flow - interconnector losses * from_region_loss_share = demand
 
@@ -873,15 +892,24 @@ class Spot:
         variable is bound between 0 and 1, only 2 variables can be greater than 0 and all variables must sum to 1.
         The actual loss function is evaluated at each break point, the variables of the special order set are
         constrained such that their values weight the distance of the actual flow from the break points on either side
-        e.g.
+        e.g. If we had 3 break points at -100 MW, 0 MW and 100 MW, three weight variables w1, w2, and w3,
+        and a loss function f, then the constraints would be of the form.
 
+        Constrain the weight variables to sum to one:
 
+            w1 + w2 + w3 = 1
+
+        Constrain the weight variables give the relative weighting of adjacent breakpoint:
+
+            w1 * -100.0 + w2 * 0.0 + w3 * 100.0 = interconnector flow
+
+        Constrain the interconnector losses to be the weighted sum of the losses at the adjacent break point:
+
+            w1 * f(-100.0) + w2 * f(0.0) + w3 * f(100.0) = interconnector flow
 
         Examples
         --------
             This is an example of the minimal set of steps for using this method.
-
-            Import required packages.
 
             >>> import pandas as pd
             >>> from nempy import markets
@@ -890,39 +918,7 @@ class Spot:
 
             >>> simple_market = markets.Spot()
 
-            The only generator is located in NSW.
-
-            >>> unit_info = pd.DataFrame({
-            ...    'unit': ['A'],
-            ...    'region': ['NSW']})
-
-            >>> simple_market.set_unit_info(unit_info)
-
-            Volume of each bids.
-
-            >>> volume_bids = pd.DataFrame({
-            ...    'unit': ['A'],
-            ...    '1': [100.0]})
-
-            >>> simple_market.set_unit_energy_volume_bids(volume_bids)
-
-            Price of each bid.
-
-            >>> price_bids = pd.DataFrame({
-            ...    'unit': ['A'],
-            ...    '1': [50.0]})
-
-            >>> simple_market.set_unit_energy_price_bids(price_bids)
-
-            NSW has no demand but VIC has 90 MW.
-
-            >>> demand = pd.DataFrame({
-            ...    'region': ['NSW', 'VIC'],
-            ...    'demand': [0.0, 90.0]})
-
-            >>> simple_market.set_demand_constraints(demand)
-
-            There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
+            Create the interconnector, this need to be done before a interconnector losses can be set.
 
             >>> interconnectors = pd.DataFrame({
             ...    'interconnector': ['little_link'],
@@ -933,12 +929,12 @@ class Spot:
 
             >>> simple_market.set_interconnectors(interconnectors)
 
-            The interconnector loss function. In this case losses are always 5 % of line flow.
+            Define the interconnector loss function. In this case losses are always 5 % of line flow.
 
             >>> def constant_losses(flow):
             ...     return abs(flow) * 0.05
 
-            The loss function on a per interconnector basis. Also details how the losses should be proportioned to the
+            Define the function on a per interconnector basis. Also details how the losses should be proportioned to the
             connected regions.
 
             >>> loss_functions = pd.DataFrame({
@@ -946,8 +942,9 @@ class Spot:
             ...    'from_region_loss_share': [0.5],  # losses are shared equally.
             ...    'loss_function': [constant_losses]})
 
-            The points to linearly interpolate the loss function bewteen. In this example the loss function is linear
-            so only three points are needed, but if a non linear loss function was used then more points would be better.
+            Define The points to linearly interpolate the loss function between. In this example the loss function is
+            linear so only three points are needed, but if a non linear loss function was used then more points would
+            result in a better approximation.
 
             >>> interpolation_break_points = pd.DataFrame({
             ...    'interconnector': ['little_link', 'little_link', 'little_link'],
@@ -955,15 +952,50 @@ class Spot:
 
             >>> simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
-            Calculate dispatch.
+            The market should now have a decision variable defined for each interconnector's losses.
 
-            >>> simple_market.dispatch()
+            >>> print(simple_market.decision_variables['interconnector_losses'])
+              interconnector  variable_id  lower_bound  upper_bound        type
+            0    little_link            1          0.0        120.0  continuous
 
-            Inspect resulting line flows.
+            ... and a mapping of those variables to regional energy constraints.
 
-            >>> print(simple_market.get_interconnector_flows())
-              interconnector       flow
-            0    little_link  92.307692
+            >>> print(simple_market.variable_to_constraint_map['regional']['interconnector_losses'])
+               variable_id region service  coefficient
+            0            1    VIC  energy         -0.5
+            1            1    NSW  energy         -0.5
+
+            The market will also have a special ordered set of weight variables for interpolating the loss function
+            between the break points.
+            >>> print(simple_market.decision_variables['interpolation_weights'])
+               variable_id interconnector  lower_bound  upper_bound        type
+            0            2    little_link          0.0          1.0  continuous
+            1            3    little_link          0.0          1.0  continuous
+            2            4    little_link          0.0          1.0  continuous
+
+            and a set of constraints that implement the interpolation, see above explanation.
+
+            >>> print(simple_market.constraints_rhs_and_type['interpolation_weights'])
+              interconnector  constraint_id  rhs type
+            0    little_link              0    1    =
+
+            >>> print(simple_market.constraints_dynamic_rhs_and_type['link_loss_to_flow'])
+              interconnector  constraint_id  rhs_variable_id type
+            0    little_link              1                0    =
+            0    little_link              2                1    =
+
+            >>> print(simple_market.lhs_coefficients)
+               variable_id  constraint_id  coefficient
+            0            2              0          1.0
+            1            3              0          1.0
+            2            4              0          1.0
+            0            2              1       -120.0
+            1            3              1          0.0
+            2            4              1        100.0
+            0            2              2          6.0
+            1            3              2          0.0
+            2            4              2          5.0
+
 
         Parameters
         ----------
@@ -1005,8 +1037,10 @@ class Spot:
             If there are inf or null values in the numeric columns of either input DataFrames. Or if
             from_region_loss_share are outside the range of 0.0 to 1.0
         """
-        loss_variables = inter.create_loss_variables(self.decision_variables['interconnectors'], loss_functions,
-                                                     self.next_variable_id)
+        loss_variables, loss_variables_constraint_map = \
+            inter.create_loss_variables(self.decision_variables['interconnectors'],
+                                        self.variable_to_constraint_map['regional']['interconnectors'],
+                                        loss_functions, self.next_variable_id)
         next_variable_id = loss_variables['variable_id'].max() + 1
         weight_variables = inter.create_weights(interpolation_break_points, next_variable_id)
         weights_sum_lhs, weights_sum_rhs = inter.create_weights_must_sum_to_one(weight_variables,
@@ -1023,6 +1057,7 @@ class Spot:
         weight_variables = weight_variables.loc[:,
                            ['variable_id', 'interconnector', 'lower_bound', 'upper_bound', 'type']]
         self.decision_variables['interconnector_losses'] = loss_variables
+        self.variable_to_constraint_map['regional']['interconnector_losses'] = loss_variables_constraint_map
         self.decision_variables['interpolation_weights'] = weight_variables
         self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
         self.constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
@@ -1118,13 +1153,14 @@ class Spot:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
+
         constraints_lhs = pd.concat([self.lhs_coefficients,
-            create_lhs.create(self.market_constraints_rhs_and_type_no_lhs_yet, self.decision_variables,
-                              ['region', 'service'])])
+            create_lhs.create(self.market_constraints_rhs_and_type_no_lhs_yet,
+                              self.variable_to_constraint_map['regional'], ['region', 'service'])])
 
         if len(self.constraints_rhs_and_type_no_lhs_yet) > 0:
-            unit_constraints_lhs = create_lhs.create(self.constraints_rhs_and_type_no_lhs_yet, self.decision_variables,
-                                                     ['unit', 'service'])
+            unit_constraints_lhs = create_lhs.create(self.constraints_rhs_and_type_no_lhs_yet,
+                                                     self.variable_to_constraint_map['unit_level'], ['unit', 'service'])
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
 
         constraints_rhs_and_type = pd.concat(list(self.constraints_rhs_and_type.values()) +

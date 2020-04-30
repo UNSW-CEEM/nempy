@@ -15,53 +15,80 @@ def energy(demand, next_constraint_id):
         constraint 1: unit A output + unit B output = region X demand
         constraint 2: unit C output + unit D output = region Y demand
 
-    The constraints are returned in two DataFrames, one for the lhs coefficients, and one for constraint rhs, type and
-    other information. Assuming regions X's demand was 100 MW and region Y's demand was 200 MW, the next free
-    constraint id was 1, and unit A, B, C, D had constraint ids of 1, 2, 3, 4. Then for the above two region example
-    these DataFrames would look like
+    Examples
+    --------
 
-    constraints_lhs:
+    >>> import pandas
 
-        constraint_id variable_id coefficient
-        1             1           1
-        1             2           1
-        2             3           1
-        2             4           1
+    Defined the unit capacities.
 
-    and constraints_rhs:
+    >>> demand = pd.DataFrame({
+    ...   'region': ['X', 'Y'],
+    ...   'demand': [1000.0, 2000.0]})
 
-        region constraint_id type rhs
-        X      1             =    100
-        Y      2             =    200
+    >>> next_constraint_id = 0
 
-    :param energy_bid_ids: DataFrame
-        variable_id: int
-        unit: str
-    :param demand: DataFrame
-        region: str
-        demand: float
-    :param unit_info:
-        unit: str
-        region: str
-    :param next_constraint_id: int
-    :return:
-        constraints_lhs: DataFrame
-            constraint_id: int
-            variable_id: int
-            coefficient: float
-        constraints_rhs: DataFrame
-            region: str
-            constraint_id: int
-            type: str
-            rhs: float
+    Create the constraint information.
+
+    >>> type_and_rhs, variable_map = energy(demand, next_constraint_id)
+
+    >>> print(type_and_rhs)
+      region  constraint_id type     rhs
+    0      X              0    =  1000.0
+    1      Y              1    =  2000.0
+
+    >>> print(variable_map)
+       constraint_id region service  coefficient
+    0              0      X  energy          1.0
+    1              1      Y  energy          1.0
+
+    Parameters
+    ----------
+    demand : pd.DataFrame
+        Demand by region.
+
+        ========  =====================================================================================
+        Columns:  Description:
+        region    unique identifier of a region (as `str`)
+        demand    the non dispatchable demand, in MW (as `np.float64`)
+        ========  =====================================================================================
+
+    next_constraint_id : int
+        The next integer to start using for constraint ids.
+
+
+    Returns
+    -------
+    type_and_rhs : pd.DataFrame
+        The type and rhs of each constraint.
+
+        =============  ===============================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        constraint_id  the id of the variable (as `int`)
+        type           the lower bound of the variable, is zero for bids (as `np.float64`)
+        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ===============================================================
+
+    variable_map : pd.DataFrame
+        The type of variables that should appear on the lhs of the constraint.
+
+        =============  ==========================================================================
+        Columns:       Description:
+        constraint_id  the id of the constraint (as `np.int64`)
+        unit           the unit variables the constraint should map too (as `str`)
+        service        the service type of the variables the constraint should map to (as `str`)
+        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ==========================================================================
     """
     # Create an index for each constraint.
-    constraints_rhs = hf.save_index(demand, 'constraint_id', next_constraint_id)
-    # Set constraint level values.
-    constraints_rhs['type'] = '='
-    constraints_rhs['rhs'] = constraints_rhs['demand']
-    constraints_rhs['service'] = 'energy'
-    constraints_rhs['coefficient'] = 1.0
-    # Return just the needed columns.
-    constraints_rhs = constraints_rhs.loc[:, ['region', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']]
-    return constraints_rhs
+    type_and_rhs = hf.save_index(demand, 'constraint_id', next_constraint_id)
+    type_and_rhs['type'] = '='  # Supply and interconnector flow must exactly equal demand.
+    type_and_rhs['rhs'] = type_and_rhs['demand']
+    type_and_rhs = type_and_rhs.loc[:, ['region', 'constraint_id', 'type', 'rhs']]
+
+    # Map constraints to energy variables in their region.
+    variable_map = type_and_rhs.loc[:, ['constraint_id', 'region']]
+    variable_map['service'] = 'energy'
+    variable_map['coefficient'] = 1.0
+    return type_and_rhs, variable_map

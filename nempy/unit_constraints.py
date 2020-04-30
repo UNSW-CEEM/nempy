@@ -9,48 +9,73 @@ def capacity(unit_limits, next_constraint_id):
 
         bid 1 dispatched + bid 2 dispatched +. . .+ bid n dispatched <= capacity
 
-    The constraints are returned in two DataFrames, one for the lhs coefficients, and one for constraint rhs, type.
-    Assuming there were to units A and B, with three bids each, with ids 1, 2, 3, and 4, 5, 6, respectively, and
-    capacities 50 MW and 60 MW, and a next_constraint_id value of 0. Then the resulting DataFrames would be:
+    Examples
+    --------
 
-    constraints_lhs:
+    >>> import pandas
 
-        constraint_id variable_id coefficient
-        0             1           1
-        0             2           1
-        0             3           1
-        1             4           1
-        1             5           1
-        1             6           1
+    Defined the unit capacities.
 
-    and constraints_rhs:
+    >>> unit_limits = pd.DataFrame({
+    ...   'unit': ['A', 'B'],
+    ...   'capacity': [100.0, 200.0]})
 
-        constraint_id type rhs
-        0             <=   50
-        1             <=   60
+    >>> next_constraint_id = 0
 
-    :param energy_bid_ids: DataFrame
-        variable_id: int
-        unit: str
-    :param unit_limits: DataFrame
-        unit: str
-        capacity: float
-    :param next_constraint_id: int
-    :return:
-        constraints_lhs: DataFrame
-            constraint_id: int
-            variable_id: int
-            coefficient: float
-        constraints_rhs: DataFrame
-            region: str
-            constraint_id: int
-            type: str
-            rhs: float
+    Create the constraint information.
+
+    >>> type_and_rhs, variable_map = capacity(unit_limits, next_constraint_id)
+
+    >>> print(type_and_rhs)
+      unit  constraint_id type    rhs
+    0    A              0   <=  100.0
+    1    B              1   <=  200.0
+
+    >>> print(variable_map)
+       constraint_id unit service  coefficient
+    0              0    A  energy          1.0
+    1              1    B  energy          1.0
+
+    Parameters
+    ----------
+    unit_limits : pd.DataFrame
+        Capacity by unit.
+
+        ========  =====================================================================================
+        Columns:  Description:
+        unit      unique identifier of a dispatch unit (as `str`)
+        capacity  The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
+        ========  =====================================================================================
+
+    next_constraint_id : int
+        The next integer to start using for constraint ids.
+
+    Returns
+    -------
+    type_and_rhs : pd.DataFrame
+        The type and rhs of each constraint.
+
+        =============  ===============================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        constraint_id  the id of the variable (as `int`)
+        type           the lower bound of the variable, is zero for bids (as `np.float64`)
+        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ===============================================================
+
+    variable_map : pd.DataFrame
+        The type of variables that should appear on the lhs of the constraint.
+
+        =============  ==========================================================================
+        Columns:       Description:
+        constraint_id  the id of the constraint (as `np.int64`)
+        unit           the unit variables the constraint should map too (as `str`)
+        service        the service type of the variables the constraint should map to (as `str`)
+        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ==========================================================================
     """
-    capacity_constraints = create_constraints(unit_limits, next_constraint_id, 'capacity', '<=')
-    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']].\
-        drop_duplicates('constraint_id')
-    return constraints_rhs
+    type_and_rhs, variable_map = create_constraints(unit_limits, next_constraint_id, 'capacity', '<=')
+    return type_and_rhs, variable_map
 
 
 def ramp_up(unit_limits, next_constraint_id, dispatch_interval):
@@ -58,113 +83,182 @@ def ramp_up(unit_limits, next_constraint_id, dispatch_interval):
 
     A constraint of the following form will be created for each unit:
 
-        bid 1 dispatched + bid 2 dispatched +. . .+ bid n dispatched <= initial output + ramp up rate
+        bid 1 dispatched + bid 2 dispatched + . + bid n dispatched <= initial_output + ramp_up_rate / dispatch_interval
 
-    The constraints are returned in two DataFrames, one for the lhs coefficients, and one for constraint rhs and type.
-    Assuming there were to units A and B, with three bids each, with ids 1, 2, 3, and 4, 5, 6, respectively, and
-    initial outputs of 30 MW and 40 MW, ramp rates of 600 and 1200 MW/h, a next_constraint_id value of 0 and a
-    dispatch interval of 5 min. Then the resulting DataFrames would be:
+    Examples
+    --------
 
-    constraints_lhs:
+    >>> import pandas
 
-        constraint_id variable_id coefficient
-        0             1           1
-        0             2           1
-        0             3           1
-        1             4           1
-        1             5           1
-        1             6           1
+    Defined the unit capacities.
 
-    and constraints_rhs:
+    >>> unit_limits = pd.DataFrame({
+    ...   'unit': ['A', 'B'],
+    ...   'ramp_up_rate': [100.0, 200.0],
+    ...   'initial_output': [50.0, 60.0]})
 
-        constraint_id type rhs
-        0             <=   100
-        1             <=   160
+    >>> next_constraint_id = 0
 
-    :param energy_bid_ids: DataFrame
-        variable_id: int
-        unit: str
-    :param unit_limits: DataFrame
-        unit: str
-        capacity: float
-    :param next_constraint_id: int
-    :return:
-        constraints_lhs: DataFrame
-            constraint_id: int
-            variable_id: int
-            coefficient: float
-        constraints_rhs: DataFrame
-            constraint_id: int
-            type: str
-            rhs: float
+    >>> dispatch_interval = 30
+
+    Create the constraint information.
+
+    >>> type_and_rhs, variable_map = ramp_up(unit_limits, next_constraint_id, dispatch_interval)
+
+    >>> print(type_and_rhs)
+      unit  constraint_id type    rhs
+    0    A              0   <=  100.0
+    1    B              1   <=  160.0
+
+    >>> print(variable_map)
+       constraint_id unit service  coefficient
+    0              0    A  energy          1.0
+    1              1    B  energy          1.0
+
+    Parameters
+    ----------
+    unit_limits : pd.DataFrame
+        Ramp up rate and initial output by unit.
+
+        ==============  =====================================================================================
+        Columns:        Description:
+        unit            unique identifier of a dispatch unit (as `str`)
+        initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+        ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
+        ==============  =====================================================================================
+
+    next_constraint_id : int
+        The next integer to start using for constraint ids.
+
+
+    dispatch_interval : float
+        The length of the dispatch interval in minutes.
+
+    Returns
+    -------
+    type_and_rhs : pd.DataFrame
+        The type and rhs of each constraint.
+
+        =============  ===============================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        constraint_id  the id of the variable (as `int`)
+        type           the lower bound of the variable, is zero for bids (as `np.float64`)
+        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ===============================================================
+
+    variable_map : pd.DataFrame
+        The type of variables that should appear on the lhs of the constraint.
+
+        =============  ==========================================================================
+        Columns:       Description:
+        constraint_id  the id of the constraint (as `np.int64`)
+        unit           the unit variables the constraint should map too (as `str`)
+        service        the service type of the variables the constraint should map to (as `str`)
+        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ==========================================================================
     """
     unit_limits['max_output'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (dispatch_interval / 60)
-    capacity_constraints = create_constraints(unit_limits, next_constraint_id, 'max_output', '<=')
-    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']].\
-        drop_duplicates('constraint_id')
-    return constraints_rhs
+    type_and_rhs, variable_map = create_constraints(unit_limits, next_constraint_id, 'max_output', '<=')
+    return  type_and_rhs, variable_map
 
 
 def ramp_down(unit_limits, next_constraint_id, dispatch_interval):
-    """Create the constraints that ensure the dispatch of a unit is capped by its ramp down rate.
+    """Create the constraints that ensure the dispatch of a unit is limited by its ramp down rate.
 
     A constraint of the following form will be created for each unit:
 
-        bid 1 dispatched + bid 2 dispatched +. . .+ bid n dispatched <= initial output - ramp down rate
+        bid 1 dispatched + bid 2 dispatched + . + bid n dispatched >= initial_output - ramp_up_rate / dispatch_interval
 
-    The constraints are returned in two DataFrames, one for the lhs coefficients, and one for constraint rhs and type.
-    Assuming there were to units A and B, with three bids each, with ids 1, 2, 3, and 4, 5, 6, respectively, and
-    initial outputs of 200 MW and 300 MW, ramp rates of 600 and 1200 MW/h, a next_constraint_id value of 0 and a
-    dispatch interval of 5 min. Then the resulting DataFrames would be:
+    Examples
+    --------
 
-    constraints_lhs:
+    >>> import pandas
 
-        constraint_id variable_id coefficient
-        0             1           1
-        0             2           1
-        0             3           1
-        1             4           1
-        1             5           1
-        1             6           1
+    Defined the unit capacities.
 
-    and constraints_rhs:
+    >>> unit_limits = pd.DataFrame({
+    ...   'unit': ['A', 'B'],
+    ...   'ramp_down_rate': [40.0, 20.0],
+    ...   'initial_output': [50.0, 60.0]})
 
-        constraint_id type rhs
-        0             <=   100
-        1             <=   200
+    >>> next_constraint_id = 0
 
-    :param bidding_ids: DataFrame
-        variable_id: int
-        unit: str
-    :param unit_limits: DataFrame
-        unit: str
-        capacity: float
-    :param next_constraint_id: int
-    :param dispatch_interval: int
-    :return:
-        constraints_lhs: DataFrame
-            constraint_id: int
-            variable_id: int
-            coefficient: float
-        constraints_rhs: DataFrame
-            constraint_id: int
-            type: str
-            rhs: float
+    >>> dispatch_interval = 30
+
+    Create the constraint information.
+
+    >>> type_and_rhs, variable_map = ramp_down(unit_limits, next_constraint_id, dispatch_interval)
+
+    >>> print(type_and_rhs)
+      unit  constraint_id type   rhs
+    0    A              0   >=  30.0
+    1    B              1   >=  50.0
+
+    >>> print(variable_map)
+       constraint_id unit service  coefficient
+    0              0    A  energy          1.0
+    1              1    B  energy          1.0
+
+    Parameters
+    ----------
+    unit_limits : pd.DataFrame
+        Ramp up rate and initial output by unit.
+
+        ==============  =====================================================================================
+        Columns:        Description:
+        unit            unique identifier of a dispatch unit (as `str`)
+        initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+        ramp_down_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
+        ==============  =====================================================================================
+
+    next_constraint_id : int
+        The next integer to start using for constraint ids.
+
+
+    dispatch_interval : float
+        The length of the dispatch interval in minutes.
+
+    Returns
+    -------
+    type_and_rhs : pd.DataFrame
+        The type and rhs of each constraint.
+
+        =============  ===============================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        constraint_id  the id of the variable (as `int`)
+        type           the lower bound of the variable, is zero for bids (as `np.float64`)
+        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ===============================================================
+
+    variable_map : pd.DataFrame
+        The type of variables that should appear on the lhs of the constraint.
+
+        =============  ==========================================================================
+        Columns:       Description:
+        constraint_id  the id of the constraint (as `np.int64`)
+        unit           the unit variables the constraint should map too (as `str`)
+        service        the service type of the variables the constraint should map to (as `str`)
+        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ==========================================================================
     """
     unit_limits['min_output'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (dispatch_interval / 60)
-    capacity_constraints = create_constraints(unit_limits, next_constraint_id, 'min_output', '>=')
-    constraints_rhs = capacity_constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs', 'coefficient', 'service']].\
-        drop_duplicates('constraint_id')
-    return constraints_rhs
+    type_and_rhs, variable_map = create_constraints(unit_limits, next_constraint_id, 'min_output', '>=')
+    return type_and_rhs, variable_map
 
 
 def create_constraints(unit_limits, next_constraint_id, rhs_col, direction):
-    # Create constraint row indexes for each unit.
-    constraint_rows = hf.save_index(unit_limits.reset_index(drop=True), 'constraint_id', next_constraint_id)
-    constraint_rows = constraint_rows.loc[:, ['unit', 'constraint_id', rhs_col]]
-    constraint_rows['rhs'] = constraint_rows[rhs_col]
-    constraint_rows = constraint_rows.loc[:, ['constraint_id', 'unit', 'rhs']]
-    constraint_rows['coefficient'] = 1.0
-    constraint_rows['type'] = direction
-    constraint_rows['service'] = 'energy'
-    return constraint_rows
+    # Create a constraint for each unit in unit limits.
+    type_and_rhs = hf.save_index(unit_limits.reset_index(drop=True), 'constraint_id', next_constraint_id)
+    type_and_rhs = type_and_rhs.loc[:, ['unit', 'constraint_id', rhs_col]]
+    type_and_rhs['type'] = direction  # the type i.e. >=, <=, or = is set by a parameter.
+    type_and_rhs['rhs'] = type_and_rhs[rhs_col]  # column used to set the rhs is set by a parameter.
+    type_and_rhs = type_and_rhs.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+
+    # These constraints always map to energy variables and have a coefficient of one.
+    variable_map = type_and_rhs.loc[:, ['constraint_id', 'unit']]
+    variable_map['service'] = 'energy'
+    variable_map['coefficient'] = 1.0
+
+    return type_and_rhs, variable_map
