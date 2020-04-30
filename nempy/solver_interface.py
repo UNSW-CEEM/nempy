@@ -98,7 +98,7 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
         rhs_and_type = pd.concat([constraints_rhs_and_type] + list(market_rhs_and_type.values()) +
                                  [constraints_dynamic_rhs_and_type])
     else:
-        rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()) + list(market_rhs_and_type.values()))
+        rhs_and_type = pd.concat([constraints_rhs_and_type] + list(market_rhs_and_type.values()))
 
     rhs = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['rhs']))
     enq_type = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['type']))

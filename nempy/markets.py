@@ -4,7 +4,6 @@ from nempy import check, market_constraints, objective_function, solver_interfac
     create_lhs, interconnectors as inter
 
 
-
 class Spot:
     """Class for constructing and dispatch the spot market on an interval basis."""
 
@@ -766,7 +765,7 @@ class Spot:
                 If there are inf, null or negative values in the bid band columns.
         """
         # 1. Create the constraints
-        rhs_and_type, variable_map = market_constraints.energy(demand,  self.next_constraint_id)
+        rhs_and_type, variable_map = market_constraints.energy(demand, self.next_constraint_id)
         # 2. Save constraint details
         self.market_constraints_rhs_and_type['demand'] = rhs_and_type
         self.constraint_to_variable_map['regional']['demand'] = variable_map
@@ -779,7 +778,7 @@ class Spot:
                            ['interconnector', 'to_region', 'from_region', 'max', 'min'])
     @check.repeated_rows('interconnector_directions_and_limits', ['interconnector'])
     @check.column_data_types('interconnector_directions_and_limits',
-                             {'interconnector': str, 'to_region': str, 'from_region' : str, 'max' : np.float64,
+                             {'interconnector': str, 'to_region': str, 'from_region': str, 'max': np.float64,
                               'min': np.float64})
     @check.column_values_must_be_real('interconnector_directions_and_limits', ['min', 'max'])
     def set_interconnectors(self, interconnector_directions_and_limits):
@@ -1047,7 +1046,8 @@ class Spot:
                                                                                 self.next_constraint_id)
         next_constraint_id = weights_sum_rhs['constraint_id'].max() + 1
         link_to_flow_lhs, link_to_flow_rhs = inter.link_weights_to_inter_flow(weight_variables,
-                                                                              self.decision_variables['interconnectors'],
+                                                                              self.decision_variables[
+                                                                                  'interconnectors'],
                                                                               next_constraint_id)
         next_constraint_id = link_to_flow_rhs['constraint_id'].max() + 1
         link_to_loss_lhs, link_to_loss_rhs = inter.link_weights_to_inter_loss(weight_variables, loss_variables,
@@ -1155,22 +1155,26 @@ class Spot:
         """
 
         constraints_lhs = pd.concat([self.lhs_coefficients,
-            create_lhs.create(self.market_constraints_rhs_and_type_no_lhs_yet,
-                              self.variable_to_constraint_map['regional'], ['region', 'service'])])
+                                     create_lhs.create(self.constraint_to_variable_map['regional'],
+                                                       self.variable_to_constraint_map['regional'],
+                                                       ['region', 'service'])])
 
-        if len(self.constraints_rhs_and_type_no_lhs_yet) > 0:
-            unit_constraints_lhs = create_lhs.create(self.constraints_rhs_and_type_no_lhs_yet,
-                                                     self.variable_to_constraint_map['unit_level'], ['unit', 'service'])
+        if len(self.constraint_to_variable_map['unit_level']) > 0:
+            unit_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['unit_level'],
+                                                     self.variable_to_constraint_map['unit_level'],
+                                                     ['unit', 'service'])
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
 
-        constraints_rhs_and_type = pd.concat(list(self.constraints_rhs_and_type.values()) +
-                                             list(self.constraints_rhs_and_type_no_lhs_yet.values()))
+        if len(self.constraints_rhs_and_type) > 0:
+            constraints_rhs_and_type = pd.concat(list(self.constraints_rhs_and_type.values()))
+        else:
+            constraints_rhs_and_type = pd.DataFrame({})
 
         decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
             self.decision_variables, constraints_lhs, constraints_rhs_and_type,
-            self.market_constraints_rhs_and_type_no_lhs_yet, self.constraints_dynamic_rhs_and_type,
+            self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
             self.objective_function_components)
-        self.market_constraints_rhs_and_type_no_lhs_yet = market_constraints_rhs_and_type
+        self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
         self.decision_variables = decision_variables
 
     def get_energy_dispatch(self):
@@ -1340,7 +1344,7 @@ class Spot:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        prices = self.market_constraints_rhs_and_type_no_lhs_yet['demand'].loc[:, ['region', 'price']]
+        prices = self.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
         return prices
 
     def get_interconnector_flows(self):
@@ -1441,4 +1445,3 @@ class Spot:
         dispatch = self.decision_variables['interconnectors'].loc[:, ['interconnector', 'value']]
         dispatch.columns = ['interconnector', 'flow']
         return dispatch.drop_duplicates('interconnector').reset_index(drop=True)
-
