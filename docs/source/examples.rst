@@ -15,8 +15,9 @@ demand is satisfied. No loss factors, ramping constraints or other factors are c
 
 
 Unit loss factors, capacities and ramp rates
----------------------------
+--------------------------------------------
 In this example units are given loss factors, capacity values and ramp rates.
+
 .. literalinclude:: ../../examples/ramp_rates_and_loss_factors.py
     :linenos:
     :language: python
