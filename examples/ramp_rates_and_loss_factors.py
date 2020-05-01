@@ -17,7 +17,7 @@ price_bids = pd.DataFrame({
     '3': [100.0, 80.0]  # . . .
 })
 
-# Factors limiting unit output
+# Factors limiting unit output.
 unit_limits = pd.DataFrame({
     'unit': ['A', 'B'],
     'initial_output': [55.0, 90.0],  # MW
@@ -26,43 +26,40 @@ unit_limits = pd.DataFrame({
     'ramp_down_rate': [1000.0, 1500.0]  # MW/h
 })
 
-# Other unit properties
+# Other unit properties including loss factors.
 unit_info = pd.DataFrame({
     'unit': ['A', 'B'],
     'region': ['NSW', 'NSW'],  # MW
     'loss_factor': [0.9, 0.95]  # MW/h
 })
 
-# The demand in the region\s being dispatched
+# The demand in the region\s being dispatched.
 demand = pd.DataFrame({
     'region': ['NSW'],
     'demand': [100.0]  # MW
 })
 
 # Create the market model
-simple_market = markets.Spot(unit_info=unit_info, dispatch_interval=5)
+simple_market = markets.Spot(dispatch_interval=5)
+simple_market.set_unit_info(unit_info)
 simple_market.set_unit_energy_volume_bids(volume_bids)
+simple_market.set_unit_energy_price_bids(price_bids)
 simple_market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
 simple_market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
 simple_market.set_unit_ramp_down_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
-simple_market.set_unit_energy_price_bids(price_bids)
 simple_market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing
 simple_market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-simple_market.get_energy_dispatch()
-
-# returns pandas DataFrame
+print(simple_market.get_energy_dispatch())
 #   unit  dispatch
 # 0    A      20.0
 # 1    B      80.0
 
 # Return the price of energy in each region.
-simple_market.get_energy_prices()
-
-# returns pandas DataFrame
+print(simple_market.get_energy_prices())
 #   region  price
 # 0    NSW   57.89
 
