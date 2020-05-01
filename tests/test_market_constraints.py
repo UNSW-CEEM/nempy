@@ -13,10 +13,14 @@ def test_energy():
         'constraint_id': [0, 1],
         'type': ['=', '='],
         'rhs': [16.0, 23.0],
-        'coefficient': [1.0, 1.0],
-        'service': ['energy', 'energy']
-
     })
-    output_rhs = market_constraints.energy(demand, next_constraint_id=0)
+    expected_variable_map = pd.DataFrame({
+        'constraint_id': [0, 1],
+        'region': ['X', 'Y'],
+        'service': ['energy', 'energy'],
+        'coefficient': [1.0, 1.0]
+    })
+    output_rhs, output_variable_map = market_constraints.energy(demand, next_constraint_id=0)
     expected_rhs.index = list(expected_rhs.index)
     assert_frame_equal(output_rhs, expected_rhs)
+    assert_frame_equal(output_variable_map, expected_variable_map)

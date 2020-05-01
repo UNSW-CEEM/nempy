@@ -196,7 +196,8 @@ def test_one_interconnector():
 
     expected_interconnector_flow = pd.DataFrame({
         'interconnector': ['little_link'],
-        'flow': [90.0/0.975]
+        'flow': [90.0/0.975],
+        'losses': [(90.0/0.975) * 0.05]
     })
 
     assert_frame_equal(simple_market.get_energy_prices(), expected_prices)

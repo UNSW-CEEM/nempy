@@ -13,11 +13,11 @@ def test_dispatch():
             'type': ['continuous', 'continuous', 'continuous','continuous'],
         })
     }
-    constraints_rhs_and_type = {'unit_capacity': pd.DataFrame({
+    constraints_rhs_and_type = pd.DataFrame({
         'constraint_id': [0, 1],
         'type': ['<=', '<='],
         'rhs': [5, 15]
-    })}
+    })
     market_rhs_and_type = {
         'demand': pd.DataFrame({
             'constraint_id': [2],
