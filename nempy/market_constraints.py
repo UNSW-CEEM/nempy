@@ -64,10 +64,10 @@ def energy(demand, next_constraint_id):
 
         =============  ===============================================================
         Columns:       Description:
-        unit           unique identifier of a dispatch unit (as `str`)
+        region         unique identifier of a market region (as `str`)
         constraint_id  the id of the variable (as `int`)
-        type           the lower bound of the variable, is zero for bids (as `np.float64`)
-        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        type           the type of the constraint, e.g. "=" (as `str`)
+        rhs            the rhs of the constraint (as `np.float64`)
         =============  ===============================================================
 
     variable_map : pd.DataFrame
@@ -76,7 +76,7 @@ def energy(demand, next_constraint_id):
         =============  ==========================================================================
         Columns:       Description:
         constraint_id  the id of the constraint (as `np.int64`)
-        unit           the unit variables the constraint should map too (as `str`)
+        region         the regional variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
         coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
         =============  ==========================================================================

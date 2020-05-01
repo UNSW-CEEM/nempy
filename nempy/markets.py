@@ -782,7 +782,7 @@ class Spot:
                               'min': np.float64})
     @check.column_values_must_be_real('interconnector_directions_and_limits', ['min', 'max'])
     def set_interconnectors(self, interconnector_directions_and_limits):
-        """Creates a lossless link between specified regions.
+        """Create lossless links between specified regions.
 
         Examples
         --------
@@ -904,7 +904,7 @@ class Spot:
 
         Constrain the interconnector losses to be the weighted sum of the losses at the adjacent break point:
 
-            w1 * f(-100.0) + w2 * f(0.0) + w3 * f(100.0) = interconnector flow
+            w1 * f(-100.0) + w2 * f(0.0) + w3 * f(100.0) = interconnector losses
 
         Examples
         --------
@@ -1050,8 +1050,8 @@ class Spot:
                                                                                   'interconnectors'],
                                                                               next_constraint_id)
         next_constraint_id = link_to_flow_rhs['constraint_id'].max() + 1
-        link_to_loss_lhs, link_to_loss_rhs = inter.link_weights_to_inter_loss(weight_variables, loss_variables,
-                                                                              loss_functions, next_constraint_id)
+        link_to_loss_lhs, link_to_loss_rhs = inter.link_inter_loss_to_interpolation_weights(weight_variables, loss_variables,
+                                                                                            loss_functions, next_constraint_id)
         lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs])
         dynamic_rhs = pd.concat([link_to_flow_rhs, link_to_loss_rhs])
         weight_variables = weight_variables.loc[:,

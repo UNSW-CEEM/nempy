@@ -49,15 +49,13 @@ def test_one_region_energy_market():
         'price': [53/0.9]
     })
 
-    expected_variable_values = pd.DataFrame({
-        'variable_id': [0, 1, 2, 3],
-        'value': [20.0, 20.0, 20.0, 0.0]
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'dispatch': [40.0, 20.0]
     })
 
-    assert_frame_equal(simple_market.market_constraints_rhs_and_type_no_lhs_yet['demand'].loc[:, ['region', 'price']],
-                       expected_prices)
-    assert_frame_equal(simple_market.decision_variables['energy_bids'].loc[:, ['variable_id', 'value']],
-                       expected_variable_values)
+    assert_frame_equal(simple_market.get_energy_prices(), expected_prices)
+    assert_frame_equal(simple_market.get_energy_dispatch(), expected_dispatch)
 
 
 def test_two_region_energy_market():
@@ -106,15 +104,13 @@ def test_two_region_energy_market():
         'price': [53/0.9, 60/0.95]
     })
 
-    expected_variable_values = pd.DataFrame({
-        'variable_id': [0, 1, 2, 3],
-        'value': [20.0, 40.0, 20.0, 60.0]
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'dispatch': [60.0, 80.0]
     })
 
-    assert_frame_equal(simple_market.market_constraints_rhs_and_type_no_lhs_yet['demand'].loc[:, ['region', 'price']],
-                       expected_prices)
-    assert_frame_equal(simple_market.decision_variables['energy_bids'].loc[:, ['variable_id', 'value']],
-                       expected_variable_values)
+    assert_frame_equal(simple_market.get_energy_prices(), expected_prices)
+    assert_frame_equal(simple_market.get_energy_dispatch(), expected_dispatch)
 
 
 def test_one_interconnector():

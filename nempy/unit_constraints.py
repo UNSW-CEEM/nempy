@@ -59,8 +59,8 @@ def capacity(unit_limits, next_constraint_id):
         Columns:       Description:
         unit           unique identifier of a dispatch unit (as `str`)
         constraint_id  the id of the variable (as `int`)
-        type           the lower bound of the variable, is zero for bids (as `np.float64`)
-        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        type           the type of the constraint, e.g. "=" (as `str`)
+        rhs            the rhs of the constraint (as `np.float64`)
         =============  ===============================================================
 
     variable_map : pd.DataFrame
@@ -143,8 +143,8 @@ def ramp_up(unit_limits, next_constraint_id, dispatch_interval):
         Columns:       Description:
         unit           unique identifier of a dispatch unit (as `str`)
         constraint_id  the id of the variable (as `int`)
-        type           the lower bound of the variable, is zero for bids (as `np.float64`)
-        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        type           the type of the constraint, e.g. "=" (as `str`)
+        rhs            the rhs of the constraint (as `np.float64`)
         =============  ===============================================================
 
     variable_map : pd.DataFrame
@@ -228,8 +228,8 @@ def ramp_down(unit_limits, next_constraint_id, dispatch_interval):
         Columns:       Description:
         unit           unique identifier of a dispatch unit (as `str`)
         constraint_id  the id of the variable (as `int`)
-        type           the lower bound of the variable, is zero for bids (as `np.float64`)
-        rhs            the upper bound of the variable, the volume bid (as `np.float64`)
+        type           the type of the constraint, e.g. "=" (as `str`)
+        rhs            the rhs of the constraint (as `np.float64`)
         =============  ===============================================================
 
     variable_map : pd.DataFrame
