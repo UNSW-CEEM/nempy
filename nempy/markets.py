@@ -278,7 +278,7 @@ class Spot:
 
         >>> simple_market.set_unit_energy_price_bids(price_bids)
 
-        The market should now have costs. Note the bid costs have been divided by the loss factors provided.
+        The market should now have costs.
 
         >>> print(simple_market.objective_function_components['energy_bids'])
            variable_id unit capacity_band   cost
@@ -292,7 +292,7 @@ class Spot:
         Parameters
         ----------
         price_bids : pd.DataFrame
-            Bids by unit, in $/MW, can contain up to n bid bands.
+            Bids by unit, in $/MW, can contain up to 10 bid bands.
 
             ========  ======================================================
             Columns:  Description:

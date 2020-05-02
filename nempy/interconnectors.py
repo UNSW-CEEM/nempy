@@ -610,3 +610,21 @@ def create_loss_variables(inter_variables, inter_constraint_map, loss_shares, ne
     loss_variables = loss_variables.loc[:, ['interconnector', 'variable_id', 'lower_bound', 'upper_bound', 'type']]
     constraint_map = constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
     return loss_variables, constraint_map
+
+
+def create_loss_functions(interconnector_coefficients, demand_coefficients, demand):
+    demand_loss_factor_offset = pd.merge(demand_coefficients, demand, 'inner', on=['region'])
+    demand_loss_factor_offset['offset'] = demand_loss_factor_offset['demand'] * \
+                                          demand_loss_factor_offset['demand_coefficient']
+    demand_loss_factor_offset = demand_loss_factor_offset.groupby('interconnector', as_index=False)['offset'].sum()
+    loss_functions = pd.merge(demand_loss_factor_offset, interconnector_coefficients, 'inner', on=['interconnector'])
+    loss_functions['loss_constant'] = loss_functions['loss_constant'] + loss_functions['offset']
+    loss_functions['loss_function'] = \
+        loss_functions.apply(lambda x: create_function(x['loss_constant'], x['flow_coefficient']), axis=1)
+    return loss_functions.loc[:, ['interconnector', 'loss_function']]
+
+
+def create_function(constant, flow_coefficient):
+    def loss_function(flow):
+        return (constant - 1) * flow + (flow_coefficient/2) * flow ** 2
+    return loss_function

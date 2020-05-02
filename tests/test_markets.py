@@ -204,3 +204,6 @@ def test_one_interconnector():
     assert_frame_equal(simple_market.get_energy_dispatch(), expected_dispatch)
     assert_frame_equal(simple_market.get_interconnector_flows(), expected_interconnector_flow)
 
+
+
+
