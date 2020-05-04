@@ -57,10 +57,6 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     prob = Model("market")
     prob.verbose = 0
 
-    # Get list of variables ids of type SOS 1
-    if 'sos_one_weights' in decision_variables:
-        sos_one_ids = [variable_id for variable_id in decision_variables['sos_one_weights']['variable_id']]
-
     # 1. Create the decision variables
     decision_variables = pd.concat(decision_variables)
     lp_variables = {}
@@ -71,13 +67,6 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
             list(decision_variables['upper_bound']), list(decision_variables['type'])):
         lp_variables[variable_id] = prob.add_var(lb=lower_bound, ub=upper_bound, var_type=variable_types[variable_type],
                                                  name=str(variable_id))
-        if 'sos_one_weights' in decision_variables:
-            if variable_id in sos_one_ids:
-                sos_one_weights.append((lp_variables[variable_id], 0))
-
-    # Create SOS 1, need to separate out sets later
-    if 'sos_one_weights' in decision_variables:
-        prob.add_sos(sos_one_weights, 2)
 
     # 2. Create the objective function
     objective_function = pd.concat(list(objective_function.values()))
@@ -87,10 +76,12 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
                                    list(objective_function.index)))
 
     # 3. Create the constraints
-    constraint_matrix = constraints_lhs.pivot('constraint_id', 'variable_id', 'coefficient')
-    constraint_matrix = constraint_matrix.sort_index(axis=1)
-    constraint_ids = np.asarray(constraint_matrix.index)
-    constraint_matrix_np = np.asarray(constraint_matrix)
+    if len(constraints_rhs_and_type) > 0:
+        sos_constraints = list(constraints_rhs_and_type['interpolation_weights']['constraint_id'])
+        constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
+    else:
+        constraints_rhs_and_type = pd.DataFrame({})
+
     if len(constraints_dynamic_rhs_and_type) > 0:
         constraints_dynamic_rhs_and_type = pd.concat(list(constraints_dynamic_rhs_and_type.values()))
         constraints_dynamic_rhs_and_type['rhs'] = constraints_dynamic_rhs_and_type.\
@@ -100,12 +91,21 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     else:
         rhs_and_type = pd.concat([constraints_rhs_and_type] + list(market_rhs_and_type.values()))
 
+    constraint_matrix = constraints_lhs.pivot('constraint_id', 'variable_id', 'coefficient')
+    constraint_matrix = constraint_matrix.sort_index(axis=1)
+    constraint_ids = np.asarray(constraint_matrix.index)
+    constraint_matrix_np = np.asarray(constraint_matrix)
+
     rhs = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['rhs']))
     enq_type = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['type']))
     var_list = np.asarray([lp_variables[k] for k in sorted(list(lp_variables))])
     for row, row_index in zip(constraint_matrix_np, constraint_ids):
         new_constraint = make_constraint(var_list, row, rhs[row_index], enq_type[row_index], marginal_offset=0)
         prob.add_constr(new_constraint, name=str(row_index))
+
+    for row_index in sos_constraints:
+        sos_set = get_sos(var_list, constraint_matrix_np[row_index])
+        prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 2)
 
     # 4. Solve the problem
     status = prob.optimize()
@@ -147,6 +147,12 @@ def make_constraint(var_list, lhs, rhs, enq_type, marginal_offset=0):
     else:
         print('missing types')
     return con
+
+
+def get_sos(var_list, lhs):
+    needed_variables_indices = np.argwhere(~np.isnan(lhs)).flatten()
+    lhs_variables = var_list[needed_variables_indices]
+    return lhs_variables
 
 
 def get_price(row_index, prob):

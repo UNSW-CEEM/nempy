@@ -13,6 +13,7 @@ Welcome to nempy's documentation!
    intro
    examples
    Spot
+   input_preprocessing
 
 Indices and tables
 ==================

@@ -1181,10 +1181,14 @@ class Spot:
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
 
-        constraints_lhs = pd.concat([self.lhs_coefficients,
-                                     create_lhs.create(self.constraint_to_variable_map['regional'],
-                                                       self.variable_to_constraint_map['regional'],
-                                                       ['region', 'service'])])
+        constraints_lhs = self.lhs_coefficients
+
+        if len(self.constraint_to_variable_map['regional']) > 0:
+            regional_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['regional'],
+                                                         self.variable_to_constraint_map['regional'],
+                                                         ['region', 'service'])
+
+            constraints_lhs = pd.concat([constraints_lhs, regional_constraints_lhs])
 
         if len(self.constraint_to_variable_map['unit_level']) > 0:
             unit_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['unit_level'],
@@ -1192,13 +1196,8 @@ class Spot:
                                                      ['unit', 'service'])
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
 
-        if len(self.constraints_rhs_and_type) > 0:
-            constraints_rhs_and_type = pd.concat(list(self.constraints_rhs_and_type.values()))
-        else:
-            constraints_rhs_and_type = pd.DataFrame({})
-
         decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
-            self.decision_variables, constraints_lhs, constraints_rhs_and_type,
+            self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
             self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
             self.objective_function_components)
         self.market_constraints_rhs_and_type = market_constraints_rhs_and_type

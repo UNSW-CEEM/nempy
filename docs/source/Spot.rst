@@ -1,4 +1,6 @@
-The Spot market class
+.. _spot:
+
+Spot market class
 ===============================
 A model of the NEM spot market dispatch process.
 
