@@ -14,7 +14,7 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
         g(inter_flow) = inter_losses
 
     The mathematics of the demand dependent loss functions is described in the
-    :download:`AMEO documentation <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>` .
+    :download:`Marginal Loss Factors documentation section 3 to 5  <../../docs/pdfs/Marginal Loss Factors for the 2020-21 Financial year.pdf>`.
 
     Examples
     --------

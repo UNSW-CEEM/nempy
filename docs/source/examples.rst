@@ -1,5 +1,3 @@
-.. _Examples
-
 Examples
 ==============
 
@@ -26,6 +24,16 @@ In this example units are given loss factors, capacity values and ramp rates.
 Interconnector with losses
 ---------------------------
 .. literalinclude:: ../../examples/interconnector_constant_loss_percentage.py
+    :linenos:
+    :language: python
+
+
+Dynamic non-linear interconnector losses
+----------------------------------------
+Implements creating loss functions as described in
+:download:`Marginal Loss Factors documentation section 3 to 5  <../../docs/pdfs/Marginal Loss Factors for the 2020-21 Financial year.pdf>`.
+
+.. literalinclude:: ../../examples/interconnector_dynamic_losses.py
     :linenos:
     :language: python
 

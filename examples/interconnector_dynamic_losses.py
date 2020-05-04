@@ -1,5 +1,5 @@
 import pandas as pd
-from nempy import markets
+from nempy import markets, input_preprocessing
 
 
 # Create a market instance.
@@ -16,7 +16,7 @@ simple_market.set_unit_info(unit_info)
 # Volume of each bids.
 volume_bids = pd.DataFrame({
     'unit': ['A'],
-    '1': [100.0]  # MW
+    '1': [1000.0]  # MW
 })
 
 simple_market.set_unit_energy_volume_bids(volume_bids)
@@ -29,42 +29,48 @@ price_bids = pd.DataFrame({
 
 simple_market.set_unit_energy_price_bids(price_bids)
 
-# NSW has no demand but VIC has 90 MW.
+# NSW has no demand but VIC has 800 MW.
 demand = pd.DataFrame({
     'region': ['NSW', 'VIC'],
-    'demand': [0.0, 90.0]  # MW
+    'demand': [0.0, 800.0]  # MW
 })
 
 simple_market.set_demand_constraints(demand)
 
 # There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
 interconnectors = pd.DataFrame({
-    'interconnector': ['little_link'],
+    'interconnector': ['VIC1-NSW1'],
     'to_region': ['VIC'],
     'from_region': ['NSW'],
-    'max': [100.0],
-    'min': [-120.0]
+    'max': [1000.0],
+    'min': [-1200.0]
 })
 
 simple_market.set_interconnectors(interconnectors)
 
-# The interconnector loss function. In this case losses are always 5 % of line flow.
-def constant_losses(flow):
-    return abs(flow) * 0.05
+# Create a demand dependent loss function.
+# Specify the demand dependency
+demand_coefficients = pd.DataFrame({
+    'interconnector': ['VIC1-NSW1', 'VIC1-NSW1'],
+    'region': ['NSW1', 'VIC1'],
+    'demand_coefficient': [0.000021734, -0.000031523]})
 
-# The loss function on a per interconnector basis. Also details how the losses should be proportioned to the
-# connected regions.
-loss_functions = pd.DataFrame({
-    'interconnector': ['little_link'],
-    'from_region_loss_share': [0.5],  # losses are shared equally.
-    'loss_function': [constant_losses]
-})
+# Specify the loss function constant and flow coefficient.
+interconnector_coefficients = pd.DataFrame({
+    'interconnector': ['VIC1-NSW1'],
+    'loss_constant': [1.0657],
+    'flow_coefficient': [0.00017027]})
 
-# The points to linearly interpolate the loss function between. In this example the loss function is linear so only
-# three points are needed, but if a non linear loss function was used then more points would be better.
+# Create loss functions on per interconnector basis.
+loss_functions = input_preprocessing.create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+
+# Specify that losses are shared equally between connected regions.
+loss_functions['from_region_loss_share'] = 0.5
+
+# The points to linearly interpolate the loss function between.
 interpolation_break_points = pd.DataFrame({
-    'interconnector': ['little_link', 'little_link', 'little_link'],
-    'break_point': [-120.0, 0.0, 100]
+    'interconnector': 'VIC1-NSW1',
+    'break_point': [-1200.0, -1000.0, -800.0, -600.0, -400.0, -200.0, 0.0, 200.0, 400.0, 600.0, 800.0, 1000]
 })
 
 simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
@@ -74,16 +80,16 @@ simple_market.dispatch()
 
 # Return the total dispatch of each unit in MW.
 print(simple_market.get_energy_dispatch())
-#   unit   dispatch
-# 0    A  94.615385
+#   unit    dispatch
+# 0    A  920.205473
 
 # Return interconnector flow and losses.
 print(simple_market.get_interconnector_flows())
-#   interconnector       flow    losses
-# 0    little_link  92.307692  4.615385
+#   interconnector        flow      losses
+# 0      VIC1-NSW1  860.102737  120.205473
 
 # Return the price of energy in each region.
 print(simple_market.get_energy_prices())
 #   region      price
 # 0    NSW  50.000000
-# 1    VIC  52.564103
+# 1    VIC  62.292869
