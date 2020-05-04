@@ -87,9 +87,9 @@ class Spot:
         self.unit_info = unit_info
 
     @check.required_columns('volume_bids', ['unit'])
-    @check.allowed_columns('volume_bids', ['unit', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.repeated_rows('volume_bids', ['unit'])
-    @check.column_data_types('volume_bids', {'unit': str, 'else': np.float64})
+    @check.allowed_columns('volume_bids', ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    @check.repeated_rows('volume_bids', ['unit', 'service'])
+    @check.column_data_types('volume_bids', {'unit': str, 'service': str, 'else': np.float64})
     @check.column_values_must_be_real('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     @check.column_values_not_negative('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     def set_unit_energy_volume_bids(self, volume_bids):
@@ -140,18 +140,18 @@ class Spot:
 
         The market should now have the variables.
 
-        >>> print(simple_market.decision_variables['energy_bids'])
-          unit capacity_band  variable_id  lower_bound  upper_bound        type
-        0    A             1            0          0.0         20.0  continuous
-        1    A             2            1          0.0         20.0  continuous
-        2    A             3            2          0.0          5.0  continuous
-        3    B             1            3          0.0         50.0  continuous
-        4    B             2            4          0.0         30.0  continuous
-        5    B             3            5          0.0         10.0  continuous
+        >>> print(simple_market.decision_variables['bids'])
+          unit capacity_band service  variable_id  lower_bound  upper_bound        type
+        0    A             1  energy            0          0.0         20.0  continuous
+        1    A             2  energy            1          0.0         20.0  continuous
+        2    A             3  energy            2          0.0          5.0  continuous
+        3    B             1  energy            3          0.0         50.0  continuous
+        4    B             2  energy            4          0.0         30.0  continuous
+        5    B             3  energy            5          0.0         10.0  continuous
 
         A mapping of these variables to constraints acting on that unit and service should also exist.
 
-        >>> print(simple_market.variable_to_constraint_map['unit_level']['energy_bids'])
+        >>> print(simple_market.variable_to_constraint_map['unit_level']['bids'])
            variable_id unit service  coefficient
         0            0    A  energy          1.0
         1            1    A  energy          1.0
@@ -162,7 +162,7 @@ class Spot:
 
         A mapping of these variables to constraints acting on the units region and service should also exist.
 
-        >>> print(simple_market.variable_to_constraint_map['regional']['energy_bids'])
+        >>> print(simple_market.variable_to_constraint_map['regional']['bids'])
            variable_id region service  coefficient
         0            0    NSW  energy          1.0
         1            1    NSW  energy          1.0
@@ -176,14 +176,16 @@ class Spot:
         volume_bids : pd.DataFrame
             Bids by unit, in MW, can contain up to 10 bid bands, these should be labeled '1' to '10'.
 
-            ========  ======================================================
+            ========  ===============================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
+            service   the service being provided, optional, if missing energy assumed
+                      (as `str`)
             1         bid volume in the 1st band, in MW (as `np.float64`)
             2         bid volume in the 2nd band, in MW (as `np.float64`)
               :
             10         bid volume in the nth band, in MW (as `np.float64`)
-            ========  ======================================================
+            ========  ================================================================
 
         Returns
         -------
@@ -204,23 +206,23 @@ class Spot:
         """
 
         # Create unit variable ids and their mapping into constraints.
-        self.decision_variables['energy_bids'], variable_to_constraint_map = \
-            variable_ids.energy(volume_bids, self.unit_info, self.next_variable_id)
+        self.decision_variables['bids'], variable_to_constraint_map = \
+            variable_ids.bids(volume_bids, self.unit_info, self.next_variable_id)
 
         # Split constraint mapping up on a regional and unit level basis.
-        self.variable_to_constraint_map['regional']['energy_bids'] = \
+        self.variable_to_constraint_map['regional']['bids'] = \
             variable_to_constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
-        self.variable_to_constraint_map['unit_level']['energy_bids'] = \
+        self.variable_to_constraint_map['unit_level']['bids'] = \
             variable_to_constraint_map.loc[:, ['variable_id', 'unit', 'service', 'coefficient']]
 
         # Update the variable id counter:
-        self.next_variable_id = max(self.decision_variables['energy_bids']['variable_id']) + 1
+        self.next_variable_id = max(self.decision_variables['bids']['variable_id']) + 1
 
     @check.energy_bid_ids_exist
-    @check.required_columns('volume_bids', ['unit'])
-    @check.allowed_columns('price_bids', ['unit', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.repeated_rows('price_bids', ['unit'])
-    @check.column_data_types('price_bids', {'unit': str, 'else': np.float64})
+    @check.required_columns('price_bids', ['unit'])
+    @check.allowed_columns('price_bids', ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    @check.repeated_rows('price_bids', ['unit', 'service'])
+    @check.column_data_types('price_bids', {'unit': str, 'service': str, 'else': np.float64})
     @check.column_values_must_be_real('price_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     @check.bid_prices_monotonic_increasing
     def set_unit_energy_price_bids(self, price_bids):
@@ -280,7 +282,7 @@ class Spot:
 
         The market should now have costs.
 
-        >>> print(simple_market.objective_function_components['energy_bids'])
+        >>> print(simple_market.objective_function_components['bids'])
            variable_id unit capacity_band   cost
         0            0    A             1   50.0
         1            1    A             2  100.0
@@ -297,6 +299,8 @@ class Spot:
             ========  ======================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
+            service   the service being provided, optional, if missing energy assumed
+                      (as `str`)
             1         bid price in the 1st band, in $/MW (as `np.float64`)
             2         bid price in the 2nd band, in $/MW (as `np.float64`)
             n         bid price in the nth band, in $/MW (as `np.float64`)
@@ -323,11 +327,11 @@ class Spot:
             BidsNotMonotonicIncreasing
                 If the bids band price for all units are not monotonic increasing.
         """
-        energy_objective_function = objective_function.energy(self.decision_variables['energy_bids'], price_bids)
+        energy_objective_function = objective_function.bids(self.decision_variables['bids'], price_bids)
         if 'loss_factor' in self.unit_info.columns:
             energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function,
                                                                                  self.unit_info)
-        self.objective_function_components['energy_bids'] = \
+        self.objective_function_components['bids'] = \
             energy_objective_function.loc[:, ['variable_id', 'unit', 'capacity_band', 'cost']]
 
     @check.energy_bid_ids_exist
@@ -666,7 +670,6 @@ class Spot:
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.energy_bid_ids_exist
     @check.required_columns('demand', ['region', 'demand'])
     @check.allowed_columns('demand', ['region', 'demand'])
     @check.repeated_rows('demand', ['region'])
@@ -718,7 +721,7 @@ class Spot:
         ...     'region': ['NSW'],
         ...     'demand': [100.0]})
 
-        Create unit capacity based constraints.
+        Create constraints.
 
         >>> simple_market.set_demand_constraints(demand)
 
@@ -751,18 +754,16 @@ class Spot:
 
         Raises
         ------
-            ModelBuildError
-                If the volume bids have not been set yet.
             RepeatedRowError
                 If there is more than one row for any unit.
             ColumnDataTypeError
-                If columns are not of the require type.
+                If columns are not of the required type.
             MissingColumnError
                 If the column 'region' or 'demand' is missing.
             UnexpectedColumn
                 There is a column that is not 'region' or 'demand'.
             ColumnValues
-                If there are inf, null or negative values in the bid band columns.
+                If there are inf, null or negative values in the volume column.
         """
         # 1. Create the constraints
         rhs_and_type, variable_map = market_constraints.energy(demand, self.next_constraint_id)
@@ -771,6 +772,109 @@ class Spot:
         self.constraint_to_variable_map['regional']['demand'] = variable_map
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
+    @check.allowed_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
+    @check.repeated_rows('fcas_requirements', ['set', 'service', 'region'])
+    @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'else': np.float64})
+    @check.column_values_must_be_real('fcas_requirements', ['volume'])
+    @check.column_values_not_negative('fcas_requirements', ['volume'])
+    def set_fcas_requirements_constraints(self, fcas_requirements):
+        """Creates constraints that force FCAS supply to equal requirements.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Define a regulation raise FCAS requirement that apply to all mainland states.
+
+        >>> fcas_requirements = pd.DataFrame({
+        ...     'set': ['raise_reg_main', 'raise_reg_main', 'raise_reg_main', 'raise_reg_main'],
+        ...     'service': ['raise_reg', 'raise_reg', 'raise_reg', 'raise_reg'],
+        ...     'region': ['QLD', 'NSW', 'VIC', 'SA'],
+        ...     'volume': [100.0, 100.0, 100.0, 100.0]})
+
+        Create constraints.
+
+        >>> simple_market.set_fcas_requirements_constraints(fcas_requirements)
+
+        The market should now have a set of constraints.
+
+        >>> print(simple_market.market_constraints_rhs_and_type['fcas'])
+                      set  constraint_id type    rhs
+        0  raise_reg_main              0    =  100.0
+
+        ... and a mapping of those constraints to variable type for the lhs.
+
+        >>> print(simple_market.constraint_to_variable_map['regional']['fcas'])
+           constraint_id    service region  coefficient
+        0              0  raise_reg    QLD          1.0
+        1              0  raise_reg    NSW          1.0
+        2              0  raise_reg    VIC          1.0
+        3              0  raise_reg     SA          1.0
+
+        Parameters
+        ----------
+        fcas_requirements : pd.DataFrame
+            requirement by set and the regions and service the requirement applies to.
+
+            ========  ===================================================================
+            Columns:  Description:
+            set       unique identifier of the requirement set (as `str`)
+            service   the service or services the requirement set applies to (as `str`)
+            region    unique identifier of a region (as `str`)
+            volume    the amount of service required, in MW (as `np.float64`)
+            ========  ===================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the required type.
+            MissingColumnError
+                If the column 'set', 'service', 'region', or 'demand' is missing.
+            UnexpectedColumn
+                There is a column that is not 'set', 'service', 'region', or 'demand'.
+            ColumnValues
+                If there are inf, null or negative values in the volume column.
+        """
+        # 1. Create the constraints
+        rhs_and_type, variable_map = market_constraints.fcas(fcas_requirements, self.next_constraint_id)
+        # 2. Save constraint details
+        self.market_constraints_rhs_and_type['fcas'] = rhs_and_type
+        self.constraint_to_variable_map['regional']['fcas'] = variable_map
+        # 3. Update the constraint id
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    def set_joint_ramping_constraints(self, fcas_regulation_trapeziums, unit_limits):
+        """Create constraint that ensure energy dispatch and FCAS regulation dispatch do no violate ramping rates.
+
+        """
 
     @check.required_columns('interconnector_directions_and_limits',
                             ['interconnector', 'to_region', 'from_region', 'max', 'min'])
@@ -1284,7 +1388,7 @@ class Spot:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        dispatch = self.decision_variables['energy_bids'].loc[:, ['unit', 'value']]
+        dispatch = self.decision_variables['bids'].loc[:, ['unit', 'value']]
         dispatch.columns = ['unit', 'dispatch']
         return dispatch.groupby('unit', as_index=False).sum()
 

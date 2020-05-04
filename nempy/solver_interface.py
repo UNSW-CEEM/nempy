@@ -76,8 +76,10 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
                                    list(objective_function.index)))
 
     # 3. Create the constraints
+    sos_constraints = []
     if len(constraints_rhs_and_type) > 0:
-        sos_constraints = list(constraints_rhs_and_type['interpolation_weights']['constraint_id'])
+        if 'interpolation_weights' in constraints_rhs_and_type:
+            sos_constraints = list(constraints_rhs_and_type['interpolation_weights']['constraint_id'])
         constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
     else:
         constraints_rhs_and_type = pd.DataFrame({})

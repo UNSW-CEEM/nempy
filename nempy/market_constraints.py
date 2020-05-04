@@ -92,3 +92,93 @@ def energy(demand, next_constraint_id):
     variable_map['service'] = 'energy'
     variable_map['coefficient'] = 1.0
     return type_and_rhs, variable_map
+
+
+def fcas(fcas_requirements, next_constraint_id):
+    """Create the constraints that ensure the amount of FCAS supply dispatched  equals requirements.
+
+    Examples
+    --------
+
+    >>> import pandas
+
+    Defined the unit capacities.
+
+    >>> fcas_requirements = pd.DataFrame({
+    ...     'set': ['raise_reg_main', 'raise_reg_main', 'raise_reg_main', 'raise_reg_main'],
+    ...     'service': ['raise_reg', 'raise_reg', 'raise_reg', 'raise_reg'],
+    ...     'region': ['QLD', 'NSW', 'VIC', 'SA'],
+    ...     'volume': [100.0, 100.0, 100.0, 100.0]})
+
+    >>> next_constraint_id = 0
+
+    Create the constraint information.
+
+    >>> type_and_rhs, variable_map = fcas(fcas_requirements, next_constraint_id)
+
+    >>> print(type_and_rhs)
+                  set  constraint_id type    rhs
+    0  raise_reg_main              0    =  100.0
+
+    >>> print(variable_map)
+       constraint_id    service region  coefficient
+    0              0  raise_reg    QLD          1.0
+    1              0  raise_reg    NSW          1.0
+    2              0  raise_reg    VIC          1.0
+    3              0  raise_reg     SA          1.0
+
+    Parameters
+    ----------
+    fcas_requirements : pd.DataFrame
+        requirement by set and the regions and service the requirement applies to.
+
+        ========  ===================================================================
+        Columns:  Description:
+        set       unique identifier of the requirement set (as `str`)
+        service   the service or services the requirement set applies to (as `str`)
+        region    unique identifier of a region (as `str`)
+        volume    the amount of service required, in MW (as `np.float64`)
+        ========  ===================================================================
+
+    next_constraint_id : int
+        The next integer to start using for constraint ids.
+
+    Returns
+    -------
+    type_and_rhs : pd.DataFrame
+        The type and rhs of each constraint.
+
+        =============  ===================================================================
+        Columns:       Description:
+        set            unique identifier of a market region (as `str`)
+        constraint_id  the id of the variable (as `int`)
+        type           the type of the constraint, e.g. "=" (as `str`)
+        rhs            the rhs of the constraint (as `np.float64`)
+        =============  ===================================================================
+
+    variable_map : pd.DataFrame
+        The type of variables that should appear on the lhs of the constraint.
+
+        =============  ==========================================================================
+        Columns:       Description:
+        constraint_id  the id of the constraint (as `np.int64`)
+        region         the regional variables the constraint should map too (as `str`)
+        service        the service type of the variables the constraint should map to (as `str`)
+        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  ==========================================================================
+    """
+
+    # Create an index for each constraint.
+    type_and_rhs = fcas_requirements.loc[:, ['set', 'volume']]
+    type_and_rhs = type_and_rhs.drop_duplicates('set')
+    type_and_rhs = hf.save_index(type_and_rhs, 'constraint_id', next_constraint_id)
+    type_and_rhs['type'] = '='  # Supply and interconnector flow must exactly equal demand.
+    type_and_rhs['rhs'] = type_and_rhs['volume']
+    type_and_rhs = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
+
+    # Map constraints to energy variables in their region.
+    variable_map = fcas_requirements.loc[:, ['set', 'service', 'region']]
+    variable_map = pd.merge(variable_map, type_and_rhs.loc[:, ['set', 'constraint_id']], 'inner', on='set')
+    variable_map['coefficient'] = 1.0
+    variable_map = variable_map.loc[:, ['constraint_id', 'service', 'region', 'coefficient']]
+    return type_and_rhs, variable_map

@@ -2,7 +2,7 @@ import pandas as pd
 from nempy import helper_functions as hf
 
 
-def energy(variable_ids, price_bids, unit_info=None):
+def bids(variable_ids, price_bids, unit_info=None):
     """Create the cost coefficients of energy in bids in the objective function.
 
     This function defines the cost associated with each decision variable that represents a unit's energy bid. Costs are
@@ -16,6 +16,8 @@ def energy(variable_ids, price_bids, unit_info=None):
         =============  ===============================================================
         Columns:       Description:
         unit           unique identifier of a dispatch unit (as `str`)
+        service   the service being provided, optional, if missing energy assumed
+                  (as `str`)
         capacity_band  the bid band of the variable (as `str`)
         variable_id    the id of the variable (as `int`)
         =============  ===============================================================
@@ -43,24 +45,16 @@ def energy(variable_ids, price_bids, unit_info=None):
         cost           the bid cost of the variable (as `float`)
         =============  ===============================================================
     """
+    # If no service column is provided assume bids are for energy.
+    if 'service' not in price_bids.columns:
+        price_bids['service'] = 'energy'
+
     # Get the list of columns that are bid bands.
-    bid_bands = [col for col in price_bids.columns if col != 'unit']
-    # Reshape the DataFrame such that all bids are stacked vertical e.g
-    # from:
-    # unit 1  2
-    # A    10 20
-    # B    10 10
-    #
-    # to:
-    # unit capacity_band cost
-    # A    1             10
-    # A    2             20
-    # B    1             10
-    # B    2             10
-    price_bids = hf.stack_columns(price_bids, cols_to_keep=['unit'], cols_to_stack=bid_bands,
+    bid_bands = [col for col in price_bids.columns if col not in ['unit', 'service']]
+    price_bids = hf.stack_columns(price_bids, cols_to_keep=['unit', 'service'], cols_to_stack=bid_bands,
                                   type_name='capacity_band', value_name='cost')
     # Match bid cost with existing variable ids
-    objective_function = pd.merge(variable_ids, price_bids, how='inner', on=['unit', 'capacity_band'])
+    objective_function = pd.merge(variable_ids, price_bids, how='inner', on=['unit', 'service', 'capacity_band'])
     return objective_function
 
 

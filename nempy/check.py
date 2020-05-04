@@ -14,7 +14,7 @@ def keep_details(fn):
 def energy_bid_ids_exist(func):
     @keep_details(func)
     def wrapper(*args):
-        if 'energy_bids' not in args[0].decision_variables:
+        if 'bids' not in args[0].decision_variables:
             raise ModelBuildError('This cannot be performed before energy volume bids are set.')
         func(*args)
 
@@ -65,8 +65,9 @@ def repeated_rows(name, cols, arg=1):
     def decorator(func):
         @keep_details(func)
         def wrapper(*args):
-            if args[0].check and len(args[arg].index) != len(args[arg].drop_duplicates(cols)):
-                raise RepeatedRowError('{} should only have one row for each {}.'.format(name, ' '.join(cols)))
+            cols_in_df = [col for col in cols if col in args[arg].columns]
+            if args[0].check and len(args[arg].index) != len(args[arg].drop_duplicates(cols_in_df)):
+                raise RepeatedRowError('{} should only have one row for each {}.'.format(name, ' '.join(cols_in_df)))
             func(*args)
 
         return wrapper
