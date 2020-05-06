@@ -963,6 +963,22 @@ class Spot:
         Returns
         -------
         None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit and service combination in regulation_units, or if there is
+                more than one row for any unit in unit_limits.
+            ColumnDataTypeError
+                If columns are not of the required type.
+            MissingColumnError
+                If the columns 'unit' or 'service' are missing from regulations_units, or if the columns 'unit',
+                'initial_output', 'ramp_up_rate' or 'ramp_down_rate' are missing from unit_limits.
+            UnexpectedColumn
+                If there are columns other than 'unit' or 'service' in regulations_units, or if there are columns other
+                than 'unit', 'initial_output', 'ramp_up_rate' or 'ramp_down_rate' in unit_limits.
+            ColumnValues
+                If there are inf, null or negative values in the columns of type `np.float64`.
         """
 
         rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(regulation_units, unit_limits,
@@ -970,6 +986,218 @@ class Spot:
                                                                                 self.next_constraint_id)
         self.constraints_rhs_and_type['joint_ramping'] = rhs_and_type
         self.constraint_to_variable_map['unit_level']['joint_ramping'] = variable_map
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    @check.required_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
+                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.allowed_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
+                                                      'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.repeated_rows('contingency_trapeziums', ['unit', 'service'], arg=1)
+    @check.column_data_types('contingency_trapeziums', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
+    @check.column_values_must_be_real('contingency_trapeziums', ['max_availability', 'enablement_min',
+                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.column_values_not_negative('contingency_trapeziums', ['max_availability', 'enablement_min',
+                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    def set_joint_capacity_constraints(self, contingency_trapeziums):
+        """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch.
+
+        Create two constraints for each contingency services, one ensures operation on upper slope of the fcas
+        contingency trapezium is consistent with regulation raise and energy dispatch, the second ensures operation on
+        upper slope of the fcas contingency trapezium is consistent with regulation lower and energy dispatch.
+
+        The constraints are described in the
+        :download:`FCAS MODEL IN NEMDE documentation section 6.2  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+        Examples
+        --------
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot(dispatch_interval=60)
+
+        Define the FCAS contingency trapeziums.
+
+        >>> contingency_trapeziums = pd.DataFrame({
+        ... 'unit': ['A'],
+        ... 'service': ['raise_6s'],
+        ... 'max_availability': [60.0],
+        ... 'enablement_min': [20.0],
+        ... 'low_break_point': [40.0],
+        ... 'high_break_point': [60.0],
+        ... 'enablement_max': [80.0]})
+
+        Set the joint capacity constraints.
+
+        >>> simple_market.set_joint_capacity_constraints(contingency_trapeziums)
+
+        TNow the market should have the constraints and their mapping to decision varibales.
+
+        >>> print(simple_market.constraints_rhs_and_type['joint_capacity'])
+          unit   service  constraint_id type   rhs
+        0    A  raise_6s              0   <=  80.0
+        0    A  raise_6s              1   >=  20.0
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['joint_capacity'])
+           constraint_id unit    service  coefficient
+        0              0    A     energy     1.000000
+        0              0    A   raise_6s     0.333333
+        0              0    A  raise_reg     1.000000
+        0              1    A     energy     1.000000
+        0              1    A   raise_6s    -0.333333
+        0              1    A  lower_reg    -1.000000
+
+        Parameters
+        ----------
+        contingency_trapeziums : pd.DataFrame
+            The FCAS trapeziums for the contingency services being offered.
+
+            ================   ======================================================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit (as `str`)
+            service            the contingency service being offered (as `str`)
+            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
+            enablement_min     the energy dispatch level at which the unit can begin to provide the
+                               contingency service, in MW (as `np.float64`)
+            low_break_point    the energy dispatch level at which the unit can provide the full
+                               contingency service offered, in MW (as `np.float64`)
+            high_break_point   the energy dispatch level at which the unit can no longer provide the
+                               full contingency service offered, in MW (as `np.float64`)
+            enablement_max     the energy dispatch level at which the unit can no longer begin
+                               the contingency service, in MW (as `np.float64`)
+            ================   ======================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit and service combination in contingency_trapeziums.
+            ColumnDataTypeError
+                If columns are not of the required type.
+            MissingColumnError
+                If the columns 'unit', 'service', 'max_availability', 'enablement_min', 'low_break_point',
+                'high_break_point' or 'enablement_max' from contingency_trapeziums.
+            UnexpectedColumn
+                If there are columns other than 'unit', 'service', 'max_availability', 'enablement_min',
+                'low_break_point', 'high_break_point' or 'enablement_max' in contingency_trapeziums.
+            ColumnValues
+                If there are inf, null or negative values in the columns of type `np.float64`.
+        """
+
+        rhs_and_type, variable_map = fcas_constraints.joint_capacity_constraints(contingency_trapeziums,
+                                                                                 self.next_constraint_id)
+        self.constraints_rhs_and_type['joint_capacity'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
+                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.allowed_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
+                                                      'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.repeated_rows('regulation_trapeziums', ['unit', 'service'], arg=1)
+    @check.column_data_types('regulation_trapeziums', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
+    @check.column_values_must_be_real('regulation_trapeziums', ['max_availability', 'enablement_min',
+                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.column_values_not_negative('regulation_trapeziums', ['max_availability', 'enablement_min',
+                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    def set_energy_and_regulation_capacity_constraints(self, regulation_trapeziums):
+        """Creates constraints to ensure there is adequate capacity for regulation and energy dispatch targets.
+
+        Create two constraints for each regulation services, one ensures operation on upper slope of the fcas
+        regulation trapezium is consistent with energy dispatch, the second ensures operation on lower slope of the
+        fcas regulation trapezium is consistent with energy dispatch.
+
+        The constraints are described in the
+        :download:`FCAS MODEL IN NEMDE documentation section 6.3  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+        Examples
+        --------
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot(dispatch_interval=60)
+
+        Define the FCAS regulation trapeziums.
+
+        >>> regulation_trapeziums = pd.DataFrame({
+        ... 'unit': ['A'],
+        ... 'service': ['raise_reg'],
+        ... 'max_availability': [60.0],
+        ... 'enablement_min': [20.0],
+        ... 'low_break_point': [40.0],
+        ... 'high_break_point': [60.0],
+        ... 'enablement_max': [80.0]})
+
+        Set the joint capacity constraints.
+
+        >>> simple_market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+
+        TNow the market should have the constraints and their mapping to decision varibales.
+
+        >>> print(simple_market.constraints_rhs_and_type['energy_and_regulation_capacity'])
+          unit    service  constraint_id type   rhs
+        0    A  raise_reg              0   <=  80.0
+        0    A  raise_reg              1   >=  20.0
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'])
+           constraint_id unit    service  coefficient
+        0              0    A     energy     1.000000
+        0              0    A  raise_reg     0.333333
+        0              1    A     energy     1.000000
+        0              1    A  raise_reg    -0.333333
+
+        Parameters
+        ----------
+        regulation_trapeziums : pd.DataFrame
+            The FCAS trapeziums for the regulation services being offered.
+
+            ================   ======================================================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit (as `str`)
+            service            the regulation service being offered (as `str`)
+            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
+            enablement_min     the energy dispatch level at which the unit can begin to provide the
+                               contingency service, in MW (as `np.float64`)
+            low_break_point    the energy dispatch level at which the unit can provide the full
+                               contingency service offered, in MW (as `np.float64`)
+            high_break_point   the energy dispatch level at which the unit can no longer provide the
+                               full contingency service offered, in MW (as `np.float64`)
+            enablement_max     the energy dispatch level at which the unit can no longer begin
+                               the contingency service, in MW (as `np.float64`)
+            ================   ======================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit and service combination in regulation_trapeziums.
+            ColumnDataTypeError
+                If columns are not of the required type.
+            MissingColumnError
+                If the columns 'unit', 'service', 'max_availability', 'enablement_min', 'low_break_point',
+                'high_break_point' or 'enablement_max' from regulation_trapeziums.
+            UnexpectedColumn
+                If there are columns other than 'unit', 'service', 'max_availability', 'enablement_min',
+                'low_break_point', 'high_break_point' or 'enablement_max' in regulation_trapeziums.
+            ColumnValues
+                If there are inf, null or negative values in the columns of type `np.float64`.
+        """
+
+        rhs_and_type, variable_map = \
+            fcas_constraints.energy_and_regulation_capacity_constraints(regulation_trapeziums, self.next_constraint_id)
+        self.constraints_rhs_and_type['energy_and_regulation_capacity'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('interconnector_directions_and_limits',
@@ -1273,7 +1501,7 @@ class Spot:
 
         # Link the losses to the interpolation weights.
         link_to_loss_lhs, link_to_loss_rhs = \
-            inter.link_inter_loss_to_interpolation_weights(weight_variables, loss_variables,loss_functions,
+            inter.link_inter_loss_to_interpolation_weights(weight_variables, loss_variables, loss_functions,
                                                            next_constraint_id)
 
         # Combine lhs sides, note these are complete lhs and don't need to be mapped to constraints.
