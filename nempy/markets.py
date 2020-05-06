@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
-    create_lhs, interconnectors as inter
+    create_lhs, interconnectors as inter, fcas_constraints
 
 
 class Spot:
@@ -556,7 +556,6 @@ class Spot:
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.energy_bid_ids_exist
     @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
     @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
     @check.repeated_rows('unit_limits', ['unit'])
@@ -871,10 +870,107 @@ class Spot:
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    def set_joint_ramping_constraints(self, fcas_regulation_trapeziums, unit_limits):
-        """Create constraint that ensure energy dispatch and FCAS regulation dispatch do no violate ramping rates.
+    @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
+    @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
+    @check.repeated_rows('regulation_units', ['unit', 'service'], arg=1)
+    @check.column_data_types('regulation_units', {'unit': str, 'service': str}, arg=1)
+    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate'], arg=2)
+    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate'], arg=2)
+    @check.repeated_rows('unit_limits', ['unit'], arg=2)
+    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64}, arg=2)
+    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_up_rate', 'ramp_down_rate'], arg=2)
+    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_up_rate', 'ramp_down_rate'], arg=2)
+    def set_joint_ramping_constraints(self, regulation_units, unit_limits):
+        """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
 
+        The constraints are described in the
+        :download:`FCAS MODEL IN NEMDE documentation section 6.1  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+        On a unit basis they take the form of:
+
+            Energy dispatch + Regulation raise target <= initial output + ramp up rate / (dispatch interval / 60)
+
+        and
+
+            Energy dispatch + Regulation lower target <= initial output - ramp down rate / (dispatch interval / 60)
+
+        Examples
+        --------
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot(dispatch_interval=60)
+
+        Define the set of units providing regulation services.
+
+        >>> regulation_units = pd.DataFrame({
+        ...   'unit': ['A', 'B', 'B'],
+        ...   'service': ['raise_reg', 'lower_reg', 'raise_reg']})
+
+        Define unit initial outputs and ramping capabilities.
+
+        >>> unit_limits = pd.DataFrame({
+        ...   'unit': ['A', 'B'],
+        ...   'initial_output': [100.0, 80.0],
+        ...   'ramp_up_rate': [20.0, 10.0],
+        ...   'ramp_down_rate': [15.0, 25.0]})
+
+        Create the joint ramping constraints.
+
+        >>> simple_market.set_joint_ramping_constraints(regulation_units, unit_limits)
+
+        Now the market should have the constraints and their mapping to decision varibales.
+
+        >>> print(simple_market.constraints_rhs_and_type['joint_ramping'])
+          unit  constraint_id type    rhs
+        0    A              0   <=  120.0
+        1    B              1   >=   55.0
+        2    B              2   <=   90.0
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['joint_ramping'])
+           constraint_id unit    service  coefficient
+        0              0    A  raise_reg          1.0
+        1              1    B  lower_reg          1.0
+        2              2    B  raise_reg          1.0
+        0              0    A     energy          1.0
+        1              1    B     energy          1.0
+        2              2    B     energy          1.0
+
+        Parameters
+        ----------
+        regulation_units : pd.DataFrame
+            The units with bids submitted to provide regulation FCAS
+
+            ========  =======================================================================
+            Columns:  Description:
+            unit      unique identifier of a dispatch unit (as `str`)
+            service   the regulation service being bid for raise_reg or lower_reg  (as `str`)
+            ========  =======================================================================
+
+        unit_limits : pd.DataFrame
+            The initial output and ramp rates of units
+            ==============  =====================================================================================
+            Columns:        Description:
+            unit            unique identifier of a dispatch unit (as `str`)
+            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
+            ramp_down_rate  the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
+            ==============  =====================================================================================
+
+        Returns
+        -------
+        None
         """
+
+        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(regulation_units, unit_limits,
+                                                                                self.dispatch_interval,
+                                                                                self.next_constraint_id)
+        self.constraints_rhs_and_type['joint_ramping'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['joint_ramping'] = variable_map
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('interconnector_directions_and_limits',
                             ['interconnector', 'to_region', 'from_region', 'max', 'min'])
