@@ -44,7 +44,7 @@ Implements a market for energy, regulation raise and contingency 6 sec raise, wi
 co-optimisation constraints as described in section 6.2 and 6.3 of
 :download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
-.. literalinclude:: ../../examples/simple_FCAS_Markets.py
+.. literalinclude:: ../../examples/simple_FCAS_markets.py
     :linenos:
     :language: python
 
