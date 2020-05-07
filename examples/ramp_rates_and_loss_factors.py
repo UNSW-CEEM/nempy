@@ -30,7 +30,7 @@ unit_limits = pd.DataFrame({
 unit_info = pd.DataFrame({
     'unit': ['A', 'B'],
     'region': ['NSW', 'NSW'],  # MW
-    'loss_factor': [0.9, 0.95]  # MW/h
+    'loss_factor': [0.9, 0.95]
 })
 
 # The demand in the region\s being dispatched.
@@ -43,7 +43,7 @@ demand = pd.DataFrame({
 simple_market = markets.Spot(dispatch_interval=5)
 simple_market.set_unit_info(unit_info)
 simple_market.set_unit_energy_volume_bids(volume_bids)
-simple_market.set_unit_energy_price_bids(price_bids)
+simple_market.set_unit_energy_bids(price_bids)
 simple_market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
 simple_market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
 simple_market.set_unit_ramp_down_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])

@@ -50,7 +50,7 @@ demand = pd.DataFrame({
 simple_market = markets.Spot(dispatch_interval=5)
 simple_market.set_unit_info(unit_info)
 simple_market.set_unit_energy_volume_bids(volume_bids)
-simple_market.set_unit_energy_price_bids(price_bids)
+simple_market.set_unit_energy_bids(price_bids)
 simple_market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing

@@ -38,3 +38,14 @@ Implements creating loss functions as described in
     :language: python
 
 
+Simple FCAS markets
+----------------------------------------
+Implements a market for energy, regulation raise and contingency 6 sec raise, with
+co-optimisation constraints as described in section 6.2 and 6.3 of
+:download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+.. literalinclude:: ../../examples/simple FCAS Markets.py
+    :linenos:
+    :language: python
+
+

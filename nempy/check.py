@@ -38,7 +38,10 @@ def bid_prices_monotonic_increasing(func, arg=1):
     @keep_details(func)
     def wrapper(*args):
         bids = args[arg].copy()
-        bids = bids.set_index('unit', drop=True)
+        if 'service' in bids.columns:
+            bids = bids.set_index(['unit', 'service'], drop=True)
+        else:
+            bids = bids.set_index('unit', drop=True)
         bids = bids.transpose()
         bids.index = pd.to_numeric(bids.index)
         bids = bids.sort_index()

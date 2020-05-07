@@ -27,7 +27,7 @@ price_bids = pd.DataFrame({
     '1': [50.0]  # $/MW
 })
 
-simple_market.set_unit_energy_price_bids(price_bids)
+simple_market.set_unit_energy_bids(price_bids)
 
 # NSW has no demand but VIC has 800 MW.
 demand = pd.DataFrame({

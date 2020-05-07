@@ -92,7 +92,7 @@ class Spot:
     @check.column_data_types('volume_bids', {'unit': str, 'service': str, 'else': np.float64})
     @check.column_values_must_be_real('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     @check.column_values_not_negative('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    def set_unit_energy_volume_bids(self, volume_bids):
+    def set_unit_volume_bids(self, volume_bids):
         """Creates the decision variables corresponding to energy bids.
 
         Variables are created by reserving a variable id (as `int`) for each bid. Bids with a volume of 0 MW do not
@@ -225,7 +225,7 @@ class Spot:
     @check.column_data_types('price_bids', {'unit': str, 'service': str, 'else': np.float64})
     @check.column_values_must_be_real('price_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     @check.bid_prices_monotonic_increasing
-    def set_unit_energy_price_bids(self, price_bids):
+    def set_unit_price_bids(self, price_bids):
         """Creates the objective function costs corresponding to energy bids.
 
         If no loss factors have been provided as part of the unit information when the model was initialised then the
@@ -691,29 +691,6 @@ class Spot:
 
         >>> simple_market = markets.Spot()
 
-        Define the unit information data set needed to initialise the market, in this example all units are in the same
-        region.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW']})
-
-        Add unit information
-
-        >>> simple_market.set_unit_info(unit_info)
-
-        Define a set of bids, in this example we have two units called A and B, with three bid bands.
-
-        >>> volume_bids = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     '1': [20.0, 50.0],
-        ...     '2': [20.0, 30.0],
-        ...     '3': [5.0, 10.0]})
-
-        Create energy unit bid decision variables.
-
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
-
         Define a demand level in each region.
 
         >>> demand = pd.DataFrame({
@@ -794,17 +771,6 @@ class Spot:
 
         >>> simple_market = markets.Spot()
 
-        Define the unit information data set needed to initialise the market, in this example all units are in the same
-        region.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW']})
-
-        Add unit information
-
-        >>> simple_market.set_unit_info(unit_info)
-
         Define a regulation raise FCAS requirement that apply to all mainland states.
 
         >>> fcas_requirements = pd.DataFrame({
@@ -868,6 +834,86 @@ class Spot:
         self.market_constraints_rhs_and_type['fcas'] = rhs_and_type
         self.constraint_to_variable_map['regional']['fcas'] = variable_map
         # 3. Update the constraint id
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    @check.required_columns('fcas_max_availability', ['unit', 'service', 'max_availability'], arg=1)
+    @check.allowed_columns('fcas_max_availability', ['unit', 'service', 'max_availability'], arg=1)
+    @check.repeated_rows('fcas_max_availability', ['unit', 'service'], arg=1)
+    @check.column_data_types('fcas_max_availability', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
+    @check.column_values_must_be_real('fcas_max_availability', ['max_availability'], arg=1)
+    @check.column_values_not_negative('fcas_max_availability', ['max_availability'], arg=1)
+    def set_fcas_max_availability(self, fcas_max_availability):
+        """Creates constraints to ensure fcas dispatch is limited to the availability specified in the FCAS trapezium.
+
+        The constraints are described in the
+        :download:`FCAS MODEL IN NEMDE documentation section 2  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+        Examples
+        --------
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot(dispatch_interval=60)
+
+        Define the FCAS max_availability.
+
+        >>> fcas_max_availability = pd.DataFrame({
+        ... 'unit': ['A'],
+        ... 'service': ['raise_6s'],
+        ... 'max_availability': [60.0]})
+
+        Set the joint availability constraints.
+
+        >>> simple_market.set_fcas_max_availability(fcas_max_availability)
+
+        TNow the market should have the constraints and their mapping to decision varibales.
+
+        >>> print(simple_market.constraints_rhs_and_type['fcas_max_availability'])
+          unit   service  constraint_id type   rhs
+        0    A  raise_6s              0   <=  60.0
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['fcas_max_availability'])
+           constraint_id unit   service  coefficient
+        0              0    A  raise_6s          1.0
+
+        Parameters
+        ----------
+        fcas_max_availability : pd.DataFrame
+            The FCAS max_availability for the services being offered.
+
+            ================   ======================================================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit (as `str`)
+            service            the contingency service being offered (as `str`)
+            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
+            ================   ======================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit and service combination in contingency_trapeziums.
+            ColumnDataTypeError
+                If columns are not of the required type.
+            MissingColumnError
+                If the columns 'unit', 'service' or 'max_availability' is missing from fcas_max_availability.
+            UnexpectedColumn
+                If there are columns other than 'unit', 'service' or 'max_availability' in fcas_max_availability.
+            ColumnValues
+                If there are inf, null or negative values in the columns of type `np.float64`.
+        """
+
+        rhs_and_type, variable_map = unit_constraints.fcas_max_availability(fcas_max_availability,
+                                                                            self.next_constraint_id)
+
+        self.constraints_rhs_and_type['fcas_max_availability'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['fcas_max_availability'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
@@ -1631,7 +1677,7 @@ class Spot:
         self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
         self.decision_variables = decision_variables
 
-    def get_energy_dispatch(self):
+    def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.
 
         Examples
@@ -1668,7 +1714,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -1680,7 +1726,7 @@ class Spot:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_energy_price_bids(price_bids)
+        >>> simple_market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region.
 
@@ -1698,10 +1744,10 @@ class Spot:
 
         Now the market dispatch can be retrieved.
 
-        >>> print(simple_market.get_energy_dispatch())
-          unit  dispatch
-        0    A      45.0
-        1    B      55.0
+        >>> print(simple_market.get_unit_dispatch())
+          unit service  dispatch
+        0    A  energy      45.0
+        1    B  energy      55.0
 
         Returns
         -------
@@ -1712,9 +1758,9 @@ class Spot:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        dispatch = self.decision_variables['bids'].loc[:, ['unit', 'value']]
-        dispatch.columns = ['unit', 'dispatch']
-        return dispatch.groupby('unit', as_index=False).sum()
+        dispatch = self.decision_variables['bids'].loc[:, ['unit', 'service', 'value']]
+        dispatch.columns = ['unit', 'service', 'dispatch']
+        return dispatch.groupby(['unit', 'service'], as_index=False).sum()
 
     def get_energy_prices(self):
         """Retrieves the energy price in each market region.
@@ -1755,7 +1801,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -1767,7 +1813,7 @@ class Spot:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_energy_price_bids(price_bids)
+        >>> simple_market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region.
 
@@ -1799,6 +1845,16 @@ class Spot:
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
         prices = self.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
+        return prices
+
+    def get_fcas_prices(self):
+        """Retrives the price associated with each set of FCAS requirement constraints.
+
+        Returns
+        -------
+        pd.DateFrame
+        """
+        prices = self.market_constraints_rhs_and_type['fcas'].loc[:, ['set', 'price']]
         return prices
 
     def get_interconnector_flows(self):
@@ -1836,7 +1892,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -1846,7 +1902,7 @@ class Spot:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_energy_price_bids(price_bids)
+        >>> simple_market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
 
@@ -1877,9 +1933,9 @@ class Spot:
 
         Now the market dispatch can be retrieved.
 
-        >>> print(simple_market.get_energy_dispatch())
-          unit  dispatch
-        0    A      90.0
+        >>> print(simple_market.get_unit_dispatch())
+          unit service  dispatch
+        0    A  energy      90.0
 
         And the interconnector flows can be retrieved.
 

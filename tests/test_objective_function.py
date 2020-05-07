@@ -7,6 +7,7 @@ def test_energy():
     bidding_ids = pd.DataFrame({
         'unit': ['A', 'A', 'B', 'B'],
         'capacity_band': ['1', '2', '1', '2'],
+        'service': ['energy', 'energy', 'energy', 'energy'],
         'variable_id': [1, 2, 3, 4]
     })
     price_bids = pd.DataFrame({
@@ -18,10 +19,11 @@ def test_energy():
         'unit': ['A', 'B'],
         'loss_factor': [0.85, 1.1]
     })
-    output = objective_function.energy(bidding_ids, price_bids, unit_info)
+    output = objective_function.bids(bidding_ids, price_bids, unit_info)
     expected = pd.DataFrame({
         'unit': ['A', 'A', 'B', 'B'],
         'capacity_band': ['1', '2', '1', '2'],
+        'service': ['energy', 'energy', 'energy', 'energy'],
         'variable_id': [1, 2, 3, 4],
         'cost': [16.0, 17.0, 23.0, 18.0]
     })

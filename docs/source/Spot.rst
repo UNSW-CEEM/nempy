@@ -60,16 +60,21 @@ Reference
     :nosignatures:
 
     Spot
-    Spot.set_unit_energy_volume_bids
-    Spot.set_unit_energy_price_bids
+    Spot.set_unit_volume_bids
+    Spot.set_unit_price_bids
     Spot.set_unit_capacity_constraints
     Spot.set_unit_ramp_up_constraints
     Spot.set_unit_ramp_down_constraints
     Spot.set_demand_constraints
     Spot.set_interconnectors
     Spot.set_interconnector_losses
+    Spot.set_fcas_max_availability
+    Spot.set_joint_ramping_constraints
+    Spot.set_joint_capacity_constraints
+    Spot.set_energy_and_regulation_capacity_constraints
+    Spot.set_fcas_requirements_constraints
     Spot.dispatch
-    Spot.get_energy_dispatch
+    Spot.get_unit_dispatch
     Spot.get_energy_prices
 
 

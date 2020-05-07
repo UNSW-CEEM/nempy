@@ -40,13 +40,13 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
     ...                                                            next_constraint_id)
 
     >>> print(type_and_rhs)
-          unit  constraint_id type    rhs
+      unit  constraint_id type    rhs
     0    A              1   <=  120.0
     1    B              2   >=   55.0
     2    B              3   <=   90.0
 
     >>> print(variable_mapping)
-           constraint_id unit    service  coefficient
+       constraint_id unit    service  coefficient
     0              1    A  raise_reg          1.0
     1              2    B  lower_reg          1.0
     2              3    B  raise_reg          1.0
@@ -313,7 +313,7 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     0    A  raise_reg              2   >=  20.0
 
     >>> print(variable_mapping)
-        constraint_id unit    service  coefficient
+       constraint_id unit    service  coefficient
     0              1    A     energy     1.000000
     0              1    A  raise_reg     0.333333
     0              2    A     energy     1.000000
@@ -417,3 +417,5 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     variable_mapping = pd.concat([energy_mapping_upper_slope, regulation_mapping_upper_slope,
                                   energy_mapping_lower_slope, regulation_mapping_lower_slope])
     return type_and_rhs, variable_mapping
+
+

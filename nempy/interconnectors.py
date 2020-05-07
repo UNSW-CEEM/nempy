@@ -438,13 +438,13 @@ def create_weights(break_points, next_variable_id):
     >>> weight_variables = create_weights(break_points, next_variable_id)
 
     >>> print(weight_variables.loc[:, ['interconnector', 'break_point', 'variable_id']])
-          interconnector  break_point  variable_id
+      interconnector  break_point  variable_id
     0              I       -100.0            0
     1              I          0.0            1
     2              I        100.0            2
 
     >>> print(weight_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']])
-           variable_id  lower_bound  upper_bound        type
+       variable_id  lower_bound  upper_bound        type
     0            0          0.0          1.0  continuous
     1            1          0.0          1.0  continuous
     2            2          0.0          1.0  continuous

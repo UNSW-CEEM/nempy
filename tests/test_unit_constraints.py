@@ -15,6 +15,7 @@ def test_create_constraints():
                                                                           direction)
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
         'constraint_id': [4, 5],
         'type': ['<=', '<='],
         'rhs': [16.0, 23.0]
@@ -41,6 +42,7 @@ def test_one_unit_create_constraints():
                                                                           direction)
     expected_rhs = pd.DataFrame({
         'unit': ['A'],
+        'service': ['energy'],
         'constraint_id': [4],
         'type': ['<='],
         'rhs': [16.0],
@@ -67,6 +69,7 @@ def test_ramp_down():
     output_rhs, output_variable_map = unit_constraints.ramp_down(unit_limit, next_constraint_id, dispatch_interval)
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
         'constraint_id': [4, 5],
         'type': ['>=', '>='],
         'rhs': [15.0, 20.0]
@@ -92,6 +95,7 @@ def test_ramp_up():
     output_rhs, output_variable_map = unit_constraints.ramp_up(unit_limit, next_constraint_id, dispatch_interval)
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
         'constraint_id': [4, 5],
         'type': ['<=', '<='],
         'rhs': [17.0, 26.0],
@@ -115,6 +119,7 @@ def test_capacity():
     output_rhs, output_variable_map = unit_constraints.capacity(unit_limit, next_constraint_id)
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
         'constraint_id': [4, 5],
         'type': ['<=', '<='],
         'rhs': [16.0, 23.0],
