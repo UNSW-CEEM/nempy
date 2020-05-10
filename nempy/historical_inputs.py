@@ -107,33 +107,75 @@ class InputsStartAndEnd(MultiDataSource):
 class DBManager:
     def __init__(self, db):
         self.con = sqlite3.connect(db)
-        self.tables = {}
-        self.table_types = {
-            'BIDPEROFFER_D': InputsByIntervalDateTime,
-            'BIDDAYOFFER_D': InputsByDay,
-            'DISPATCHREGIONSUM': InputsBySettlementDate,
-            'DISPATCHLOAD': InputsBySettlementDate,
-            'DISPATCHCONSTRAINT': InputsBySettlementDate,
-            'GENCONDATA': ['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'],
-            'DUDETAILSUMMARY': InputsStartAndEnd,
-            'LOSSMODEL': ['EFFECTIVEDATE', 'VERSIONNO', 'INTERCONNECTORID', 'LOSSSEGMENT'],
-            'LOSSFACTORMODEL': ['EFFECTIVEDATE', 'VERSIONNO', 'INTERCONNECTORID', 'REGIONID'],
-            'SPDREGIONCONSTRAINT': ['REGIONID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID', 'BIDTYPE'],
-            'SPDCONNECTIONPOINTCONSTRAINT': ['CONNECTIONPOINTID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID', 'BIDTYPE'],
-            'SPDINTERCONNECTORCONSTRAINT': ['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID'],
-            'INTERCONNECTOR': ['INTERCONNECTORID'],
-            'INTERCONNECTORCONSTRAINT': ['EFFECTIVEDATE', 'VERSIONNO', 'INTERCONNECTORID', 'MAXMWIN', 'MAXMWOUT',
-                                         'LOSSCONSTANT', 'LOSSFLOWCOEFFICIENT', 'FROMREGIONLOSSSHARE', 'ICTYPE']
-        }
+        self.BIDPEROFFER_D = InputsByIntervalDateTime(
+            table_name='BIDPEROFFER_D', table_columns=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE', 'BANDAVAIL1',
+                                                       'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5',
+                                                       'BANDAVAIL6','BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
+                                                       'BANDAVAIL10', 'MAXAVAIL', 'ENABLEMENTMIN', 'ENABLEMENTMAX',
+                                                       'LOWBREAKPOINT', 'HIGHBREAKPOINT'],
+            table_primary_keys=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE'])
+        self.BIDDAYOFFER_D = InputsByIntervalDateTime(
+            table_name='BIDDAYOFFER_D', table_columns=['SETTLEMENTDATE', 'DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2',
+                                                       'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5', 'PRICEBAND6',
+                                                       'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10', 'T1',
+                                                       'T2', 'T3', 'T4'],
+            table_primary_keys=['SETTLEMENTDATE', 'DUID', 'BIDTYPE'])
+        self.DISPATCHREGIONSUM = InputsBySettlementDate(
+            table_name='DISPATCHREGIONSUM', table_columns=['SETTLEMENTDATE', 'DUID', 'TOTALDEMAND',
+                                                           'DEMANDFORECAST', 'INITIALSUPPLY'],
+            table_primary_keys=['SETTLEMENTDATE', 'REGIONID'])
+        self.DISPATCHLOAD = InputsBySettlementDate(
+            table_name='DISPATCHLOAD', table_columns=['SETTLEMENTDATE', 'DUID', 'DISPATCHMODE', 'AGCSTATUS',
+                                                      'INITIALMW', 'TOTALCLEARED', 'RAMPDOWNRATE', 'RAMPUPRATE',
+                                                      'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
+                                                      'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN'],
+            table_primary_keys=['SETTLEMENTDATE', 'DUID'])
+        self.DUDETAILSUMMARY = InputsBySettlementDate(
+            table_name='DUDETAILSUMMARY', table_columns=['SETTLEMENTDATE', 'DUID', 'DISPATCHMODE', 'AGCSTATUS',
+                                                      'INITIALMW', 'TOTALCLEARED', 'RAMPDOWNRATE', 'RAMPUPRATE',
+                                                      'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
+                                                      'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN'],
+            table_primary_keys=['SETTLEMENTDATE', 'DUID'])
+        self.DISPATCHCONSTRAINT = InputsBySettlementDate(
+            table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
+                                                           'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO'],
+            table_primary_keys=['SETTLEMENTDATE', 'CONSTRAINTID'])
+        self.GENCONDATA = InputsByIntervalDateTime(
+            table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE'
+                                                    'GENERICCONSTRAINTWEIGHT'],
+            table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'])
+        self.SPDREGIONCONSTRAINT = InputsByIntervalDateTime(
+            table_name='SPDREGIONCONSTRAINT', table_columns=['REGIONID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID'
+                                                             'BIDTYPE', 'FACTOR'],
+            table_primary_keys=['REGIONID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'])
+        self.SPDCONNECTIONPOINTCONSTRAINT = InputsByIntervalDateTime(
+            table_name='SPDCONNECTIONPOINTCONSTRAINT', table_columns=['CONNECTIONPOINTID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                                      'GENCONID', 'BIDTYPE', 'FACTOR'],
+            table_primary_keys=['CONNECTIONPOINTID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'])
+        self.SPDINTERCONNECTORCONSTRAINT = InputsByIntervalDateTime(
+            table_name='SPDINTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                                     'GENCONID', 'BIDTYPE', 'FACTOR'],
+            table_primary_keys=['INTERCONNECTORID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'])
+        self.INTERCONNECTOR = InputsByIntervalDateTime(
+            table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
+            table_primary_keys=['INTERCONNECTORID'])
+        self.INTERCONNECTORCONSTRAINT = InputsByIntervalDateTime(
+            table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                                  'FROMREGIONLOSSSHARE', 'LOSSCONSTANT',
+                                                                  'LOSSFLOWCOEFFICIENT'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'])
+        self.LOSSMODEL = InputsByIntervalDateTime(
+            table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
+                                                   'MWBREAKPOINT'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'])
+        self.LOSSFACTORMODEL = InputsByIntervalDateTime(
+            table_name='LOSSFACTORMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGIONID',
+                                                         'DEMANDCOEFFICIENT'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'])
+        self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
+            table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE'],
+            table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'])
 
-    def create_table(self, table_name, table_columns, table_primary_keys):
-        self.tables[table_name] = self.table_types[table_name](table_name, table_columns, table_primary_keys, self.con)
-
-    def get_historical_inputs(self, table_name, datetime):
-        self.tables[table_name].get_data(table_name, datetime, self.con)
-
-    def add_data(self, table_name, year, month):
-        self.tables[table_name].add_data(table_name, year, month, self.con)
 
     @check.table_exists()
     def get_historical_inputs_old(self, table_name, applicable_for):
@@ -155,23 +197,6 @@ class DBManager:
                               
                               Select * from {table} inner join temp3 on {id}, VERSIONNO, EFFECTIVEDATE
                          """
-        queries_by_table = {
-            'BIDPEROFFER_D': dispatch_interval_data_query,
-            'BIDDAYOFFER_D': settlement_date_query,
-            'DISPATCHREGIONSUM': settlement_date_query,
-            'DISPATCHLOAD': settlement_date_query,
-            'DISPATCHCONSTRAINT': settlement_date_query,
-            'GENCONDATA': ['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'],
-            'DUDETAILSUMMARY': ['DUID', 'START_DATE'],
-            'LOSSMODEL': ['EFFECTIVEDATE', 'VERSIONNO', 'INTERCONNECTORID', 'LOSSSEGMENT'],
-            'LOSSFACTORMODEL': effective_date,
-            'SPDREGIONCONSTRAINT': ['REGIONID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID', 'BIDTYPE'],
-            'SPDCONNECTIONPOINTCONSTRAINT': ['CONNECTIONPOINTID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID', 'BIDTYPE'],
-            'SPDINTERCONNECTORCONSTRAINT': ['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID'],
-            'INTERCONNECTOR': ['INTERCONNECTORID'],
-            'INTERCONNECTORCONSTRAINT': ['EFFECTIVEDATE', 'VERSIONNO', 'INTERCONNECTORID', 'MAXMWIN', 'MAXMWOUT',
-                                         'LOSSCONSTANT', 'LOSSFLOWCOEFFICIENT', 'FROMREGIONLOSSSHARE', 'ICTYPE']
-        }
 
         query_to_execute = queries_by_table[table_name].format(table=table_name, datetime=applicable_for,
                                                                id='INTERCONNECTORID')
@@ -179,23 +204,3 @@ class DBManager:
 
 
 
-hi = DBManager('historical_inputs.db')
-hi.create_table('LOSSFACTORMODEL')
-hi.add_data('LOSSFACTORMODEL', 2019, 1)
-out = hi.get_historical_inputs('LOSSFACTORMODEL', '2019/01/19 00:00:00')
-#
-# t0 = time()
-# historical_inputs = DBManager('historical_inputs.db')
-# print(time()-t0)
-# t0 = time()
-# historical_inputs.create_table('DISPATCHCONSTRAINT')
-# print(time()-t0)
-# t0 = time()
-# for i in range(1, 2):
-#     historical_inputs.add_data('DISPATCHCONSTRAINT', 2019, i)
-# print(time()-t0)
-# t0 = time()
-# for i in range(0, 2):
-#     out = historical_inputs.get_historical_inputs('DISPATCHCONSTRAINT', '2019/{}/19 00:00:00'.format(str(i).zfill(2)))
-# print((time()-t0)/12)
-# t0 = time()
