@@ -8,11 +8,65 @@ from datetime import datetime, timedelta
 from time import time
 
 
-def download_to_df(table_name, year, month):
-    data_url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip'
-    r = requests.get(data_url.format(table=table_name, year=year, month=str(month).zfill(2)))
+def download_to_df(url, table_name, year, month):
+    """Downloads a zipped csv file and converts it to a pandas DataFrame, returns the DataFrame.
+
+    Examples
+    --------
+    This will only work if you are connected to the internet.
+
+    >>> url = ('http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' +
+    ...        'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip')
+
+    >>> table_name = 'DISPATCHREGIONSUM'
+
+    >>> df = download_to_df(url, table_name='DISPATCHREGIONSUM', year=2020, month=1)
+
+    >>> print(df)
+           I       DISPATCH  ... SEMISCHEDULE_CLEAREDMW  SEMISCHEDULE_COMPLIANCEMW
+    0      D       DISPATCH  ...              549.30600                    0.00000
+    1      D       DISPATCH  ...              102.00700                    0.00000
+    2      D       DISPATCH  ...              387.40700                    0.00000
+    3      D       DISPATCH  ...              145.43200                    0.00000
+    4      D       DISPATCH  ...              136.85200                    0.00000
+    ...   ..            ...  ...                    ...                        ...
+    45381  D       DISPATCH  ...              142.71600                    0.00000
+    45382  D       DISPATCH  ...              310.28903                    0.36103
+    45383  D       DISPATCH  ...               83.94100                    0.00000
+    45384  D       DISPATCH  ...              196.69610                    0.69010
+    45385  C  END OF REPORT  ...                    NaN                        NaN
+    <BLANKLINE>
+    [45386 rows x 109 columns]
+
+    Parameters
+    ----------
+    url : str
+        A url of the format 'PUBLIC_DVD_{table}_{year}{month}010000.zip', typically this will be a location on AEMO's
+        nemweb portal where data is stored in monthly archives.
+
+    table_name : str
+        The name of the table you want to download from nemweb.
+
+    year : int
+        The year the table is from.
+
+    month : int
+        The month the table is form.
+
+    Returns
+    -------
+    pd.DataFrame
+
+    """
+    # Insert the table_name, year and month into the url.
+    url = url.format(table=table_name, year=year, month=str(month).zfill(2))
+    # Download the file.
+    r = requests.get(url)
+    # Convert the contents of the response into a zipfile object.
     zf = zipfile.ZipFile(io.BytesIO(r.content))
+    # Get the name of the file inside the zip object, assuming only one file is zipped inside.
     file_name = zf.namelist()[0]
+    # Read the file into a DataFrame.
     data = pd.read_csv(zf.open(file_name), skiprows=1)
     return data
 
@@ -22,6 +76,7 @@ class MMSTable:
         self.table_name = table_name
         self.table_columns = table_columns
         self.table_primary_keys = table_primary_keys
+        self.url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip'
         with con:
             cur = con.cursor()
             cur.execute("""DROP TABLE IF EXISTS {};""".format(table_name))
@@ -39,7 +94,7 @@ class SingleDataSource(MMSTable):
 
     @check.table_exists()
     def add_data(self, table_name, year, month, con):
-        data = download_to_df(table_name, year, month)
+        data = download_to_df(self.url, table_name, year, month)
         data = data.loc[:, self.table_columns[table_name]]
         with con:
             data.to_sql(table_name, con=con, if_exists='replace', index=False)
@@ -52,7 +107,7 @@ class MultiDataSource(MMSTable):
 
     @check.table_exists()
     def add_data(self, table_name, year, month, con):
-        data = download_to_df(table_name, year, month)
+        data = download_to_df(self.url, table_name, year, month)
         data = data.loc[:, self.table_columns[table_name]]
         with con:
             data.to_sql(table_name, con=con, if_exists='append', index=False)
