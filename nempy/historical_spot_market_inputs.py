@@ -6,6 +6,7 @@ import sqlite3
 from nempy import check
 from datetime import datetime, timedelta
 from time import time
+import os
 
 
 def download_to_df(url, table_name, year, month):
@@ -100,10 +101,14 @@ class MMSTable:
         --------
         This class is designed to be used after subclassing, however this is how it would be used on it own.
 
-        >>> connection = sqlite3.connect('the_database.db')
+        >>> connection = sqlite3.connect('historical_inputs.db')
 
         >>> table = MMSTable(table_name='a_table', table_columns=['col_1', 'col_2'], table_primary_keys=['col_1'],
         ...                  con=connection)
+
+        Clean up by deleting database created.
+
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -147,7 +152,7 @@ class SingleDataSource(MMSTable):
         This class is designed to be used after subclassing, however this is how it would be used on it own. This
         example will only work with an internet connection.
 
-        >>> connection = sqlite3.connect('the_database.db')
+        >>> connection = sqlite3.connect('historical_inputs.db')
 
         >>> table = SingleDataSource(table_name='DUDETAILSUMMARY',
         ...                          table_columns=['DUID', 'START_DATE', 'CONNECTIONPOINTID', 'REGIONID'],
@@ -171,6 +176,10 @@ class SingleDataSource(MMSTable):
         >>> print(pd.read_sql_query(query, con=connection))
                DUID           START_DATE CONNECTIONPOINTID REGIONID
         0  WEMENSF1  2019/03/04 00:00:00            VWES2W     VIC1
+
+        Clean up by deleting database created.
+
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -203,7 +212,7 @@ class MultiDataSource(MMSTable):
         This class is designed to be used after subclassing, however this is how it would be used on it own. This
         example will only work with an internet connection.
 
-        >>> connection = sqlite3.connect('the_database.db')
+        >>> connection = sqlite3.connect('historical_inputs.db')
 
         >>> table = InputsBySettlementDate(table_name='DISPATCHLOAD',
         ...                                table_columns=['SETTLEMENTDATE', 'DUID',  'RAMPDOWNRATE', 'RAMPUPRATE'],
@@ -227,6 +236,10 @@ class MultiDataSource(MMSTable):
         >>> print(pd.read_sql_query(query, con=connection))
                 SETTLEMENTDATE   DUID RAMPDOWNRATE RAMPUPRATE
         0  2020/02/01 00:00:00  YWPS4        180.0      180.0
+
+        Clean up by deleting database created.
+
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -287,6 +300,10 @@ class InputsByIntervalDateTime(MultiDataSource):
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
              INTERVAL_DATETIME VALUE
         0  2019/01/01 12:00:00   2.0
+
+        Clean up by deleting database created.
+
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -352,6 +369,10 @@ class InputsByDay(MultiDataSource):
                 SETTLEMENTDATE VALUE
         0  2019/01/02 00:00:00   2.0
 
+        Clean up by deleting database created.
+
+        >>> os.remove('historical_inputs.db')
+
         Parameters
         ----------
         date_time : str
@@ -360,8 +381,8 @@ class InputsByDay(MultiDataSource):
         Returns
         -------
         pd.DataFrame
-
         """
+
         # Convert to datetime object
         date_time = datetime.strptime(date_time, '%Y/%m/%d %H:%M:%S')
         # Change date_time provided so any time less than 04:05:00 will have the previous days date.
@@ -377,14 +398,232 @@ class InputsByDay(MultiDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsStartAndEnd(MultiDataSource):
+class InputsStartAndEnd(SingleDataSource):
+    """Manages retrieving dispatch inputs by START_DATE and END_DATE."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
-    def get_data(self, date_time, con):
+    def get_data(self, date_time):
+        """Retrieves data for the specified date_time by START_DATE and END_DATE.
+
+        Records with a START_DATE before or equal to the date_times and an END_DATE after the date_time will be
+        returned.
+
+        Examples
+        --------
+        Set up a dummy database
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['START_DATE', 'END_DATE', 'VALUE'],
+        ...                           table_primary_keys=['START_DATE'], con=con)
+
+        Normally you would use the add_data method to add historical data, but here we will add data directly to the
+        database so some simple example data can be added.
+
+        >>> data = pd.DataFrame({
+        ...   'START_DATE': ['2019/01/01 00:00:00', '2019/01/02 00:00:00'],
+        ...   'END_DATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00'],
+        ...   'VALUE': [1.0, 2.0]})
+
+        >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        When we call get_data the output is filtered by START_DATE and END_DATE.
+
+        >>> print(table.get_data(date_time='2019/01/01 00:00:00'))
+                    START_DATE             END_DATE VALUE
+        0  2019/01/01 00:00:00  2019/01/02 00:00:00   1.0
+
+        >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
+                    START_DATE             END_DATE VALUE
+        0  2019/01/01 00:00:00  2019/01/02 00:00:00   1.0
+
+        >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
+                    START_DATE             END_DATE VALUE
+        0  2019/01/02 00:00:00  2019/01/03 00:00:00   2.0
+
+        >>> print(table.get_data(date_time='2019/01/02 00:12:00'))
+                    START_DATE             END_DATE VALUE
+        0  2019/01/02 00:00:00  2019/01/03 00:00:00   2.0
+
+        Clean up by closing and deleting the database created.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Parameters
+        ----------
+        date_time : str
+            Should be of format '%Y/%m/%d %H:%M:%S', and always a round 5 min interval e.g. 2019/01/01 11:55:00.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+
         query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE > '{datetime}'"
         query = query.format(table=self.table_name, datetime=date_time)
-        return pd.read_sql_query(query, con=con)
+        return pd.read_sql_query(query, con=self.con)
+
+
+class InputsByMatchDispatchConstraints(SingleDataSource):
+    """Manages retrieving dispatch inputs by matching against the DISPATCHCONSTRAINTS table"""
+    def __init__(self, table_name, table_columns, table_primary_keys, con):
+        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+
+    def get_data(self, date_time):
+        """Retrieves data for the specified date_time by matching against the DISPATCHCONSTRAINT table.
+
+        First the DISPATCHCONSTRAINT table is filtered by SETTLEMENTDATE and then the contents of the classes table
+        is matched against that.
+
+        Examples
+        --------
+        Set up a dummy database
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        >>> table = InputsByMatchDispatchConstraints(table_name='EXAMPLE',
+        ...                           table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'RHS'],
+        ...                           table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
+
+        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        database so some simple example data can be added.
+
+        >>> data = pd.DataFrame({
+        ...   'GENCONID': ['X', 'X', 'Y', 'Y'],
+        ...   'EFFECTIVEDATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00', '2019/01/01 00:00:00',
+        ...                     '2019/01/03 00:00:00'],
+        ...   'VERSIONNO': [1, 2, 2, 3],
+        ...   'RHS': [1.0, 2.0, 2.0, 3.0]})
+
+        >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        >>> data = pd.DataFrame({
+        ...   'SETTLEMENTDATE' : ['2019/01/02 00:00:00', '2019/01/02 00:00:00', '2019/01/03 00:00:00',
+        ...                       '2019/01/03 00:00:00'],
+        ...   'CONSTRAINTID': ['X', 'Y', 'X', 'Y'],
+        ...   'GENCONID_EFFECTIVEDATE': ['2019/01/02 00:00:00', '2019/01/01 00:00:00', '2019/01/03 00:00:00',
+        ...                              '2019/01/03 00:00:00'],
+        ...   'GENCONID_VERSIONNO': [1, 2, 2, 3]})
+
+        >>> data.to_sql('DISPATCHCONSTRAINT', con=con, if_exists='append', index=False)
+
+        When we call get_data the output is filtered by the contents of DISPATCHCONSTRAINT.
+
+        >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
+          GENCONID        EFFECTIVEDATE VERSIONNO  RHS
+        0        X  2019/01/02 00:00:00         1  1.0
+        1        Y  2019/01/01 00:00:00         2  2.0
+
+        >>> print(table.get_data(date_time='2019/01/03 00:00:00'))
+          GENCONID        EFFECTIVEDATE VERSIONNO  RHS
+        0        X  2019/01/03 00:00:00         2  2.0
+        1        Y  2019/01/03 00:00:00         3  3.0
+
+        Clean up by closing and deleting the database created.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Parameters
+        ----------
+        date_time : str
+            Should be of format '%Y/%m/%d %H:%M:%S', and always a round 5 min interval e.g. 2019/01/01 11:55:00.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        columns = ','.join(['{}'.format(col) for col in self.table_columns])
+        query = """Select {columns} from (
+                        {table} 
+                    inner join 
+                        (Select * from DISPATCHCONSTRAINT where SETTLEMENTDATE == '{datetime}')
+                    on GENCONID == CONSTRAINTID
+                    and EFFECTIVEDATE == GENCONID_EFFECTIVEDATE
+                    and VERSIONNO == GENCONID_VERSIONNO);"""
+        query = query.format(columns=columns, table=self.table_name, datetime=date_time)
+        return pd.read_sql_query(query, con=self.con)
+
+
+class InputsByEffectiveDateAndVersionNo(SingleDataSource):
+    """Manages retrieving dispatch inputs by EFFECTTIVEDATE and VERSIONNO."""
+    def __init__(self, table_name, table_columns, table_primary_keys, con):
+        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+
+    def get_data(self, date_time):
+        """Retrieves data for the specified date_time by EFFECTTIVEDATE and VERSIONNO.
+
+        For each unique record (by the remaining primary keys, not including EFFECTTIVEDATE and VERSIONNO) the record
+        with the most recent EFFECTIVEDATE
+
+        Examples
+        --------
+        Set up a dummy database
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        >>> table = InputsByEffectiveDateAndVersionNo(table_name='EXAMPLE',
+        ...                           table_columns=['ID', 'EFFECTIVEDATE', 'VERSIONNO', 'VALUE'],
+        ...                           table_primary_keys=['ID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
+
+        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        database so some simple example data can be added.
+
+        >>> data = pd.DataFrame({
+        ...   'ID': ['X', 'X', 'Y', 'Y'],
+        ...   'EFFECTIVEDATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00', '2019/01/01 00:00:00',
+        ...                     '2019/01/03 00:00:00'],
+        ...   'VERSIONNO': [1, 2, 2, 3],
+        ...   'VALUE': [1.0, 2.0, 2.0, 3.0]})
+
+        >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        When we call get_data the output is filtered by the contents of DISPATCHCONSTRAINT.
+
+        >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
+          ID        EFFECTIVEDATE VERSIONNO VALUE
+        0  X  2019/01/02 00:00:00         1   1.0
+        1  Y  2019/01/01 00:00:00         2   2.0
+
+        >>> print(table.get_data(date_time='2019/01/03 00:00:00'))
+          ID        EFFECTIVEDATE VERSIONNO VALUE
+        0  X  2019/01/03 00:00:00         2   2.0
+        1  Y  2019/01/03 00:00:00         3   3.0
+
+        Clean up by closing and deleting the database created.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Parameters
+        ----------
+        date_time : str
+            Should be of format '%Y/%m/%d %H:%M:%S', and always a round 5 min interval e.g. 2019/01/01 11:55:00.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        id_columns = ','.join([col for col in self.table_primary_keys if col not in ['EFFECTIVEDATE', 'VERSIONNO']])
+        with self.con:
+            cur = self.con.cursor()
+            cur.execute("DROP TABLE IF EXISTS temp;")
+            cur.execute("DROP TABLE IF EXISTS temp2;")
+            cur.execute("DROP TABLE IF EXISTS temp3;")
+            query = "Create temporary table temp as select * from {table} where EFFECTIVEDATE <= '{datetime}';"
+            cur.execute(query.format(table=self.table_name, datetime=date_time))
+            query = """Create temporary table temp2 as
+                                    Select {id}, EFFECTIVEDATE, max(VERSIONNO) as VERSIONNO
+                                      from temp
+                                  group by {id}, EFFECTIVEDATE;"""
+            cur.execute(query.format(id=id_columns))
+            query = """Create temporary table temp3 as
+                                    Select {id}, VERSIONNO, max(EFFECTIVEDATE) as EFFECTIVEDATE
+                                      from temp2
+                                  group by {id};"""
+            cur.execute(query.format(id=id_columns))
+            query = "Select * from {table} inner join temp3 using ({id}, VERSIONNO, EFFECTIVEDATE);"
+            data = pd.read_sql_query(query.format(table=self.table_name, id=id_columns), con=self.con)
+        return data
 
 
 class DBManager:
@@ -397,7 +636,7 @@ class DBManager:
                                                        'BANDAVAIL10', 'MAXAVAIL', 'ENABLEMENTMIN', 'ENABLEMENTMAX',
                                                        'LOWBREAKPOINT', 'HIGHBREAKPOINT'],
             table_primary_keys=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE'], con=self.con)
-        self.BIDDAYOFFER_D = InputsByIntervalDateTime(
+        self.BIDDAYOFFER_D = InputsByDay(
             table_name='BIDDAYOFFER_D', table_columns=['SETTLEMENTDATE', 'DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2',
                                                        'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5', 'PRICEBAND6',
                                                        'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10', 'T1',
@@ -423,7 +662,7 @@ class DBManager:
             table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
                                                            'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO'],
             table_primary_keys=['SETTLEMENTDATE', 'CONSTRAINTID'], con=self.con)
-        self.GENCONDATA = InputsByIntervalDateTime(
+        self.GENCONDATA = InputsByMatchDispatchConstraints(
             table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE'
                                                     'GENERICCONSTRAINTWEIGHT'],
             table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
