@@ -9,7 +9,7 @@ from time import time
 import os
 
 
-def download_to_df(url, table_name, year, month):
+def _download_to_df(url, table_name, year, month):
     """Downloads a zipped csv file and converts it to a pandas DataFrame, returns the DataFrame.
 
     Examples
@@ -21,7 +21,7 @@ def download_to_df(url, table_name, year, month):
 
     >>> table_name = 'DISPATCHREGIONSUM'
 
-    >>> df = download_to_df(url, table_name='DISPATCHREGIONSUM', year=2020, month=1)
+    >>> df = _download_to_df(url, table_name='DISPATCHREGIONSUM', year=2020, month=1)
 
     >>> print(df)
            I       DISPATCH  ... SEMISCHEDULE_CLEAREDMW  SEMISCHEDULE_COMPLIANCEMW
@@ -88,7 +88,7 @@ class MissingData(Exception):
     """Raise for nemweb not returning status 200 for file request."""
 
 
-class MMSTable:
+class _MMSTable:
     """Manages Market Management System (MMS) tables stored in an sqlite database.
 
     This class creates the table in the data base when the object is instantiated. Methods for adding adding and
@@ -103,11 +103,12 @@ class MMSTable:
 
         >>> connection = sqlite3.connect('historical_inputs.db')
 
-        >>> table = MMSTable(table_name='a_table', table_columns=['col_1', 'col_2'], table_primary_keys=['col_1'],
+        >>> table = _MMSTable(table_name='a_table', table_columns=['col_1', 'col_2'], table_primary_keys=['col_1'],
         ...                  con=connection)
 
         Clean up by deleting database created.
 
+        >>> con.close()
         >>> os.remove('historical_inputs.db')
 
         Parameters
@@ -139,10 +140,10 @@ class MMSTable:
             self.con.commit()
 
 
-class SingleDataSource(MMSTable):
+class _SingleDataSource(_MMSTable):
     """Manages downloading data from nemweb for tables where all relevant data is stored in lasted data file."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def set_data(self, year, month):
         """"Download data for the given table and time, replace any existing data.
@@ -154,7 +155,7 @@ class SingleDataSource(MMSTable):
 
         >>> connection = sqlite3.connect('historical_inputs.db')
 
-        >>> table = SingleDataSource(table_name='DUDETAILSUMMARY',
+        >>> table = _SingleDataSource(table_name='DUDETAILSUMMARY',
         ...                          table_columns=['DUID', 'START_DATE', 'CONNECTIONPOINTID', 'REGIONID'],
         ...                          table_primary_keys=['START_DATE', 'DUID'], con=connection)
 
@@ -179,6 +180,7 @@ class SingleDataSource(MMSTable):
 
         Clean up by deleting database created.
 
+        >>> con.close()
         >>> os.remove('historical_inputs.db')
 
         Parameters
@@ -192,17 +194,17 @@ class SingleDataSource(MMSTable):
         ------
         None
         """
-        data = download_to_df(self.url, self.table_name, year, month)
+        data = _download_to_df(self.url, self.table_name, year, month)
         data = data.loc[:, self.table_columns]
         with self.con:
             data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)
             self.con.commit()
 
 
-class MultiDataSource(MMSTable):
+class _MultiDataSource(_MMSTable):
     """Manages downloading data from nemweb for tables where data main be stored across multiple monthly files."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def add_data(self, year, month):
         """"Download data for the given table and time, appends to any existing data.
@@ -239,6 +241,7 @@ class MultiDataSource(MMSTable):
 
         Clean up by deleting database created.
 
+        >>> con.close()
         >>> os.remove('historical_inputs.db')
 
         Parameters
@@ -252,28 +255,70 @@ class MultiDataSource(MMSTable):
         ------
         None
         """
-        data = download_to_df(self.url, self.table_name, year, month)
-        data = data[data['INTERVENTION'] == 0]
+        data = _download_to_df(self.url, self.table_name, year, month)
+        if 'INTERVENTION' in data.columns:
+            data = data[data['INTERVENTION'] == 0]
         data = data.loc[:, self.table_columns]
         with self.con:
             data.to_sql(self.table_name, con=self.con, if_exists='append', index=False)
             self.con.commit()
 
 
-class InputsBySettlementDate(MultiDataSource):
+class InputsBySettlementDate(_MultiDataSource):
+    """Manages retrieving dispatch inputs by SETTLEMENTDATE."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def get_data(self, date_time):
+        """Retrieves data for the specified date_time e.g. 2019/01/01 11:55:00"
+
+        Examples
+        --------
+        Set up a dummy database
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        >>> table = InputsByIntervalDateTime(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'VALUE'],
+        ...                                  table_primary_keys=['SETTLEMENTDATE'], con=con)
+
+        Normally you would use the add_data method to add historical data, but here we will add data directly to the
+        database so some simple example data can be added.
+
+        >>> data = pd.DataFrame({
+        ...   'SETTLEMENTDATE': ['2019/01/01 11:55:00', '2019/01/01 12:00:00'],
+        ...   'VALUE': [1.0, 2.0]})
+
+        >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        When we call get_data the output is filtered by SETTLEMENTDATE.
+
+        >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
+                SETTLEMENTDATE VALUE
+        0  2019/01/01 12:00:00   2.0
+
+        Clean up by deleting database created.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Parameters
+        ----------
+        date_time : str
+            Should be of format '%Y/%m/%d %H:%M:%S', and always a round 5 min interval e.g. 2019/01/01 11:55:00.
+
+        Returns
+        -------
+        pd.DataFrame
+
+        """
         query = "Select * from {table} where SETTLEMENTDATE == '{datetime}'"
         query = query.format(table=self.table_name, datetime=date_time)
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsByIntervalDateTime(MultiDataSource):
+class InputsByIntervalDateTime(_MultiDataSource):
     """Manages retrieving dispatch inputs by INTERVAL_DATETIME."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def get_data(self, date_time):
         """Retrieves data for the specified date_time e.g. 2019/01/01 11:55:00"
@@ -303,6 +348,7 @@ class InputsByIntervalDateTime(MultiDataSource):
 
         Clean up by deleting database created.
 
+        >>> con.close()
         >>> os.remove('historical_inputs.db')
 
         Parameters
@@ -320,10 +366,10 @@ class InputsByIntervalDateTime(MultiDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsByDay(MultiDataSource):
+class InputsByDay(_MultiDataSource):
     """Manages retrieving dispatch inputs by SETTLEMENTDATE, where inputs are stored on a daily basis."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def get_data(self, date_time):
         """Retrieves data for the specified date_time e.g. 2019/01/01 11:55:00, where inputs are stored on daily basis.
@@ -371,6 +417,7 @@ class InputsByDay(MultiDataSource):
 
         Clean up by deleting database created.
 
+        >>> con.close()
         >>> os.remove('historical_inputs.db')
 
         Parameters
@@ -398,10 +445,10 @@ class InputsByDay(MultiDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsStartAndEnd(SingleDataSource):
+class InputsStartAndEnd(_SingleDataSource):
     """Manages retrieving dispatch inputs by START_DATE and END_DATE."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def get_data(self, date_time):
         """Retrieves data for the specified date_time by START_DATE and END_DATE.
@@ -465,10 +512,10 @@ class InputsStartAndEnd(SingleDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsByMatchDispatchConstraints(SingleDataSource):
+class InputsByMatchDispatchConstraints(_SingleDataSource):
     """Manages retrieving dispatch inputs by matching against the DISPATCHCONSTRAINTS table"""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def get_data(self, date_time):
         """Retrieves data for the specified date_time by matching against the DISPATCHCONSTRAINT table.
@@ -545,10 +592,10 @@ class InputsByMatchDispatchConstraints(SingleDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsByEffectiveDateAndVersionNo(SingleDataSource):
+class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
     """Manages retrieving dispatch inputs by EFFECTTIVEDATE and VERSIONNO."""
     def __init__(self, table_name, table_columns, table_primary_keys, con):
-        MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
     def get_data(self, date_time):
         """Retrieves data for the specified date_time by EFFECTTIVEDATE and VERSIONNO.
@@ -626,7 +673,147 @@ class InputsByEffectiveDateAndVersionNo(SingleDataSource):
         return data
 
 
+class InputsNoFilter(_SingleDataSource):
+    """Manages retrieving dispatch inputs where no filter is require."""
+    def __init__(self, table_name, table_columns, table_primary_keys, con):
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+
+    def get_data(self):
+        """Retrieves all data in the table.
+
+        Examples
+        --------
+        Set up a dummy database
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        >>> table = InputsNoFilter(table_name='EXAMPLE', table_columns=['ID', 'VALUE'], table_primary_keys=['ID'],
+        ...                        con=con)
+
+        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        database so some simple example data can be added.
+
+        >>> data = pd.DataFrame({
+        ...   'ID': ['X', 'Y'],
+        ...   'VALUE': [1.0, 2.0]})
+
+        >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        When we call get_data all data in the table is returned.
+
+        >>> print(table.get_data())
+          ID VALUE
+        0  X   1.0
+        1  Y   2.0
+
+        Clean up by closing and deleting the database created.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+
+        return pd.read_sql_query("Select * from {table}".format(table=self.table_name), con=self.con)
+
+
 class DBManager:
+    """Constructs and manages a sqlite database for accessing historical inputs for NEM spot market dispatch.
+
+    Constructs a database if none exists, otherwise connects to an existing database. Specific datasets can be added
+    to the database from AEMO nemweb portal and inputs can be retrieved on a 5 min dispatch interval basis.
+
+    Examples
+    --------
+    Create the database.
+
+    >>> historical_inputs = DBManager('historical_inputs.db')
+
+    Add data from AEMO nemweb data portal. In this case we are adding data from the table BIDDAYOFFER_D which contains
+    unit's volume bids on 5 min basis, the data comes in monthly chunks.
+
+    This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
+    If you need data for multiple months then multiple add_data calls can be made.
+
+    >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=1)
+
+    >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=2)
+
+    Data for a specific 5 min dispatch interval can then be retrieved.
+
+    >>> print(historical_inputs.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
+            SETTLEMENTDATE     DUID     BIDTYPE PRICEBAND1  ...    T1   T2    T3   T4
+    0  2020/01/10 00:00:00   AGLHAL      ENERGY     -974.8  ...  10.0  3.0  10.0  2.0
+    1  2020/01/10 00:00:00   AGLSOM      ENERGY    -980.69  ...  20.0  2.0  35.0  2.0
+    2  2020/01/10 00:00:00  ANGAST1      ENERGY    -941.23  ...   0.0  0.0   0.0  0.0
+    3  2020/01/10 00:00:00    APD01   LOWER5MIN        0.0  ...   0.0  0.0   0.0  0.0
+    4  2020/01/10 00:00:00    APD01  LOWER60SEC        0.0  ...   0.0  0.0   0.0  0.0
+    <BLANKLINE>
+    [5 rows x 17 columns]
+
+    Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
+    provided by AEMO contains all historical data for this table. In this case if multiple calls to the set_data method
+    are made the new data replaces the old.
+
+    >>> historical_inputs.DUDETAILSUMMARY.set_data(year=2020, month=2)
+
+    Data for a specific 5 min dispatch interval can then be retrieved.
+
+    >>> print(historical_inputs.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
+           DUID  ... DISTRIBUTIONLOSSFACTOR
+    0    AGLHAL  ...                 1.0000
+    1   AGLNOW1  ...                 1.0000
+    2  AGLSITA1  ...                 1.0000
+    3    AGLSOM  ...                 0.9891
+    4   ANGAST1  ...                 0.9890
+    <BLANKLINE>
+    [5 rows x 10 columns]
+
+    Parameters
+    ----------
+    db : str
+        the file path and name of the database.
+
+    Attributes
+    ----------
+    BIDPEROFFER_D : InputsByIntervalDateTime
+        Unit volume bids by 5 min dispatch intervals.
+    BIDDAYOFFER_D : InputsByDay
+        Unit price bids by market day.
+    DISPATCHREGIONSUM : InputsBySettlementDate
+        Regional demand terms by 5 min dispatch intervals.
+    DISPATCHLOAD : InputsBySettlementDate
+        Unit operating conditions by 5 min dispatch intervals.
+    DUDETAILSUMMARY : InputsStartAndEnd
+        Unit information by the start and end times of when the information is applicable.
+    DISPATCHCONSTRAINT : InputsBySettlementDate
+        The generic constraints that were used in each 5 min interval dispatch.
+    GENCONDATA : InputsByMatchDispatchConstraints
+        The generic constraints information, their applicability to a particular dispatch interval is determined by
+        reference to DISPATCHCONSTRAINT.
+    SPDREGIONCONSTRAINT : InputsByMatchDispatchConstraints
+        The regional lhs terms in generic constraints, their applicability to a particular dispatch interval is
+        determined by reference to DISPATCHCONSTRAINT.
+    SPDCONNECTIONPOINTCONSTRAINT : InputsByMatchDispatchConstraints
+        The connection point lhs terms in generic constraints, their applicability to a particular dispatch interval is
+        determined by reference to DISPATCHCONSTRAINT.
+    SPDINTERCONNECTORCONSTRAINT : InputsByMatchDispatchConstraints
+        The interconnector lhs terms in generic constraints, their applicability to a particular dispatch interval is
+        determined by reference to DISPATCHCONSTRAINT.
+    INTERCONNECTOR : InputsNoFilter
+        The the regions that each interconnector links.
+    INTERCONNECTORCONSTRAINT : InputsByEffectiveDateAndVersionNo
+        Interconnector properties FROMREGIONLOSSSHARE, LOSSCONSTANT, LOSSFLOWCOEFFICIENT, MAXMWIN, MAXMWOUT by
+        EFFECTIVEDATE and VERSIONNO.
+    LOSSMODEL : InputsByEffectiveDateAndVersionNo
+        Break points used in linearly interpolating interconnector loss funtctions by EFFECTIVEDATE and VERSIONNO.
+    LOSSFACTORMODEL : InputsByEffectiveDateAndVersionNo
+        Coefficients of demand terms in interconnector loss functions.
+    DISPATCHINTERCONNECTORRES : InputsBySettlementDate
+        Record of which interconnector were used in a particular dispatch interval.
+
+    """
     def __init__(self, db):
         self.con = sqlite3.connect(db)
         self.BIDPEROFFER_D = InputsByIntervalDateTime(
@@ -652,7 +839,7 @@ class DBManager:
                                                       'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
                                                       'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
-        self.DUDETAILSUMMARY = InputsBySettlementDate(
+        self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
                                                          'CONNECTIONPOINTID', 'REGIONID', 'STATIONID',
                                                          'LASTCHANGED', 'TRANSMISSIONLOSSFACTOR',
@@ -666,71 +853,37 @@ class DBManager:
             table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE'
                                                     'GENERICCONSTRAINTWEIGHT'],
             table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.SPDREGIONCONSTRAINT = InputsByIntervalDateTime(
+        self.SPDREGIONCONSTRAINT = InputsByMatchDispatchConstraints(
             table_name='SPDREGIONCONSTRAINT', table_columns=['REGIONID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID',
                                                              'BIDTYPE', 'FACTOR'],
             table_primary_keys=['REGIONID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
-        self.SPDCONNECTIONPOINTCONSTRAINT = InputsByIntervalDateTime(
+        self.SPDCONNECTIONPOINTCONSTRAINT = InputsByMatchDispatchConstraints(
             table_name='SPDCONNECTIONPOINTCONSTRAINT', table_columns=['CONNECTIONPOINTID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                                       'GENCONID', 'BIDTYPE', 'FACTOR'],
             table_primary_keys=['CONNECTIONPOINTID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
-        self.SPDINTERCONNECTORCONSTRAINT = InputsByIntervalDateTime(
+        self.SPDINTERCONNECTORCONSTRAINT = InputsByMatchDispatchConstraints(
             table_name='SPDINTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                                      'GENCONID', 'BIDTYPE', 'FACTOR'],
             table_primary_keys=['INTERCONNECTORID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.INTERCONNECTOR = InputsByIntervalDateTime(
+        self.INTERCONNECTOR = InputsByEffectiveDateAndVersionNo(
             table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
             table_primary_keys=['INTERCONNECTORID'], con=self.con)
-        self.INTERCONNECTORCONSTRAINT = InputsByIntervalDateTime(
+        self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateAndVersionNo(
             table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                                   'FROMREGIONLOSSSHARE', 'LOSSCONSTANT',
-                                                                  'LOSSFLOWCOEFFICIENT'],
+                                                                  'LOSSFLOWCOEFFICIENT', 'MAXMWIN', 'MAXMWOUT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.LOSSMODEL = InputsByIntervalDateTime(
+        self.LOSSMODEL = InputsByEffectiveDateAndVersionNo(
             table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
                                                    'MWBREAKPOINT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.LOSSFACTORMODEL = InputsByIntervalDateTime(
+        self.LOSSFACTORMODEL = InputsByEffectiveDateAndVersionNo(
             table_name='LOSSFACTORMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGIONID',
                                                          'DEMANDCOEFFICIENT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
             table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE'],
             table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
-
-
-    # @check.table_exists()
-    # def get_historical_inputs_old(self, table_name, applicable_for):
-    #     settlement_date_query = "Select * from {table} where SETTLEMENTDATE == '{datetime}'"
-    #     dispatch_interval_data_query = "Select * from {table} where INTERVAL_DATETIME == '{datetime}'"
-    #     start_and_end_time_query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE > '{datetime}'"
-    #     effective_date = """Create temporary table temp as
-    #                             Select * from {table} where EFFECTIVEDATE <= '{datetime}';
-    #
-    #                         Create temporary table temp2 as
-    #                             Select {id}, EFFECTIVEDATE, max(VERSIONNO) as VERSIONNO
-    #                               from temp
-    #                           group by {id}, EFFECTIVEDATE';
-    #
-    #                         Create temporary table temp3 as
-    #                             Select {id}, VERSIONNO, max(EFFECTIVEDATE) as EFFECTIVEDATE
-    #                               from temp2
-    #                           group by {id}';
-    #
-    #                           Select * from {table} inner join temp3 on {id}, VERSIONNO, EFFECTIVEDATE
-    #                      """
-    #
-    #     query_to_execute = queries_by_table[table_name].format(table=table_name, datetime=applicable_for,
-    #                                                            id='INTERCONNECTORID')
-    #     return pd.read_sql_query(query_to_execute, con=self.con)
-
-# from time import time
-# db = DBManager('historical_input.db')
-# db.DISPATCHCONSTRAINT.add_data(year=2020, month=1)
-# t0 = time()
-# df = db.DISPATCHCONSTRAINT.get_data('2020/01/20 00:00:00')
-# print(df)
-# print(time()-t0)
 
 
 def create_loss_functions(interconnector_coefficients, demand_coefficients, demand):

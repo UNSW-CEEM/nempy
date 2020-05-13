@@ -176,7 +176,7 @@ class Spot:
         volume_bids : pd.DataFrame
             Bids by unit, in MW, can contain up to 10 bid bands, these should be labeled '1' to '10'.
 
-            ========  ===============================================================
+            ========  ================================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
             service   the service being provided, optional, if missing energy assumed
