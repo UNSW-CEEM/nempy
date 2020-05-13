@@ -1,6 +1,41 @@
 import pytest
 import pandas as pd
-from nempy import input_preprocessing
+import subprocess
+from pandas._testing import assert_frame_equal
+from nempy import historical_spot_market_inputs
+
+
+def test_download_to_df():
+    server = subprocess.Popen('python -m http.server 8080 --bind 127.0.0.1')
+    output = historical_spot_market_inputs.download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
+                                                          table_name='table_one', year=2020, month=1)
+    expected = pd.DataFrame({
+        'a': [1, 2],
+        'b': [4, 5]
+    })
+    assert_frame_equal(output, expected)
+    output = historical_spot_market_inputs.download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
+                                                          table_name='table_two', year=2019, month=2)
+    expected = pd.DataFrame({
+        'c': [1, 2],
+        'd': [4, 5]
+    })
+    assert_frame_equal(output, expected)
+    server.terminate()
+
+
+def test_download_to_df_raises_on_missing_data():
+    server = subprocess.Popen('python -m http.server 8080 --bind 127.0.0.1')
+    with pytest.raises(historical_spot_market_inputs.MissingData):
+        output = historical_spot_market_inputs.download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
+                                                              table_name='table_one', year=2020, month=3)
+    server.terminate()
+
+
+def test_download_to_df_raises_on_url_down():
+    with pytest.raises(historical_spot_market_inputs.MissingData):
+        output = historical_spot_market_inputs.download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
+                                                              table_name='table_one', year=2020, month=3)
 
 
 def test_create_loss_function():
@@ -29,7 +64,8 @@ def test_create_loss_function():
         'flow_coefficient': [0.00019617]
     })
 
-    loss_function = input_preprocessing.create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+    loss_function = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients,
+                                                                        demand_coefficients, demand)
 
     output_losses = loss_function['loss_function'].loc[0](flow)
 
@@ -65,7 +101,8 @@ def test_create_loss_function_vic_nsw():
         'flow_coefficient': [0.00017027]
     })
 
-    loss_function = input_preprocessing.create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+    loss_function = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients,
+                                                                        demand_coefficients, demand)
 
     output_losses = loss_function['loss_function'].loc[0](flow)
 
@@ -101,10 +138,13 @@ def test_create_loss_function_bass_link():
         'flow_coefficient': [0.00020786]
     })
 
-    loss_function = input_preprocessing.create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+    loss_function = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients,
+                                                                        demand_coefficients, demand)
 
     output_losses = loss_function['loss_function'].loc[0](flow)
 
     expected_losses = (-3.92E-3) * flow + (1.0393E-4) * flow ** 2
 
     assert(pytest.approx(expected_losses, 0.0001) == output_losses)
+
+

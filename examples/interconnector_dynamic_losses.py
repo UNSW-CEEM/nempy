@@ -1,5 +1,5 @@
 import pandas as pd
-from nempy import markets, input_preprocessing
+from nempy import markets, historical_spot_market_inputs
 
 
 # Create a market instance.
@@ -19,7 +19,7 @@ volume_bids = pd.DataFrame({
     '1': [1000.0]  # MW
 })
 
-simple_market.set_unit_energy_volume_bids(volume_bids)
+simple_market.set_unit_volume_bids(volume_bids)
 
 # Price of each bid.
 price_bids = pd.DataFrame({
@@ -27,7 +27,7 @@ price_bids = pd.DataFrame({
     '1': [50.0]  # $/MW
 })
 
-simple_market.set_unit_energy_bids(price_bids)
+simple_market.set_unit_price_bids(price_bids)
 
 # NSW has no demand but VIC has 800 MW.
 demand = pd.DataFrame({
@@ -62,7 +62,8 @@ interconnector_coefficients = pd.DataFrame({
     'flow_coefficient': [0.00017027]})
 
 # Create loss functions on per interconnector basis.
-loss_functions = input_preprocessing.create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+loss_functions = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients, demand_coefficients,
+                                                                     demand)
 
 # Specify that losses are shared equally between connected regions.
 loss_functions['from_region_loss_share'] = 0.5
@@ -79,7 +80,7 @@ simple_market.set_interconnector_losses(loss_functions, interpolation_break_poin
 simple_market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_energy_dispatch())
+print(simple_market.get_unit_dispatch())
 #   unit    dispatch
 # 0    A  920.205473
 

@@ -131,3 +131,6 @@ dmypy.json
 .idea/*
 nempy/historical_inputs.db
 historical_inputs.db
+docs/historical_input.db
+*.db
+nempy/the_database.db
