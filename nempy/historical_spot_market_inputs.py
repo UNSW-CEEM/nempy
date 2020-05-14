@@ -94,6 +94,7 @@ class _MMSTable:
     This class creates the table in the data base when the object is instantiated. Methods for adding adding and
     retrieving data are added by sub classing.
     """
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         """Creates a table in sqlite database that the connection is provided for.
 
@@ -131,6 +132,27 @@ class _MMSTable:
         # url that sub classes will use to pull MMS tables from nemweb.
         self.url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' + \
                    'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip'
+        self.columns_types = {
+            'INTERVAL_DATETIME': 'TEXT', 'DUID': 'TEXT', 'BIDTYPE': 'TEXT', 'BANDAVAIL1': 'REAL', 'BANDAVAIL2': 'REAL',
+            'BANDAVAIL3': 'REAL', 'BANDAVAIL4': 'REAL', 'BANDAVAIL5': 'REAL', 'BANDAVAIL6': 'REAL',
+            'BANDAVAIL7': 'REAL', 'BANDAVAIL8': 'REAL', 'BANDAVAIL9': 'REAL', 'BANDAVAIL10': 'REAL', 'MAXAVAIL': 'REAL',
+            'ENABLEMENTMIN': 'REAL', 'ENABLEMENTMAX': 'REAL', 'LOWBREAKPOINT': 'REAL', 'HIGHBREAKPOINT': 'REAL',
+            'SETTLEMENTDATE': 'TEXT', 'PRICEBAND1': 'REAL', 'PRICEBAND2': 'REAL', 'PRICEBAND3': 'REAL',
+            'PRICEBAND4': 'REAL', 'PRICEBAND5': 'REAL', 'PRICEBAND6': 'REAL', 'PRICEBAND7': 'REAL',
+            'PRICEBAND8': 'REAL', 'PRICEBAND9': 'REAL', 'PRICEBAND10': 'REAL', 'T1': 'REAL', 'T2': 'REAL',
+            'T3': 'REAL', 'T4': 'REAL', 'REGIONID': 'TEXT', 'TOTALDEMAND': 'REAL', 'DEMANDFORECAST': 'REAL',
+            'INITIALSUPPLY': 'REAL', 'DISPATCHMODE': 'TEXT', 'AGCSTATUS': 'TEXT', 'INITIALMW': 'REAL',
+            'TOTALCLEARED': 'REAL', 'RAMPDOWNRATE': 'REAL', 'RAMPUPRATE': 'REAL', 'AVAILABILITY': 'REAL',
+            'RAISEREGENABLEMENTMAX': 'REAL', 'RAISEREGENABLEMENTMIN': 'REAL', 'LOWERREGENABLEMENTMAX': 'REAL',
+            'LOWERREGENABLEMENTMIN': 'REAL', 'START_DATE': 'TEXT', 'END_DATE': 'TEXT', 'DISPATCHTYPE': 'TEXT',
+            'CONNECTIONPOINTID': 'TEXT', 'TRANSMISSIONLOSSFACTOR': 'REAL', 'DISTRIBUTIONLOSSFACTOR': 'REAL',
+            'CONSTRAINTID': 'TEXT', 'RHS': 'REAL', 'GENCONID_EFFECTIVEDATE': 'TEXT', 'GENCONID_VERSIONNO': 'TEXT',
+            'GENCONID': 'TEXT', 'EFFECTIVEDATE': 'TEXT', 'VERSIONNO': 'TEXT', 'CONSTRAINTTYPE': 'TEXT',
+            'GENERICCONSTRAINTWEIGHT': 'REAL', 'FACTOR': 'REAL', 'FROMREGIONLOSSSHARE': 'REAL', 'LOSSCONSTANT': 'REAL',
+            'LOSSFLOWCOEFFICIENT': 'REAL', 'MAXMWIN': 'REAL', 'MAXMWOUT': 'REAL', 'LOSSSEGMENT': 'TEXT',
+            'MWBREAKPOINT': 'REAL', 'DEMANDCOEFFICIENT': 'REAL', 'INTERCONNECTORID': 'TEXT', 'REGIONFROM': 'TEXT',
+            'REGIONTO': 'TEXT'
+        }
 
     def create_table_in_sqlite_db(self):
         """Creates a table in the sqlite database that the object has a connection to.
@@ -147,7 +169,7 @@ class _MMSTable:
 
         Create the table object.
 
-        >>> table = _MMSTable(table_name='example', table_columns=['col_1', 'col_2'], table_primary_keys=['col_1'],
+        >>> table = _MMSTable(table_name='EXAMPLE', table_columns=['DUID', 'BIDTYPE'], table_primary_keys=['DUID'],
         ...                  con=con)
 
         Create the corresponding table in the sqlite database, note this step many not be needed if you have connected
@@ -159,7 +181,7 @@ class _MMSTable:
 
         >>> print(pd.read_sql("Select * from example", con=con))
         Empty DataFrame
-        Columns: [col_1, col_2]
+        Columns: [DUID, BIDTYPE]
         Index: []
 
         Clean up by closing the database and deleting if its no longer needed.
@@ -172,7 +194,7 @@ class _MMSTable:
             cur = self.con.cursor()
             cur.execute("""DROP TABLE IF EXISTS {};""".format(self.table_name))
             base_create_query = """CREATE TABLE {}({}, PRIMARY KEY ({}));"""
-            columns = ','.join(['{} TEXT'.format(col) for col in self.table_columns])
+            columns = ','.join(['{} {}'.format(col, self.columns_types[col]) for col in self.table_columns])
             primary_keys = ','.join(['{}'.format(col) for col in self.table_primary_keys])
             create_query = base_create_query.format(self.table_name, columns, primary_keys)
             cur.execute(create_query)
@@ -181,6 +203,7 @@ class _MMSTable:
 
 class _SingleDataSource(_MMSTable):
     """Manages downloading data from nemweb for tables where all relevant data is stored in lasted data file."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -253,6 +276,7 @@ class _SingleDataSource(_MMSTable):
 
 class _MultiDataSource(_MMSTable):
     """Manages downloading data from nemweb for tables where data main be stored across multiple monthly files."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -288,8 +312,8 @@ class _MultiDataSource(_MMSTable):
         >>> query = "Select * from DISPATCHLOAD order by SETTLEMENTDATE DESC limit 1;"
 
         >>> print(pd.read_sql_query(query, con=con))
-                SETTLEMENTDATE   DUID RAMPDOWNRATE RAMPUPRATE
-        0  2020/02/01 00:00:00  YWPS4        180.0      180.0
+                SETTLEMENTDATE   DUID  RAMPDOWNRATE  RAMPUPRATE
+        0  2020/02/01 00:00:00  YWPS4         180.0       180.0
 
         If we subsequently add data from an earlier month the old data remains in the table, in addition to the new
         data.
@@ -297,8 +321,8 @@ class _MultiDataSource(_MMSTable):
         >>> table.add_data(year=2019, month=1)
 
         >>> print(pd.read_sql_query(query, con=con))
-                SETTLEMENTDATE   DUID RAMPDOWNRATE RAMPUPRATE
-        0  2020/02/01 00:00:00  YWPS4        180.0      180.0
+                SETTLEMENTDATE   DUID  RAMPDOWNRATE  RAMPUPRATE
+        0  2020/02/01 00:00:00  YWPS4         180.0       180.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -327,6 +351,7 @@ class _MultiDataSource(_MMSTable):
 
 class InputsBySettlementDate(_MultiDataSource):
     """Manages retrieving dispatch inputs by SETTLEMENTDATE."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -341,8 +366,8 @@ class InputsBySettlementDate(_MultiDataSource):
 
         Create the table object.
 
-        >>> table = InputsBySettlementDate(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'VALUE'],
-        ...                                  table_primary_keys=['SETTLEMENTDATE'], con=con)
+        >>> table = InputsBySettlementDate(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'INITIALMW'],
+        ...                                table_primary_keys=['SETTLEMENTDATE'], con=con)
 
         Create the table in the database.
 
@@ -353,15 +378,15 @@ class InputsBySettlementDate(_MultiDataSource):
 
         >>> data = pd.DataFrame({
         ...   'SETTLEMENTDATE': ['2019/01/01 11:55:00', '2019/01/01 12:00:00'],
-        ...   'VALUE': [1.0, 2.0]})
+        ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
 
         When we call get_data the output is filtered by SETTLEMENTDATE.
 
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
-                SETTLEMENTDATE VALUE
-        0  2019/01/01 12:00:00   2.0
+                SETTLEMENTDATE  INITIALMW
+        0  2019/01/01 12:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -385,6 +410,7 @@ class InputsBySettlementDate(_MultiDataSource):
 
 class InputsByIntervalDateTime(_MultiDataSource):
     """Manages retrieving dispatch inputs by INTERVAL_DATETIME."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -399,7 +425,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
         Create the table object.
 
-        >>> table = InputsByIntervalDateTime(table_name='EXAMPLE', table_columns=['INTERVAL_DATETIME', 'VALUE'],
+        >>> table = InputsByIntervalDateTime(table_name='EXAMPLE', table_columns=['INTERVAL_DATETIME', 'INITIALMW'],
         ...                                  table_primary_keys=['INTERVAL_DATETIME'], con=con)
 
         Create the table in the database.
@@ -411,15 +437,15 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
         >>> data = pd.DataFrame({
         ...   'INTERVAL_DATETIME': ['2019/01/01 11:55:00', '2019/01/01 12:00:00'],
-        ...   'VALUE': [1.0, 2.0]})
+        ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
 
         When we call get_data the output is filtered by INTERVAL_DATETIME.
 
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
-             INTERVAL_DATETIME VALUE
-        0  2019/01/01 12:00:00   2.0
+             INTERVAL_DATETIME  INITIALMW
+        0  2019/01/01 12:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -443,6 +469,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
 class InputsByDay(_MultiDataSource):
     """Manages retrieving dispatch inputs by SETTLEMENTDATE, where inputs are stored on a daily basis."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -462,7 +489,7 @@ class InputsByDay(_MultiDataSource):
 
         Create the table object.
 
-        >>> table = InputsByDay(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'VALUE'],
+        >>> table = InputsByDay(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'INITIALMW'],
         ...                     table_primary_keys=['SETTLEMENTDATE'], con=con)
 
         Create the table in the database.
@@ -474,7 +501,7 @@ class InputsByDay(_MultiDataSource):
 
         >>> data = pd.DataFrame({
         ...   'SETTLEMENTDATE': ['2019/01/01 00:00:00', '2019/01/02 00:00:00'],
-        ...   'VALUE': [1.0, 2.0]})
+        ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
 
@@ -482,20 +509,20 @@ class InputsByDay(_MultiDataSource):
         day starting at 04:05:00 are retrieved. In the results below note when the output changes
 
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
-                SETTLEMENTDATE VALUE
-        0  2019/01/01 00:00:00   1.0
+                SETTLEMENTDATE  INITIALMW
+        0  2019/01/01 00:00:00        1.0
 
         >>> print(table.get_data(date_time='2019/01/02 04:00:00'))
-                SETTLEMENTDATE VALUE
-        0  2019/01/01 00:00:00   1.0
+                SETTLEMENTDATE  INITIALMW
+        0  2019/01/01 00:00:00        1.0
 
         >>> print(table.get_data(date_time='2019/01/02 04:05:00'))
-                SETTLEMENTDATE VALUE
-        0  2019/01/02 00:00:00   2.0
+                SETTLEMENTDATE  INITIALMW
+        0  2019/01/02 00:00:00        2.0
 
         >>> print(table.get_data(date_time='2019/01/02 12:00:00'))
-                SETTLEMENTDATE VALUE
-        0  2019/01/02 00:00:00   2.0
+                SETTLEMENTDATE  INITIALMW
+        0  2019/01/02 00:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -529,6 +556,7 @@ class InputsByDay(_MultiDataSource):
 
 class InputsStartAndEnd(_SingleDataSource):
     """Manages retrieving dispatch inputs by START_DATE and END_DATE."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -546,7 +574,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
         Create the table object.
 
-        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['START_DATE', 'END_DATE', 'VALUE'],
+        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['START_DATE', 'END_DATE', 'INITIALMW'],
         ...                           table_primary_keys=['START_DATE'], con=con)
 
         Create the table in the database.
@@ -559,27 +587,27 @@ class InputsStartAndEnd(_SingleDataSource):
         >>> data = pd.DataFrame({
         ...   'START_DATE': ['2019/01/01 00:00:00', '2019/01/02 00:00:00'],
         ...   'END_DATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00'],
-        ...   'VALUE': [1.0, 2.0]})
+        ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
 
         When we call get_data the output is filtered by START_DATE and END_DATE.
 
         >>> print(table.get_data(date_time='2019/01/01 00:00:00'))
-                    START_DATE             END_DATE VALUE
-        0  2019/01/01 00:00:00  2019/01/02 00:00:00   1.0
+                    START_DATE             END_DATE  INITIALMW
+        0  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
 
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
-                    START_DATE             END_DATE VALUE
-        0  2019/01/01 00:00:00  2019/01/02 00:00:00   1.0
+                    START_DATE             END_DATE  INITIALMW
+        0  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
 
         >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
-                    START_DATE             END_DATE VALUE
-        0  2019/01/02 00:00:00  2019/01/03 00:00:00   2.0
+                    START_DATE             END_DATE  INITIALMW
+        0  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         >>> print(table.get_data(date_time='2019/01/02 00:12:00'))
-                    START_DATE             END_DATE VALUE
-        0  2019/01/02 00:00:00  2019/01/03 00:00:00   2.0
+                    START_DATE             END_DATE  INITIALMW
+        0  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -603,6 +631,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
 class InputsByMatchDispatchConstraints(_SingleDataSource):
     """Manages retrieving dispatch inputs by matching against the DISPATCHCONSTRAINTS table"""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -688,8 +717,9 @@ class InputsByMatchDispatchConstraints(_SingleDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
+class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource):
     """Manages retrieving dispatch inputs by EFFECTTIVEDATE and VERSIONNO."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -707,9 +737,9 @@ class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
 
         Create the table object.
 
-        >>> table = InputsByEffectiveDateAndVersionNo(table_name='EXAMPLE',
-        ...                           table_columns=['ID', 'EFFECTIVEDATE', 'VERSIONNO', 'VALUE'],
-        ...                           table_primary_keys=['ID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
+        >>> table = InputsByEffectiveDateVersionNoAndDispatchInterconnector(table_name='EXAMPLE',
+        ...                           table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'INITIALMW'],
+        ...                           table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
 
         Create the table in the database.
 
@@ -719,25 +749,35 @@ class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
-        ...   'ID': ['X', 'X', 'Y', 'Y'],
+        ...   'INTERCONNECTORID': ['X', 'X', 'Y', 'Y'],
         ...   'EFFECTIVEDATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00', '2019/01/01 00:00:00',
         ...                     '2019/01/03 00:00:00'],
         ...   'VERSIONNO': [1, 2, 2, 3],
-        ...   'VALUE': [1.0, 2.0, 2.0, 3.0]})
+        ...   'INITIALMW': [1.0, 2.0, 2.0, 3.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        We also need to add data to DISPATCHINTERCONNECTORRES because the results of the get_data method are filtered
+        against this table
+
+        >>> data = pd.DataFrame({
+        ...   'INTERCONNECTORID': ['X', 'X', 'Y'],
+        ...   'SETTLEMENTDATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00', '2019/01/02 00:00:00']})
+
+        >>> data.to_sql('DISPATCHINTERCONNECTORRES', con=con, if_exists='append', index=False)
 
         When we call get_data the output is filtered by the contents of DISPATCHCONSTRAINT.
 
         >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
-          ID        EFFECTIVEDATE VERSIONNO VALUE
-        0  X  2019/01/02 00:00:00         1   1.0
-        1  Y  2019/01/01 00:00:00         2   2.0
+          INTERCONNECTORID        EFFECTIVEDATE VERSIONNO  INITIALMW
+        0                X  2019/01/02 00:00:00         1        1.0
+        1                Y  2019/01/01 00:00:00         2        2.0
+
+        In the next interval interconnector Y is not present in DISPATCHINTERCONNECTORRES.
 
         >>> print(table.get_data(date_time='2019/01/03 00:00:00'))
-          ID        EFFECTIVEDATE VERSIONNO VALUE
-        0  X  2019/01/03 00:00:00         2   2.0
-        1  Y  2019/01/03 00:00:00         3   3.0
+          INTERCONNECTORID        EFFECTIVEDATE VERSIONNO  INITIALMW
+        0                X  2019/01/03 00:00:00         2        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -754,30 +794,53 @@ class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
         pd.DataFrame
         """
         id_columns = ','.join([col for col in self.table_primary_keys if col not in ['EFFECTIVEDATE', 'VERSIONNO']])
+        return_columns = ','.join(self.table_columns)
         with self.con:
             cur = self.con.cursor()
             cur.execute("DROP TABLE IF EXISTS temp;")
             cur.execute("DROP TABLE IF EXISTS temp2;")
             cur.execute("DROP TABLE IF EXISTS temp3;")
-            query = "Create temporary table temp as select * from {table} where EFFECTIVEDATE <= '{datetime}';"
+            cur.execute("DROP TABLE IF EXISTS temp4;")
+            # Store just the unique sets of ids that came into effect before the the datetime in a temporary table.
+            query = """CREATE TEMPORARY TABLE temp AS 
+                              SELECT * 
+                                FROM {table} 
+                               WHERE EFFECTIVEDATE <= '{datetime}';"""
             cur.execute(query.format(table=self.table_name, datetime=date_time))
-            query = """Create temporary table temp2 as
-                                    Select {id}, EFFECTIVEDATE, max(VERSIONNO) as VERSIONNO
-                                      from temp
-                                  group by {id}, EFFECTIVEDATE;"""
+            # For each unique set of ids and effective dates get the latest versionno and sore in temporary table.
+            query = """CREATE TEMPORARY TABLE temp2 AS
+                              SELECT {id}, EFFECTIVEDATE, MAX(VERSIONNO) AS VERSIONNO
+                                FROM temp
+                               GROUP BY {id}, EFFECTIVEDATE;"""
             cur.execute(query.format(id=id_columns))
-            query = """Create temporary table temp3 as
-                                    Select {id}, VERSIONNO, max(EFFECTIVEDATE) as EFFECTIVEDATE
-                                      from temp2
-                                  group by {id};"""
+            # For each unique set of ids get the record with the most recent effective date.
+            query = """CREATE TEMPORARY TABLE temp3 as
+                              SELECT {id}, VERSIONNO, max(EFFECTIVEDATE) as EFFECTIVEDATE
+                                FROM temp2
+                               GROUP BY {id};"""
             cur.execute(query.format(id=id_columns))
-        query = "Select * from {table} inner join temp3 using ({id}, VERSIONNO, EFFECTIVEDATE);"
-        data = pd.read_sql_query(query.format(table=self.table_name, id=id_columns), con=self.con)
+            # Inner join the original table to the set of most recent effective dates and version no.
+            query = """CREATE TEMPORARY TABLE temp4 AS
+                              SELECT * 
+                                FROM {table} 
+                                     INNER JOIN temp3 
+                                     USING ({id}, VERSIONNO, EFFECTIVEDATE);"""
+            cur.execute(query.format(table=self.table_name, id=id_columns))
+        # Inner join the most recent data with the interconnectors used in the actual interval of interest.
+        query = """SELECT {cols} 
+                     FROM temp4 
+                          INNER JOIN (SELECT * 
+                                        FROM DISPATCHINTERCONNECTORRES 
+                                       WHERE SETTLEMENTDATE == '{datetime}') 
+                          USING (INTERCONNECTORID);"""
+        query = query.format(datetime=date_time, id=id_columns, cols=return_columns)
+        data = pd.read_sql_query(query, con=self.con)
         return data
 
 
 class InputsNoFilter(_SingleDataSource):
     """Manages retrieving dispatch inputs where no filter is require."""
+
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
 
@@ -792,8 +855,8 @@ class InputsNoFilter(_SingleDataSource):
 
         Create the table object.
 
-        >>> table = InputsNoFilter(table_name='EXAMPLE', table_columns=['ID', 'VALUE'], table_primary_keys=['ID'],
-        ...                        con=con)
+        >>> table = InputsNoFilter(table_name='EXAMPLE', table_columns=['DUID', 'INITIALMW'],
+        ...                        table_primary_keys=['DUID'], con=con)
 
         Create the table in the database.
 
@@ -803,17 +866,17 @@ class InputsNoFilter(_SingleDataSource):
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
-        ...   'ID': ['X', 'Y'],
-        ...   'VALUE': [1.0, 2.0]})
+        ...   'DUID': ['X', 'Y'],
+        ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
 
         When we call get_data all data in the table is returned.
 
         >>> print(table.get_data())
-          ID VALUE
-        0  X   1.0
-        1  Y   2.0
+          DUID  INITIALMW
+        0    X        1.0
+        1    Y        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -861,12 +924,12 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical_inputs.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
-            SETTLEMENTDATE     DUID     BIDTYPE PRICEBAND1  ...    T1   T2    T3   T4
-    0  2020/01/10 00:00:00   AGLHAL      ENERGY     -974.8  ...  10.0  3.0  10.0  2.0
-    1  2020/01/10 00:00:00   AGLSOM      ENERGY    -980.69  ...  20.0  2.0  35.0  2.0
-    2  2020/01/10 00:00:00  ANGAST1      ENERGY    -941.23  ...   0.0  0.0   0.0  0.0
-    3  2020/01/10 00:00:00    APD01   LOWER5MIN        0.0  ...   0.0  0.0   0.0  0.0
-    4  2020/01/10 00:00:00    APD01  LOWER60SEC        0.0  ...   0.0  0.0   0.0  0.0
+            SETTLEMENTDATE     DUID     BIDTYPE  PRICEBAND1  ...    T1   T2    T3   T4
+    0  2020/01/10 00:00:00   AGLHAL      ENERGY     -974.80  ...  10.0  3.0  10.0  2.0
+    1  2020/01/10 00:00:00   AGLSOM      ENERGY     -980.69  ...  20.0  2.0  35.0  2.0
+    2  2020/01/10 00:00:00  ANGAST1      ENERGY     -941.23  ...   0.0  0.0   0.0  0.0
+    3  2020/01/10 00:00:00    APD01   LOWER5MIN        0.00  ...   0.0  0.0   0.0  0.0
+    4  2020/01/10 00:00:00    APD01  LOWER60SEC        0.00  ...   0.0  0.0   0.0  0.0
     <BLANKLINE>
     [5 rows x 17 columns]
 
@@ -886,7 +949,7 @@ class DBManager:
     3    AGLSOM  ...                 0.9891
     4   ANGAST1  ...                 0.9890
     <BLANKLINE>
-    [5 rows x 10 columns]
+    [5 rows x 8 columns]
 
     Parameters
     ----------
@@ -932,12 +995,13 @@ class DBManager:
         Record of which interconnector were used in a particular dispatch interval.
 
     """
+
     def __init__(self, connection):
         self.con = connection
         self.BIDPEROFFER_D = InputsByIntervalDateTime(
             table_name='BIDPEROFFER_D', table_columns=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE', 'BANDAVAIL1',
                                                        'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5',
-                                                       'BANDAVAIL6','BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
+                                                       'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
                                                        'BANDAVAIL10', 'MAXAVAIL', 'ENABLEMENTMIN', 'ENABLEMENTMAX',
                                                        'LOWBREAKPOINT', 'HIGHBREAKPOINT'],
             table_primary_keys=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE'], con=self.con)
@@ -959,16 +1023,15 @@ class DBManager:
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
-                                                         'CONNECTIONPOINTID', 'REGIONID', 'STATIONID',
-                                                         'LASTCHANGED', 'TRANSMISSIONLOSSFACTOR',
+                                                         'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
                                                          'DISTRIBUTIONLOSSFACTOR'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
         self.DISPATCHCONSTRAINT = InputsBySettlementDate(
             table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
-                                                           'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO'],
+                                                            'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO'],
             table_primary_keys=['SETTLEMENTDATE', 'CONSTRAINTID'], con=self.con)
         self.GENCONDATA = InputsByMatchDispatchConstraints(
-            table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE'
+            table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE',
                                                     'GENERICCONSTRAINTWEIGHT'],
             table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.SPDREGIONCONSTRAINT = InputsByMatchDispatchConstraints(
@@ -983,19 +1046,19 @@ class DBManager:
             table_name='SPDINTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                                      'GENCONID', 'BIDTYPE', 'FACTOR'],
             table_primary_keys=['INTERCONNECTORID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.INTERCONNECTOR = InputsByEffectiveDateAndVersionNo(
+        self.INTERCONNECTOR = InputsNoFilter(
             table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
             table_primary_keys=['INTERCONNECTORID'], con=self.con)
-        self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateAndVersionNo(
+        self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                                   'FROMREGIONLOSSSHARE', 'LOSSCONSTANT',
                                                                   'LOSSFLOWCOEFFICIENT', 'MAXMWIN', 'MAXMWOUT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.LOSSMODEL = InputsByEffectiveDateAndVersionNo(
+        self.LOSSMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
                                                    'MWBREAKPOINT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.LOSSFACTORMODEL = InputsByEffectiveDateAndVersionNo(
+        self.LOSSFACTORMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='LOSSFACTORMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGIONID',
                                                          'DEMANDCOEFFICIENT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
@@ -1032,10 +1095,10 @@ class DBManager:
         >>> historical_inputs.DISPATCHREGIONSUM.add_data(year=2020, month=1)
 
         >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM limit 3", con=con))
-                SETTLEMENTDATE REGIONID TOTALDEMAND DEMANDFORECAST INITIALSUPPLY
-        0  2020/01/01 00:05:00     NSW1     7245.31      -26.35352    7284.32178
-        1  2020/01/01 00:05:00     QLD1     6095.75      -24.29639    6129.36279
-        2  2020/01/01 00:05:00      SA1     1466.53         1.4719    1452.25647
+                SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
+        0  2020/01/01 00:05:00     NSW1      7245.31       -26.35352     7284.32178
+        1  2020/01/01 00:05:00     QLD1      6095.75       -24.29639     6129.36279
+        2  2020/01/01 00:05:00      SA1      1466.53         1.47190     1452.25647
 
         >>> historical_inputs.create_tables()
 
@@ -1090,7 +1153,8 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     >>> interconnector_coefficients = pd.DataFrame({
     ...   'interconnector': ['NSW1-QLD1', 'VIC1-NSW1'],
     ...   'loss_constant': [0.9529, 1.0657],
-    ...   'flow_coefficient': [0.00019617, 0.00017027]})
+    ...   'flow_coefficient': [0.00019617, 0.00017027],
+    ...   'from_region_loss_share': [0.5, 0.5]})
 
     Create the loss functions
 
@@ -1153,10 +1217,6 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
         loss_function     a `function` object that takes interconnector flow (as `float`) an input and returns
                           interconnector losses (as `float`).
         ================  ============================================================================================
-
-
-
-
     """
 
     demand_loss_factor_offset = pd.merge(demand_coefficients, demand, 'inner', on=['region'])
@@ -1167,10 +1227,102 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     loss_functions['loss_constant'] = loss_functions['loss_constant'] + loss_functions['offset'].fillna(0)
     loss_functions['loss_function'] = \
         loss_functions.apply(lambda x: create_function(x['loss_constant'], x['flow_coefficient']), axis=1)
-    return loss_functions.loc[:, ['interconnector', 'loss_function']]
+    return loss_functions.loc[:, ['interconnector', 'loss_function', 'from_region_loss_share']]
 
 
 def create_function(constant, flow_coefficient):
     def loss_function(flow):
-        return (constant - 1) * flow + (flow_coefficient/2) * flow ** 2
+        return (constant - 1) * flow + (flow_coefficient / 2) * flow ** 2
+
     return loss_function
+
+
+def datetime_dispatch_sequence(start_time, end_time):
+    """Creates a list of datetimes in the string format '%Y/%m/%d %H:%M:%S', in 5 min intervals.
+
+    Examples
+    --------
+
+    >>> date_times = datetime_dispatch_sequence(start_time='2020/01/01 12:00:00', end_time='2020/01/01 12:20:00')
+
+    >>> print(date_times)
+    ['2020/01/01 12:05:00', '2020/01/01 12:10:00', '2020/01/01 12:15:00', '2020/01/01 12:20:00']
+
+    Parameters
+    ----------
+    start_time : str
+        In the datetime in the format '%Y/%m/%d %H:%M:%S' e.g. '2020/01/01 12:00:00'
+    end_time : str
+        In the datetime in the format '%Y/%m/%d %H:%M:%S' e.g. '2020/01/01 12:00:00'
+    """
+    delta = timedelta(minutes=5)
+    start_time = datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
+    end_time = datetime.strptime(end_time, '%Y/%m/%d %H:%M:%S')
+    date_times = []
+    curr = start_time + delta
+    while curr <= end_time:
+        # Change the datetime object to a timestamp and modify its format by replacing characters.
+        date_times.append(curr.isoformat().replace('T', ' ').replace('-', '/'))
+        curr += delta
+    return date_times
+
+
+def format_unit_info(unit_info):
+    # Combine loss factors.
+    unit_info['LOSSFACTOR'] = unit_info['TRANSMISSIONLOSSFACTOR'] * unit_info['DISTRIBUTIONLOSSFACTOR']
+    unit_info = unit_info.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
+    unit_info.columns = ['unit', 'dispatch_type', 'connection_point', 'region', 'loss_factor']
+    return unit_info
+
+
+def format_volume_bids(volume_bids):
+    volume_bids = volume_bids.loc[:, ['DUID', 'BIDTYPE', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4',
+                                      'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
+                                      'BANDAVAIL10']]
+    volume_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    return volume_bids
+
+
+def format_price_bids(price_bids):
+    price_bids = price_bids.loc[:, ['DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2', 'PRICEBAND3', 'PRICEBAND4',
+                                    'PRICEBAND5', 'PRICEBAND6', 'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9',
+                                    'PRICEBAND10']]
+    price_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    return price_bids
+
+
+def format_interconnector_definitions(interconnector_directions, interconnector_paramaters):
+    interconnector_directions = interconnector_directions.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
+    interconnector_directions.columns = ['interconnector', 'to_region', 'from_region']
+    interconnector_paramaters = interconnector_paramaters.loc[:, ['INTERCONNECTORID', 'MAXMWIN', 'MAXMWOUT']]
+    interconnector_paramaters.columns = ['interconnector', 'max', 'min']
+    interconnectors = pd.merge(interconnector_directions, interconnector_paramaters, 'inner', on='interconnector')
+    return interconnectors
+
+
+def format_interconnector_loss_coefficients(interconnector_paramaters):
+    interconnector_paramaters = interconnector_paramaters.loc[:, ['INTERCONNECTORID', 'LOSSCONSTANT',
+                                                                  'LOSSFLOWCOEFFICIENT', 'FROMREGIONLOSSSHARE']]
+    interconnector_paramaters.columns = ['interconnector', 'loss_constant', 'flow_coefficient',
+                                         'from_region_loss_share']
+    return interconnector_paramaters
+
+
+def format_interconnector_loss_demand_coefficient(interconnector_demand_coefficients):
+    interconnector_demand_coefficients = \
+        interconnector_demand_coefficients.loc[:, ['INTERCONNECTORID', 'REGIONID', 'DEMANDCOEFFICIENT']]
+    interconnector_demand_coefficients.columns = ['interconnector', 'region', 'demand_coefficient']
+    return interconnector_demand_coefficients
+
+
+def format_regional_demand(regional_demand):
+    regional_demand = regional_demand.loc[:, ['REGIONID', 'TOTALDEMAND', 'DEMANDFORECAST',
+                                              'INITIALSUPPLY']]
+    regional_demand.columns = ['region', 'demand', 'demand_forecast', 'initial_supply']
+    return regional_demand
+
+
+def format_interpolation_break_points(format_interpolation_break_points):
+    format_interpolation_break_points = format_interpolation_break_points.loc[:, ['INTERCONNECTORID', 'MWBREAKPOINT']]
+    format_interpolation_break_points.columns = ['interconnector', 'break_point']
+    return format_interpolation_break_points
