@@ -135,6 +135,10 @@ class _MMSTable:
     def create_table_in_sqlite_db(self):
         """Creates a table in the sqlite database that the object has a connection to.
 
+        Note
+        ----
+        This method and its documentation is inherited from the _MMSTable class.
+
         Examples
         --------
         Set up a database or connect to an existing one.
@@ -182,6 +186,10 @@ class _SingleDataSource(_MMSTable):
 
     def set_data(self, year, month):
         """"Download data for the given table and time, replace any existing data.
+
+        Note
+        ----
+        This method and its documentation is inherited from the _SingleDataSource class.
 
         Examples
         --------
@@ -251,6 +259,10 @@ class _MultiDataSource(_MMSTable):
     def add_data(self, year, month):
         """"Download data for the given table and time, appends to any existing data.
 
+        Note
+        ----
+        This method and its documentation is inherited from the _MultiDataSource class.
+
         Examples
         --------
         Set up a database or connect to an existing one.
@@ -259,9 +271,9 @@ class _MultiDataSource(_MMSTable):
 
         Create the table object.
 
-        >>> table = InputsBySettlementDate(table_name='DISPATCHLOAD',
-        ...                                table_columns=['SETTLEMENTDATE', 'DUID',  'RAMPDOWNRATE', 'RAMPUPRATE'],
-        ...                                table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=con)
+        >>> table = _MultiDataSource(table_name='DISPATCHLOAD',
+        ...                          table_columns=['SETTLEMENTDATE', 'DUID',  'RAMPDOWNRATE', 'RAMPUPRATE'],
+        ...                          table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=con)
 
         Create the table in the database.
 
@@ -880,8 +892,7 @@ class DBManager:
     ----------
     con : sqlite3.connection
 
-    Default tables
-    --------------
+
     Attributes
     ----------
     BIDPEROFFER_D : InputsByIntervalDateTime

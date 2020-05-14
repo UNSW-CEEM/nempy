@@ -998,6 +998,7 @@ class Spot:
 
         unit_limits : pd.DataFrame
             The initial output and ramp rates of units
+
             ==============  =====================================================================================
             Columns:        Description:
             unit            unique identifier of a dispatch unit (as `str`)
