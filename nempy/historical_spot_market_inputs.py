@@ -24,20 +24,20 @@ def _download_to_df(url, table_name, year, month):
     >>> df = _download_to_df(url, table_name='DISPATCHREGIONSUM', year=2020, month=1)
 
     >>> print(df)
-           I       DISPATCH  ... SEMISCHEDULE_CLEAREDMW  SEMISCHEDULE_COMPLIANCEMW
-    0      D       DISPATCH  ...              549.30600                    0.00000
-    1      D       DISPATCH  ...              102.00700                    0.00000
-    2      D       DISPATCH  ...              387.40700                    0.00000
-    3      D       DISPATCH  ...              145.43200                    0.00000
-    4      D       DISPATCH  ...              136.85200                    0.00000
-    ...   ..            ...  ...                    ...                        ...
-    45381  D       DISPATCH  ...              142.71600                    0.00000
-    45382  D       DISPATCH  ...              310.28903                    0.36103
-    45383  D       DISPATCH  ...               83.94100                    0.00000
-    45384  D       DISPATCH  ...              196.69610                    0.69010
-    45385  C  END OF REPORT  ...                    NaN                        NaN
+           I  DISPATCH  ... SEMISCHEDULE_CLEAREDMW  SEMISCHEDULE_COMPLIANCEMW
+    0      D  DISPATCH  ...              549.30600                    0.00000
+    1      D  DISPATCH  ...              102.00700                    0.00000
+    2      D  DISPATCH  ...              387.40700                    0.00000
+    3      D  DISPATCH  ...              145.43200                    0.00000
+    4      D  DISPATCH  ...              136.85200                    0.00000
+    ...   ..       ...  ...                    ...                        ...
+    45380  D  DISPATCH  ...              757.47600                    0.00000
+    45381  D  DISPATCH  ...              142.71600                    0.00000
+    45382  D  DISPATCH  ...              310.28903                    0.36103
+    45383  D  DISPATCH  ...               83.94100                    0.00000
+    45384  D  DISPATCH  ...              196.69610                    0.69010
     <BLANKLINE>
-    [45386 rows x 109 columns]
+    [45385 rows x 109 columns]
 
     Parameters
     ----------
@@ -69,10 +69,10 @@ def _download_to_df(url, table_name, year, month):
     # Download the file.
     r = requests.get(url)
     if r.status_code != 200:
-        raise MissingData(('Requested data for table: {}, year: {}, month: {} not downloaded.' +
-                           '\nPlease check your internet connection. Also check' 
-                           '\nhttp://nemweb.com.au/#mms-data-model, to see if your requested' +
-                           '\ndata is uploaded.').format(table_name, year, month))
+        raise _MissingData(("""Requested data for table: {}, year: {}, month: {} 
+                              not downloaded. Please check your internet connection. Also check
+                              http://nemweb.com.au/#mms-data-model, to see if your requested
+                              data is uploaded.""").format(table_name, year, month))
     # Convert the contents of the response into a zipfile object.
     zf = zipfile.ZipFile(io.BytesIO(r.content))
     # Get the name of the file inside the zip object, assuming only one file is zipped inside.
@@ -84,7 +84,7 @@ def _download_to_df(url, table_name, year, month):
     return data
 
 
-class MissingData(Exception):
+class _MissingData(Exception):
     """Raise for nemweb not returning status 200 for file request."""
 
 
@@ -99,12 +99,14 @@ class _MMSTable:
 
         Examples
         --------
-        This class is designed to be used after subclassing, however this is how it would be used on it own.
+        Set up a database or connect to an existing one.
 
-        >>> connection = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = _MMSTable(table_name='a_table', table_columns=['col_1', 'col_2'], table_primary_keys=['col_1'],
-        ...                  con=connection)
+        ...                  con=con)
 
         Clean up by deleting database created.
 
@@ -129,13 +131,46 @@ class _MMSTable:
         # url that sub classes will use to pull MMS tables from nemweb.
         self.url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' + \
                    'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip'
+
+    def create_table_in_sqlite_db(self):
+        """Creates a table in the sqlite database that the object has a connection to.
+
+        Examples
+        --------
+        Set up a database or connect to an existing one.
+
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
+
+        >>> table = _MMSTable(table_name='example', table_columns=['col_1', 'col_2'], table_primary_keys=['col_1'],
+        ...                  con=con)
+
+        Create the corresponding table in the sqlite database, note this step many not be needed if you have connected
+        to an existing database.
+
+        >>> table.create_table_in_sqlite_db()
+
+        Now a table exists in the database, but its empty.
+
+        >>> print(pd.read_sql("Select * from example", con=con))
+        Empty DataFrame
+        Columns: [col_1, col_2]
+        Index: []
+
+        Clean up by closing the database and deleting if its no longer needed.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        """
         with self.con:
             cur = self.con.cursor()
-            cur.execute("""DROP TABLE IF EXISTS {};""".format(table_name))
+            cur.execute("""DROP TABLE IF EXISTS {};""".format(self.table_name))
             base_create_query = """CREATE TABLE {}({}, PRIMARY KEY ({}));"""
             columns = ','.join(['{} TEXT'.format(col) for col in self.table_columns])
             primary_keys = ','.join(['{}'.format(col) for col in self.table_primary_keys])
-            create_query = base_create_query.format(table_name, columns, primary_keys)
+            create_query = base_create_query.format(self.table_name, columns, primary_keys)
             cur.execute(create_query)
             self.con.commit()
 
@@ -150,14 +185,21 @@ class _SingleDataSource(_MMSTable):
 
         Examples
         --------
-        This class is designed to be used after subclassing, however this is how it would be used on it own. This
-        example will only work with an internet connection.
+        Set up a database or connect to an existing one.
 
-        >>> connection = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = _SingleDataSource(table_name='DUDETAILSUMMARY',
         ...                          table_columns=['DUID', 'START_DATE', 'CONNECTIONPOINTID', 'REGIONID'],
-        ...                          table_primary_keys=['START_DATE', 'DUID'], con=connection)
+        ...                          table_primary_keys=['START_DATE', 'DUID'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
+
+        Downloading data from http://nemweb.com.au/#mms-data-model into the table.
 
         >>> table.set_data(year=2020, month=1)
 
@@ -165,7 +207,7 @@ class _SingleDataSource(_MMSTable):
 
         >>> query = "Select * from DUDETAILSUMMARY order by START_DATE DESC limit 1;"
 
-        >>> print(pd.read_sql_query(query, con=connection))
+        >>> print(pd.read_sql_query(query, con=con))
               DUID           START_DATE CONNECTIONPOINTID REGIONID
         0  URANQ11  2020/02/04 00:00:00            NURQ1U     NSW1
 
@@ -174,11 +216,11 @@ class _SingleDataSource(_MMSTable):
 
         >>> table.set_data(year=2019, month=1)
 
-        >>> print(pd.read_sql_query(query, con=connection))
+        >>> print(pd.read_sql_query(query, con=con))
                DUID           START_DATE CONNECTIONPOINTID REGIONID
         0  WEMENSF1  2019/03/04 00:00:00            VWES2W     VIC1
 
-        Clean up by deleting database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -211,14 +253,21 @@ class _MultiDataSource(_MMSTable):
 
         Examples
         --------
-        This class is designed to be used after subclassing, however this is how it would be used on it own. This
-        example will only work with an internet connection.
+        Set up a database or connect to an existing one.
 
-        >>> connection = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsBySettlementDate(table_name='DISPATCHLOAD',
         ...                                table_columns=['SETTLEMENTDATE', 'DUID',  'RAMPDOWNRATE', 'RAMPUPRATE'],
-        ...                                table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=connection)
+        ...                                table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
+
+        Downloading data from http://nemweb.com.au/#mms-data-model into the table.
 
         >>> table.add_data(year=2020, month=1)
 
@@ -226,7 +275,7 @@ class _MultiDataSource(_MMSTable):
 
         >>> query = "Select * from DISPATCHLOAD order by SETTLEMENTDATE DESC limit 1;"
 
-        >>> print(pd.read_sql_query(query, con=connection))
+        >>> print(pd.read_sql_query(query, con=con))
                 SETTLEMENTDATE   DUID RAMPDOWNRATE RAMPUPRATE
         0  2020/02/01 00:00:00  YWPS4        180.0      180.0
 
@@ -235,11 +284,11 @@ class _MultiDataSource(_MMSTable):
 
         >>> table.add_data(year=2019, month=1)
 
-        >>> print(pd.read_sql_query(query, con=connection))
+        >>> print(pd.read_sql_query(query, con=con))
                 SETTLEMENTDATE   DUID RAMPDOWNRATE RAMPUPRATE
         0  2020/02/01 00:00:00  YWPS4        180.0      180.0
 
-        Clean up by deleting database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -274,11 +323,18 @@ class InputsBySettlementDate(_MultiDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
 
-        >>> table = InputsByIntervalDateTime(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'VALUE'],
+        Create the table object.
+
+        >>> table = InputsBySettlementDate(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'VALUE'],
         ...                                  table_primary_keys=['SETTLEMENTDATE'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -295,7 +351,7 @@ class InputsBySettlementDate(_MultiDataSource):
                 SETTLEMENTDATE VALUE
         0  2019/01/01 12:00:00   2.0
 
-        Clean up by deleting database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -325,11 +381,18 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsByIntervalDateTime(table_name='EXAMPLE', table_columns=['INTERVAL_DATETIME', 'VALUE'],
         ...                                  table_primary_keys=['INTERVAL_DATETIME'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -346,7 +409,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
              INTERVAL_DATETIME VALUE
         0  2019/01/01 12:00:00   2.0
 
-        Clean up by deleting database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -381,11 +444,18 @@ class InputsByDay(_MultiDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsByDay(table_name='EXAMPLE', table_columns=['SETTLEMENTDATE', 'VALUE'],
         ...                     table_primary_keys=['SETTLEMENTDATE'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -415,7 +485,7 @@ class InputsByDay(_MultiDataSource):
                 SETTLEMENTDATE VALUE
         0  2019/01/02 00:00:00   2.0
 
-        Clean up by deleting database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -458,11 +528,18 @@ class InputsStartAndEnd(_SingleDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['START_DATE', 'END_DATE', 'VALUE'],
         ...                           table_primary_keys=['START_DATE'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -492,7 +569,7 @@ class InputsStartAndEnd(_SingleDataSource):
                     START_DATE             END_DATE VALUE
         0  2019/01/02 00:00:00  2019/01/03 00:00:00   2.0
 
-        Clean up by closing and deleting the database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -525,12 +602,19 @@ class InputsByMatchDispatchConstraints(_SingleDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsByMatchDispatchConstraints(table_name='EXAMPLE',
         ...                           table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'RHS'],
         ...                           table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the set_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -566,7 +650,7 @@ class InputsByMatchDispatchConstraints(_SingleDataSource):
         0        X  2019/01/03 00:00:00         2  2.0
         1        Y  2019/01/03 00:00:00         3  3.0
 
-        Clean up by closing and deleting the database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -605,12 +689,19 @@ class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsByEffectiveDateAndVersionNo(table_name='EXAMPLE',
         ...                           table_columns=['ID', 'EFFECTIVEDATE', 'VERSIONNO', 'VALUE'],
         ...                           table_primary_keys=['ID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the set_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -636,7 +727,7 @@ class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
         0  X  2019/01/03 00:00:00         2   2.0
         1  Y  2019/01/03 00:00:00         3   3.0
 
-        Clean up by closing and deleting the database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -668,8 +759,8 @@ class InputsByEffectiveDateAndVersionNo(_SingleDataSource):
                                       from temp2
                                   group by {id};"""
             cur.execute(query.format(id=id_columns))
-            query = "Select * from {table} inner join temp3 using ({id}, VERSIONNO, EFFECTIVEDATE);"
-            data = pd.read_sql_query(query.format(table=self.table_name, id=id_columns), con=self.con)
+        query = "Select * from {table} inner join temp3 using ({id}, VERSIONNO, EFFECTIVEDATE);"
+        data = pd.read_sql_query(query.format(table=self.table_name, id=id_columns), con=self.con)
         return data
 
 
@@ -683,11 +774,18 @@ class InputsNoFilter(_SingleDataSource):
 
         Examples
         --------
-        Set up a dummy database
+        Set up a database or connect to an existing one.
+
         >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
 
         >>> table = InputsNoFilter(table_name='EXAMPLE', table_columns=['ID', 'VALUE'], table_primary_keys=['ID'],
         ...                        con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
 
         Normally you would use the set_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
@@ -705,7 +803,7 @@ class InputsNoFilter(_SingleDataSource):
         0  X   1.0
         1  Y   2.0
 
-        Clean up by closing and deleting the database created.
+        Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
         >>> os.remove('historical_inputs.db')
@@ -726,19 +824,27 @@ class DBManager:
 
     Examples
     --------
-    Create the database.
+    Create the database or connect to an existing one.
 
-    >>> historical_inputs = DBManager('historical_inputs.db')
+    >>> con = sqlite3.connect('historical_inputs.db')
+
+    Create the database manager.
+
+    >>> historical_inputs = DBManager(con)
+
+    Create a set of default table in the database.
+
+    >>> historical_inputs.create_tables()
 
     Add data from AEMO nemweb data portal. In this case we are adding data from the table BIDDAYOFFER_D which contains
     unit's volume bids on 5 min basis, the data comes in monthly chunks.
 
-    This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
-    If you need data for multiple months then multiple add_data calls can be made.
-
     >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=1)
 
     >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=2)
+
+    This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
+    If you need data for multiple months then multiple add_data calls can be made.
 
     Data for a specific 5 min dispatch interval can then be retrieved.
 
@@ -772,9 +878,10 @@ class DBManager:
 
     Parameters
     ----------
-    db : str
-        the file path and name of the database.
+    con : sqlite3.connection
 
+    Default tables
+    --------------
     Attributes
     ----------
     BIDPEROFFER_D : InputsByIntervalDateTime
@@ -814,8 +921,8 @@ class DBManager:
         Record of which interconnector were used in a particular dispatch interval.
 
     """
-    def __init__(self, db):
-        self.con = sqlite3.connect(db)
+    def __init__(self, connection):
+        self.con = connection
         self.BIDPEROFFER_D = InputsByIntervalDateTime(
             table_name='BIDPEROFFER_D', table_columns=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE', 'BANDAVAIL1',
                                                        'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5',
@@ -884,6 +991,55 @@ class DBManager:
         self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
             table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE'],
             table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
+
+    def create_tables(self):
+        """Drops any existing default tables and creates new ones, this method is generally called a new database.
+
+        Examples
+        --------
+        Create the database or connect to an existing one.
+
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the database manager.
+
+        >>> historical_inputs = DBManager(con)
+
+        Create a set of default table in the database.
+
+        >>> historical_inputs.create_tables()
+
+        Default tables will now exist, but will be empty.
+
+        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
+        Empty DataFrame
+        Columns: [SETTLEMENTDATE, REGIONID, TOTALDEMAND, DEMANDFORECAST, INITIALSUPPLY]
+        Index: []
+
+        If you added data and then call create_tables again then any added data will be emptied.
+
+        >>> historical_inputs.DISPATCHREGIONSUM.add_data(year=2020, month=1)
+
+        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM limit 3", con=con))
+                SETTLEMENTDATE REGIONID TOTALDEMAND DEMANDFORECAST INITIALSUPPLY
+        0  2020/01/01 00:05:00     NSW1     7245.31      -26.35352    7284.32178
+        1  2020/01/01 00:05:00     QLD1     6095.75      -24.29639    6129.36279
+        2  2020/01/01 00:05:00      SA1     1466.53         1.4719    1452.25647
+
+        >>> historical_inputs.create_tables()
+
+        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
+        Empty DataFrame
+        Columns: [SETTLEMENTDATE, REGIONID, TOTALDEMAND, DEMANDFORECAST, INITIALSUPPLY]
+        Index: []
+
+        Returns
+        -------
+        None
+        """
+        for name, attribute in self.__dict__.items():
+            if hasattr(attribute, 'create_table_in_sqlite_db'):
+                attribute.create_table_in_sqlite_db()
 
 
 def create_loss_functions(interconnector_coefficients, demand_coefficients, demand):
