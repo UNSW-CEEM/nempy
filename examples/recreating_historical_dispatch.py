@@ -13,8 +13,8 @@ inputs_manager = hi.DBManager(connection=con)
 
 # This is the first time the database has been used so we need to add the tables.
 # inputs_manager.create_tables()
-
-# Download the relevant historical data from http://nemweb.com.au/#mms-data-model and into the database.
+#
+# #Download the relevant historical data from http://nemweb.com.au/#mms-data-model and into the database.
 # inputs_manager.DUDETAILSUMMARY.set_data(year=2020, month=1)  # Unit information
 # inputs_manager.BIDPEROFFER_D.add_data(year=2020, month=1)  # historical volume bids
 # inputs_manager.BIDDAYOFFER_D.add_data(year=2020, month=1)  # historical price bids
@@ -55,10 +55,12 @@ for interval in dispatch_intervals:
 
     # Volume of each bids.
     volume_bids = volume_bids[volume_bids['service'] == 'ENERGY']
+    volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
     simple_market.set_unit_volume_bids(volume_bids.loc[:, ['unit', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']])
 
     # Price of each bid.
     price_bids = price_bids[price_bids['service'] == 'ENERGY']
+    price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
     simple_market.set_unit_price_bids(price_bids.loc[:, ['unit', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']])
 
     # regional_demand

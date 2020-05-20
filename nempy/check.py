@@ -21,6 +21,15 @@ def energy_bid_ids_exist(func):
     return wrapper
 
 
+def all_units_have_info(func):
+    @keep_details(func)
+    def wrapper(*args):
+        if not set(args[1]['unit'].unique()) <= set(args[0].unit_info['unit']):
+            raise ModelBuildError('Not all unit with bids are present in the unit_info input.')
+        func(*args)
+    return wrapper
+
+
 def interconnectors_exist(func):
     @keep_details(func)
     def wrapper(*args):

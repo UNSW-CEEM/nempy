@@ -92,6 +92,7 @@ class Spot:
     @check.column_data_types('volume_bids', {'unit': str, 'service': str, 'else': np.float64})
     @check.column_values_must_be_real('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     @check.column_values_not_negative('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    @check.all_units_have_info
     def set_unit_volume_bids(self, volume_bids):
         """Creates the decision variables corresponding to energy bids.
 

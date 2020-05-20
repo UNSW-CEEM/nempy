@@ -134,3 +134,4 @@ historical_inputs.db
 docs/historical_input.db
 *.db
 nempy/the_database.db
+tests/sos_bug.py

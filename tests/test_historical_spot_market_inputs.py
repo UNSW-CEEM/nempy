@@ -70,7 +70,8 @@ def test_create_loss_function():
     interconnector_coefficients = pd.DataFrame({
         'interconnector': ['NSW1-QLD1'],
         'loss_constant': [0.9529],
-        'flow_coefficient': [0.00019617]
+        'flow_coefficient': [0.00019617],
+        'from_region_loss_share': [0.5]
     })
 
     loss_function = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients,
@@ -107,7 +108,8 @@ def test_create_loss_function_vic_nsw():
     interconnector_coefficients = pd.DataFrame({
         'interconnector': ['VIC1-NSW1'],
         'loss_constant': [1.0657],
-        'flow_coefficient': [0.00017027]
+        'flow_coefficient': [0.00017027],
+        'from_region_loss_share': [0.5]
     })
 
     loss_function = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients,
@@ -144,7 +146,8 @@ def test_create_loss_function_bass_link():
     interconnector_coefficients = pd.DataFrame({
         'interconnector': ['BL'],
         'loss_constant': [0.99608],
-        'flow_coefficient': [0.00020786]
+        'flow_coefficient': [0.00020786],
+        'from_region_loss_share': [0.5]
     })
 
     loss_function = historical_spot_market_inputs.create_loss_functions(interconnector_coefficients,

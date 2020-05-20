@@ -7,6 +7,7 @@ from nempy import check
 from datetime import datetime, timedelta
 from time import time
 import os
+import numpy as np
 
 
 def _download_to_df(url, table_name, year, month):
@@ -149,9 +150,10 @@ class _MMSTable:
             'CONSTRAINTID': 'TEXT', 'RHS': 'REAL', 'GENCONID_EFFECTIVEDATE': 'TEXT', 'GENCONID_VERSIONNO': 'TEXT',
             'GENCONID': 'TEXT', 'EFFECTIVEDATE': 'TEXT', 'VERSIONNO': 'TEXT', 'CONSTRAINTTYPE': 'TEXT',
             'GENERICCONSTRAINTWEIGHT': 'REAL', 'FACTOR': 'REAL', 'FROMREGIONLOSSSHARE': 'REAL', 'LOSSCONSTANT': 'REAL',
-            'LOSSFLOWCOEFFICIENT': 'REAL', 'MAXMWIN': 'REAL', 'MAXMWOUT': 'REAL', 'LOSSSEGMENT': 'TEXT',
+            'LOSSFLOWCOEFFICIENT': 'REAL', 'IMPORTLIMIT': 'REAL', 'EXPORTLIMIT': 'REAL', 'LOSSSEGMENT': 'TEXT',
             'MWBREAKPOINT': 'REAL', 'DEMANDCOEFFICIENT': 'REAL', 'INTERCONNECTORID': 'TEXT', 'REGIONFROM': 'TEXT',
-            'REGIONTO': 'TEXT'
+            'REGIONTO': 'TEXT', 'MWFLOW': 'REAL', 'MWLOSSES': 'REAL', 'MINIMUMLOAD': 'REAL', 'MAXCAPACITY': 'REAL',
+            'SEMIDISPATCHCAP': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -838,6 +840,114 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         return data
 
 
+class InputsByEffectiveDateVersionNo(_SingleDataSource):
+    """Manages retrieving dispatch inputs by EFFECTTIVEDATE and VERSIONNO."""
+
+    def __init__(self, table_name, table_columns, table_primary_keys, con):
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+
+    def get_data(self, date_time):
+        """Retrieves data for the specified date_time by EFFECTTIVEDATE and VERSIONNO.
+
+        For each unique record (by the remaining primary keys, not including EFFECTTIVEDATE and VERSIONNO) the record
+        with the most recent EFFECTIVEDATE
+
+        Examples
+        --------
+        Set up a database or connect to an existing one.
+
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
+
+        >>> table = InputsByEffectiveDateVersionNo(table_name='EXAMPLE',
+        ...                           table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'INITIALMW'],
+        ...                           table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
+
+        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        database so some simple example data can be added.
+
+        >>> data = pd.DataFrame({
+        ...   'DUID': ['X', 'X', 'Y', 'Y'],
+        ...   'EFFECTIVEDATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00', '2019/01/01 00:00:00',
+        ...                     '2019/01/03 00:00:00'],
+        ...   'VERSIONNO': [1, 2, 2, 3],
+        ...   'INITIALMW': [1.0, 2.0, 2.0, 3.0]})
+
+        >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+
+        When we call get_data the output is filtered by most recent effective date and highest version no.
+
+        >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
+          DUID        EFFECTIVEDATE VERSIONNO  INITIALMW
+        0    X  2019/01/02 00:00:00         1        1.0
+        1    Y  2019/01/01 00:00:00         2        2.0
+
+        In the next interval interconnector Y is not present in DISPATCHINTERCONNECTORRES.
+
+        >>> print(table.get_data(date_time='2019/01/03 00:00:00'))
+          DUID        EFFECTIVEDATE VERSIONNO  INITIALMW
+        0    X  2019/01/03 00:00:00         2        2.0
+        1    Y  2019/01/03 00:00:00         3        3.0
+
+        Clean up by closing the database and deleting if its no longer needed.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Parameters
+        ----------
+        date_time : str
+            Should be of format '%Y/%m/%d %H:%M:%S', and always a round 5 min interval e.g. 2019/01/01 11:55:00.
+
+        Returns
+        -------
+        pd.DataFrame
+        """
+        id_columns = ','.join([col for col in self.table_primary_keys if col not in ['EFFECTIVEDATE', 'VERSIONNO']])
+        return_columns = ','.join(self.table_columns)
+        with self.con:
+            cur = self.con.cursor()
+            cur.execute("DROP TABLE IF EXISTS temp;")
+            cur.execute("DROP TABLE IF EXISTS temp2;")
+            cur.execute("DROP TABLE IF EXISTS temp3;")
+            cur.execute("DROP TABLE IF EXISTS temp4;")
+            # Store just the unique sets of ids that came into effect before the the datetime in a temporary table.
+            query = """CREATE TEMPORARY TABLE temp AS 
+                              SELECT * 
+                                FROM {table} 
+                               WHERE EFFECTIVEDATE <= '{datetime}';"""
+            cur.execute(query.format(table=self.table_name, datetime=date_time))
+            # For each unique set of ids and effective dates get the latest versionno and sore in temporary table.
+            query = """CREATE TEMPORARY TABLE temp2 AS
+                              SELECT {id}, EFFECTIVEDATE, MAX(VERSIONNO) AS VERSIONNO
+                                FROM temp
+                               GROUP BY {id}, EFFECTIVEDATE;"""
+            cur.execute(query.format(id=id_columns))
+            # For each unique set of ids get the record with the most recent effective date.
+            query = """CREATE TEMPORARY TABLE temp3 as
+                              SELECT {id}, VERSIONNO, max(EFFECTIVEDATE) as EFFECTIVEDATE
+                                FROM temp2
+                               GROUP BY {id};"""
+            cur.execute(query.format(id=id_columns))
+            # Inner join the original table to the set of most recent effective dates and version no.
+            query = """CREATE TEMPORARY TABLE temp4 AS
+                              SELECT * 
+                                FROM {table} 
+                                     INNER JOIN temp3 
+                                     USING ({id}, VERSIONNO, EFFECTIVEDATE);"""
+            cur.execute(query.format(table=self.table_name, id=id_columns))
+        # Inner join the most recent data with the interconnectors used in the actual interval of interest.
+        query = """SELECT {cols} FROM temp4 ;"""
+        query = query.format(cols=return_columns)
+        data = pd.read_sql_query(query, con=self.con)
+        return data
+
+
 class InputsNoFilter(_SingleDataSource):
     """Manages retrieving dispatch inputs where no filter is require."""
 
@@ -1009,7 +1119,7 @@ class DBManager:
             table_name='BIDDAYOFFER_D', table_columns=['SETTLEMENTDATE', 'DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2',
                                                        'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5', 'PRICEBAND6',
                                                        'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10', 'T1',
-                                                       'T2', 'T3', 'T4'],
+                                                       'T2', 'T3', 'T4', 'MINIMUMLOAD'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID', 'BIDTYPE'], con=self.con)
         self.DISPATCHREGIONSUM = InputsBySettlementDate(
             table_name='DISPATCHREGIONSUM', table_columns=['SETTLEMENTDATE', 'REGIONID', 'TOTALDEMAND',
@@ -1019,13 +1129,17 @@ class DBManager:
             table_name='DISPATCHLOAD', table_columns=['SETTLEMENTDATE', 'DUID', 'DISPATCHMODE', 'AGCSTATUS',
                                                       'INITIALMW', 'TOTALCLEARED', 'RAMPDOWNRATE', 'RAMPUPRATE',
                                                       'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
-                                                      'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN'],
+                                                      'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN',
+                                                      'SEMIDISPATCHCAP'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
                                                          'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
                                                          'DISTRIBUTIONLOSSFACTOR'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
+        self.DUDETAIL = InputsByEffectiveDateVersionNo(
+            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'MAXCAPACITY'],
+            table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHCONSTRAINT = InputsBySettlementDate(
             table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
                                                             'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO'],
@@ -1052,7 +1166,7 @@ class DBManager:
         self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                                   'FROMREGIONLOSSSHARE', 'LOSSCONSTANT',
-                                                                  'LOSSFLOWCOEFFICIENT', 'MAXMWIN', 'MAXMWOUT'],
+                                                                  'LOSSFLOWCOEFFICIENT', 'IMPORTLIMIT', 'EXPORTLIMIT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.LOSSMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
@@ -1063,7 +1177,8 @@ class DBManager:
                                                          'DEMANDCOEFFICIENT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
-            table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE'],
+            table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE', 'MWFLOW',
+                                                                   'MWLOSSES'],
             table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
 
     def create_tables(self):
@@ -1294,8 +1409,9 @@ def format_price_bids(price_bids):
 def format_interconnector_definitions(interconnector_directions, interconnector_paramaters):
     interconnector_directions = interconnector_directions.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
     interconnector_directions.columns = ['interconnector', 'to_region', 'from_region']
-    interconnector_paramaters = interconnector_paramaters.loc[:, ['INTERCONNECTORID', 'MAXMWIN', 'MAXMWOUT']]
-    interconnector_paramaters.columns = ['interconnector', 'max', 'min']
+    interconnector_paramaters = interconnector_paramaters.loc[:, ['INTERCONNECTORID', 'IMPORTLIMIT', 'EXPORTLIMIT']]
+    interconnector_paramaters.columns = ['interconnector', 'min', 'max']
+    interconnector_paramaters['min'] = -1 * interconnector_paramaters['min']
     interconnectors = pd.merge(interconnector_directions, interconnector_paramaters, 'inner', on='interconnector')
     return interconnectors
 
@@ -1326,3 +1442,30 @@ def format_interpolation_break_points(format_interpolation_break_points):
     format_interpolation_break_points = format_interpolation_break_points.loc[:, ['INTERCONNECTORID', 'MWBREAKPOINT']]
     format_interpolation_break_points.columns = ['interconnector', 'break_point']
     return format_interpolation_break_points
+
+
+def determine_unit_limits(initial_conditions, offered_capacity):
+
+    # Override ramp rates for fast start units.
+    ic = initial_conditions
+    ic['RAMPMAX'] = ic['INITIALMW'] + ic['RAMPUPRATE'] * (5/60)
+    ic['RAMPUPRATE'] = np.where((ic['TOTALCLEARED'] > ic['RAMPMAX']) & (ic['DISPATCHMODE'] != 0.0),
+                                (ic['TOTALCLEARED'] - ic['INITIALMW']) * (60/5), ic['RAMPUPRATE'])
+    ic['RAMPMIN'] = ic['INITIALMW'] - ic['RAMPDOWNRATE'] * (5/60)
+    ic['RAMPDOWNRATE'] = np.where((ic['TOTALCLEARED'] < ic['RAMPMIN']) & (ic['DISPATCHMODE'] != 0.0),
+                                  (ic['INITIALMW'] - ic['TOTALCLEARED'] ) * (60/5), ic['RAMPDOWNRATE'])
+
+    # Override ALAILABILITY when SEMIDISPATCHCAP is 1.0
+    ic = pd.merge(ic, offered_capacity.loc[:, ['DUID', 'MAXAVAIL']], 'inner', on='DUID')
+    ic['AVAILABILITY'] = np.where((ic['MAXAVAIL'] < ic['AVAILABILITY']) & (ic['SEMIDISPATCHCAP'] == 1.0) &
+                                  (ic['MAXAVAIL'] > 0.01) & (ic['TOTALCLEARED'] < ic['MAXAVAIL']), ic['MAXAVAIL'],
+                                  ic['AVAILABILITY'])
+
+    # Where the availability is lower than the ramp down min set the availibility to equal the ramp down min.
+    ic['AVAILABILITY'] = np.where(ic['AVAILABILITY'] < ic['RAMPMIN'], ic['RAMPMIN'], ic['AVAILABILITY'])
+
+    # Format for compatibility with the Spot market class.
+    ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+    ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
+
+    return ic
