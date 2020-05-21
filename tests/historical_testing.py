@@ -132,10 +132,9 @@ def test_using_availability_and_ramp_rates():
                                               'TOTALCLEARED', 'DISPATCHMODE']]
         dispatch_load['RAMPMAX'] = dispatch_load['INITIALMW'] + dispatch_load['RAMPUPRATE'] * (5/60)
         dispatch_load['RAMPMIN'] = dispatch_load['INITIALMW'] - dispatch_load['RAMPDOWNRATE'] * (5 / 60)
-        dispatch_load['assumption'] = ((dispatch_load['RAMPMAX'] + 0.01 >= dispatch_load['TOTALCLEARED']) & \
+        dispatch_load['assumption'] = ((dispatch_load['RAMPMAX'] + 0.01 >= dispatch_load['TOTALCLEARED']) &
                                        (dispatch_load['AVAILABILITY'] + 0.01 >= dispatch_load['TOTALCLEARED'])) | \
                                       (np.abs(dispatch_load['TOTALCLEARED'] - dispatch_load['RAMPMIN']) < 0.01)
-        print(interval)
         assert(dispatch_load['assumption'].all())
 
 
@@ -155,63 +154,14 @@ def test_max_capacity_not_less_than_availability():
         unit_capacity = inputs_manager.DUDETAIL.get_data(interval)
         unit_capacity = pd.merge(unit_capacity, dispatch_load, 'inner', on='DUID')
         unit_capacity['assumption'] = unit_capacity['AVAILABILITY'] <= unit_capacity['MAXCAPACITY']
-        print(interval)
-        temp = unit_capacity[unit_capacity['assumption'] == False]
         assert(unit_capacity['assumption'].all())
 
 
-def test_offer_max_not_less_than_availability():
-    """For historical testing we are using availability as the unit capacity, so we want to test that the unit capacity
-       or offer max is never lower than this value."""
-
-    # Create a database for the require inputs.
-    con = sqlite3.connect('test_files/historical_inputs.db')
-
-    # Create a data base manager.
-    inputs_manager = hi.DBManager(connection=con)
-
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval)
-        dispatch_load = dispatch_load.loc[:, ['DUID', 'AVAILABILITY', 'TOTALCLEARED', 'SEMIDISPATCHCAP']]
-        unit_capacity = inputs_manager.BIDPEROFFER_D.get_data(interval)
-        unit_capacity = unit_capacity[unit_capacity['BIDTYPE'] == 'ENERGY']
-        unit_capacity = pd.merge(unit_capacity, dispatch_load, 'inner', on='DUID')
-        unit_capacity['assumption'] = ~(np.abs(unit_capacity['MAXAVAIL'] - unit_capacity['TOTALCLEARED']) < 0.01) | \
-                                      (unit_capacity['MAXAVAIL'] >= unit_capacity['AVAILABILITY'])
-
-        print(interval)
-        temp = unit_capacity[unit_capacity['assumption'] < 0.1]
-        x=1
-        #assert(unit_capacity['assumption'].all())
-
-
-def test_find():
-    """For historical testing we are using availability as the unit capacity, so we want to test that the unit capacity
-       or offer max is never lower than this value."""
-
-    # Create a database for the require inputs.
-    con = sqlite3.connect('test_files/historical_inputs.db')
-
-    # Create a data base manager.
-    inputs_manager = hi.DBManager(connection=con)
-
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval)
-        dispatch_load = dispatch_load.loc[:, ['DUID', 'AVAILABILITY', 'TOTALCLEARED', 'SEMIDISPATCHCAP']]
-        unit_capacity = inputs_manager.BIDPEROFFER_D.get_data(interval)
-        unit_capacity = unit_capacity[unit_capacity['BIDTYPE'] == 'ENERGY']
-        unit_capacity = pd.merge(unit_capacity, dispatch_load, 'inner', on='DUID')
-        unit_capacity['assumption'] = ~(unit_capacity['TOTALCLEARED'] > unit_capacity['MAXAVAIL'])
-
-        print(interval)
-        temp = unit_capacity[unit_capacity['assumption'] < 0.1]
-        x=1
-        #assert(unit_capacity['assumption'].all())
-
-
 def test_determine_unit_limits():
-    """For historical testing we are using availability as the unit capacity, so we want to test that the unit capacity
-       or offer max is never lower than this value."""
+    """Test the procedure for determining unit limits from historical inputs.
+
+    It the limits set should always contain the historical amount dispatched within their bounds.
+    """
 
     # Create a database for the require inputs.
     con = sqlite3.connect('test_files/historical_inputs.db')
@@ -230,11 +180,10 @@ def test_determine_unit_limits():
                                left_on='unit', right_on='DUID')
         unit_limits['ramp_max'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (5/60)
         unit_limits['ramp_min'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (5/60)
+        # Test the assumption that our calculated limits are not more restrictive then amount historically dispatched.
         unit_limits['assumption'] = ~((unit_limits['TOTALCLEARED'] > unit_limits['capacity'] + 0.01) |
                                     (unit_limits['TOTALCLEARED'] > unit_limits['ramp_max'] + 0.01) |
                                     (unit_limits['TOTALCLEARED'] < unit_limits['ramp_min'] - 0.01))
-        print(interval)
-        temp = unit_limits[unit_limits['assumption'] < 0.1]
         assert(unit_limits['assumption'].all())
 
 

@@ -526,7 +526,7 @@ class Spot:
             Columns:        Description:
             unit            unique identifier of a dispatch unit (as `str`)
             initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
+            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
             ==============  =====================================================================================
 
         Returns

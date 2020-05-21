@@ -3,11 +3,11 @@ import zipfile
 import io
 import pandas as pd
 import sqlite3
-from nempy import check
 from datetime import datetime, timedelta
-from time import time
 import os
 import numpy as np
+
+from nempy import check
 
 
 def _download_to_df(url, table_name, year, month):
@@ -1254,7 +1254,7 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
 
     >>> demand = pd.DataFrame({
     ...   'region': ['VIC1', 'NSW1', 'QLD1', 'SA1'],
-    ...   'demand': [6000.0 , 7000.0, 5000.0, 3000.0]})
+    ...   'loss_function_demand': [6000.0 , 7000.0, 5000.0, 3000.0]})
 
     Loss model details from 2020 Jan NEM web LOSSFACTORMODEL file
 
@@ -1295,12 +1295,15 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     ----------
     interconnector_coefficients : pd.DataFrame
 
-        ================  ============================================================================================
-        Columns:          Description:
-        interconnector    unique identifier of a interconnector (as `str`)
-        loss_constant     the constant term in the interconnector loss factor equation (as np.float64)
-        flow_coefficient  the coefficient of interconnector flow variable in the loss factor equation (as np.float64)
-        ================  ============================================================================================
+        ======================  ========================================================================================
+        Columns:                Description:
+        interconnector          unique identifier of a interconnector (as `str`)
+        loss_constant           the constant term in the interconnector loss factor equation (as np.float64)
+        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation
+                                (as np.float64)
+        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the to
+                                region (as np.float64)
+        ======================  ========================================================================================
 
     demand_coefficients : pd.DataFrame
 
@@ -1313,12 +1316,12 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
 
     demand : pd.DataFrame
 
-        ========  =====================================================================================
-        Columns:  Description:
-        region    unique identifier of a region (as `str`)
-        demand    the estimated regional demand, as calculated by initial supply + demand forecast,
-                  in MW (as `np.float64`)
-        ========  =====================================================================================
+        ====================  =====================================================================================
+        Columns:              Description:
+        region                unique identifier of a region (as `str`)
+        loss_function_demand  the estimated regional demand, as calculated by initial supply + demand forecast,
+                              in MW (as `np.float64`)
+        ====================  =====================================================================================
 
     Returns
     -------
@@ -1335,7 +1338,7 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     """
 
     demand_loss_factor_offset = pd.merge(demand_coefficients, demand, 'inner', on=['region'])
-    demand_loss_factor_offset['offset'] = demand_loss_factor_offset['demand'] * \
+    demand_loss_factor_offset['offset'] = demand_loss_factor_offset['loss_function_demand'] * \
                                           demand_loss_factor_offset['demand_coefficient']
     demand_loss_factor_offset = demand_loss_factor_offset.groupby('interconnector', as_index=False)['offset'].sum()
     loss_functions = pd.merge(interconnector_coefficients, demand_loss_factor_offset, 'left', on=['interconnector'])
@@ -1390,82 +1393,572 @@ def format_unit_info(unit_info):
     return unit_info
 
 
-def format_volume_bids(volume_bids):
-    volume_bids = volume_bids.loc[:, ['DUID', 'BIDTYPE', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4',
+service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg', 'RAISE6SEC': 'raise_6s',
+                        'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min', 'LOWER6SEC': 'lower_6s',
+                        'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
+
+
+def format_volume_bids(BIDPEROFFER_D):
+    """Re-formats the AEMO MSS table BIDDAYOFFER_D to be compatible with the Spot market class.
+
+    Examples
+    --------
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
+    ...   'BANDAVAIL1': [100.0, 50.0],
+    ...   'BANDAVAIL2': [10.0, 10.0],
+    ...   'BANDAVAIL3': [0.0, 0.0],
+    ...   'BANDAVAIL4': [10.0, 10.0],
+    ...   'BANDAVAIL5': [10.0, 10.0],
+    ...   'BANDAVAIL6': [10.0, 10.0],
+    ...   'BANDAVAIL7': [10.0, 10.0],
+    ...   'BANDAVAIL8': [0.0, 0.0],
+    ...   'BANDAVAIL9': [0.0, 0.0],
+    ...   'BANDAVAIL10': [0.0, 0.0]})
+
+    >>> volume_bids = format_volume_bids(BIDPEROFFER_D)
+
+    >>> print(volume_bids)
+      unit    service      1     2    3     4     5     6     7    8    9   10
+    0    A     energy  100.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+    1    B  raise_reg   50.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+
+    Parameters
+    ----------
+    BIDPEROFFER_D : pd.DataFrame
+
+        ===========  ====================================================
+        Columns:     Description:
+        DUID         unique identifier of a unit (as `str`)
+        BIDTYPE      the service being provided (as `str`)
+        PRICEBAND1   bid volume in the 1st band, in MW (as `np.float64`)
+        PRICEBAND2   bid volume in the 2nd band, in MW (as `np.float64`)
+        PRICEBAND10  bid volume in the 10th band, in MW (as `np.float64`)
+        ===========  ====================================================
+
+    Returns
+    ----------
+    demand_coefficients : pd.DataFrame
+
+        ========  ================================================================
+        Columns:  Description:
+        unit      unique identifier of a dispatch unit (as `str`)
+        service   the service being provided, optional, if missing energy assumed
+                  (as `str`)
+        1         bid volume in the 1st band, in MW (as `np.float64`)
+        2         bid volume in the 2nd band, in MW (as `np.float64`)
+          :
+        10         bid volume in the nth band, in MW (as `np.float64`)
+        ========  ================================================================
+    """
+
+    volume_bids = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4',
                                       'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
                                       'BANDAVAIL10']]
     volume_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    volume_bids['service'] = volume_bids['service'].apply(lambda x: service_name_mapping[x])
     return volume_bids
 
 
-def format_price_bids(price_bids):
-    price_bids = price_bids.loc[:, ['DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2', 'PRICEBAND3', 'PRICEBAND4',
-                                    'PRICEBAND5', 'PRICEBAND6', 'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9',
-                                    'PRICEBAND10']]
+def format_price_bids(BIDDAYOFFER_D):
+    """Re-formats the AEMO MSS table BIDDAYOFFER_D to be compatible with the Spot market class.
+
+    Examples
+    --------
+
+    >>> BIDDAYOFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
+    ...   'PRICEBAND1': [100.0, 50.0],
+    ...   'PRICEBAND2': [10.0, 10.0],
+    ...   'PRICEBAND3': [0.0, 0.0],
+    ...   'PRICEBAND4': [10.0, 10.0],
+    ...   'PRICEBAND5': [10.0, 10.0],
+    ...   'PRICEBAND6': [10.0, 10.0],
+    ...   'PRICEBAND7': [10.0, 10.0],
+    ...   'PRICEBAND8': [0.0, 0.0],
+    ...   'PRICEBAND9': [0.0, 0.0],
+    ...   'PRICEBAND10': [0.0, 0.0]})
+
+    >>> price_bids = format_price_bids(BIDDAYOFFER_D)
+
+    >>> print(price_bids)
+      unit    service      1     2    3     4     5     6     7    8    9   10
+    0    A     energy  100.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+    1    B  raise_reg   50.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+
+    Parameters
+    ----------
+    BIDDAYOFFER_D : pd.DataFrame
+
+        ===========  ====================================================
+        Columns:     Description:
+        DUID         unique identifier of a unit (as `str`)
+        BIDTYPE      the service being provided (as `str`)
+        PRICEBAND1   bid price in the 1st band, in MW (as `np.float64`)
+        PRICEBAND2   bid price in the 2nd band, in MW (as `np.float64`)
+        PRICEBAND10  bid price in the 10th band, in MW (as `np.float64`)
+        ===========  ====================================================
+
+    Returns
+    ----------
+    demand_coefficients : pd.DataFrame
+
+        ========  ================================================================
+        Columns:  Description:
+        unit      unique identifier of a dispatch unit (as `str`)
+        service   the service being provided, optional, if missing energy assumed
+                  (as `str`)
+        1         bid price in the 1st band, in MW (as `np.float64`)
+        2         bid price in the 2nd band, in MW (as `np.float64`)
+          :
+        10         bid price in the nth band, in MW (as `np.float64`)
+        ========  ================================================================
+    """
+
+    price_bids = BIDDAYOFFER_D.loc[:, ['DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2', 'PRICEBAND3', 'PRICEBAND4',
+                                       'PRICEBAND5', 'PRICEBAND6', 'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9',
+                                       'PRICEBAND10']]
     price_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    price_bids['service'] = price_bids['service'].apply(lambda x: service_name_mapping[x])
     return price_bids
 
 
-def format_interconnector_definitions(interconnector_directions, interconnector_paramaters):
-    interconnector_directions = interconnector_directions.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
+def format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT):
+    """Re-format and combine the AEMO MSS tables INTERCONNECTOR and INTERCONNECTORCONSTRAINT for the Spot market class.
+
+    Examples
+    --------
+
+    >>> INTERCONNECTOR = pd.DataFrame({
+    ... 'INTERCONNECTORID': ['X', 'Y'],
+    ... 'REGIONFROM': ['NSW', 'VIC'],
+    ... 'REGIONTO': ['QLD', 'SA']})
+
+    >>> INTERCONNECTORCONSTRAINT = pd.DataFrame({
+    ... 'INTERCONNECTORID': ['X', 'Y'],
+    ... 'IMPORTLIMIT': [100.0, 900.0],
+    ... 'EXPORTLIMIT': [150.0, 800.0]})
+
+    >>> interconnector_paramaters = format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
+
+    >>> print(interconnector_paramaters)
+      interconnector to_region from_region    min    max
+    0              X       NSW         QLD -100.0  150.0
+    1              Y       VIC          SA -900.0  800.0
+
+
+    Parameters
+    ----------
+    INTERCONNECTOR : pd.DataFrame
+
+        ===================  ======================================================================================
+        Columns:             Description:
+        INTERCONNECTORID     unique identifier of a interconnector (as `str`)
+        REGIONFROM           the region that power is drawn from when flow is in the positive direction (as `str`)
+        REGIONTO             the region that receives power when flow is in the positive direction (as `str`)
+        ===================  ======================================================================================
+
+    INTERCONNECTOR : pd.DataFrame
+
+        ===================  ======================================================================================
+        Columns:             Description:
+        INTERCONNECTORID     unique identifier of a interconnector (as `str`)
+        IMPORTLIMIT          the maximum power flow in the positive direction, in MW (as `np.float64`)
+        EXPORTLIMIT          the maximum power flow in the negative direction, in MW (as `np.float64`)
+        ===================  ======================================================================================
+
+    Returns
+    ----------
+    interconnectors : pd.DataFrame
+
+            ==============  =====================================================================================
+            Columns:        Description:
+            interconnector  unique identifier of a interconnector (as `str`)
+            to_region       the region that receives power when flow is in the positive direction (as `str`)
+            from_region     the region that power is drawn from when flow is in the positive direction (as `str`)
+            max             the maximum power flow in the positive direction, in MW (as `np.float64`)
+            min             the maximum power flow in the negative direction, in MW (as `np.float64`)
+            ==============  =====================================================================================
+    """
+    interconnector_directions = INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
     interconnector_directions.columns = ['interconnector', 'to_region', 'from_region']
-    interconnector_paramaters = interconnector_paramaters.loc[:, ['INTERCONNECTORID', 'IMPORTLIMIT', 'EXPORTLIMIT']]
+    interconnector_paramaters = INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'IMPORTLIMIT', 'EXPORTLIMIT']]
     interconnector_paramaters.columns = ['interconnector', 'min', 'max']
     interconnector_paramaters['min'] = -1 * interconnector_paramaters['min']
     interconnectors = pd.merge(interconnector_directions, interconnector_paramaters, 'inner', on='interconnector')
     return interconnectors
 
 
-def format_interconnector_loss_coefficients(interconnector_paramaters):
-    interconnector_paramaters = interconnector_paramaters.loc[:, ['INTERCONNECTORID', 'LOSSCONSTANT',
-                                                                  'LOSSFLOWCOEFFICIENT', 'FROMREGIONLOSSSHARE']]
+def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
+    """Re-formats the AEMO MSS table LOSSFACTORMODEL to be compatible with the Spot market class.
+
+    Examples
+    --------
+
+    >>> INTERCONNECTORCONSTRAINT = pd.DataFrame({
+    ... 'INTERCONNECTORID': ['X', 'Y', 'Z'],
+    ... 'LOSSCONSTANT': [1.0, 1.1, 1.0],
+    ... 'LOSSFLOWCOEFFICIENT': [0.001, 0.003, 0.005],
+    ... 'FROMREGIONLOSSSHARE': [0.5, 0.3, 0.7,]})
+
+    >>> interconnector_paramaters = format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT)
+
+    >>> print(interconnector_paramaters)
+      interconnector  loss_constant  flow_coefficient  from_region_loss_share
+    0              X            1.0             0.001                     0.5
+    1              Y            1.1             0.003                     0.3
+    2              Z            1.0             0.005                     0.7
+
+
+    Parameters
+    ----------
+    LOSSMODEL : pd.DataFrame
+
+        ===================  ======================================================================================
+        Columns:             Description:
+        INTERCONNECTORID     unique identifier of a interconnector (as `str`)
+        LOSSCONSTANT         the constant term in the interconnector loss factor equation (as np.float64)
+        LOSSFLOWCOEFFICIENT  the coefficient of the interconnector flow variable in the loss factor equation
+                             (as np.float64)
+        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainer are attributed to the to
+                             region (as np.float64)
+        ===================  ======================================================================================
+
+    Returns
+    ----------
+    demand_coefficients : pd.DataFrame
+
+        ======================  ========================================================================================
+        Columns:                Description:
+        interconnector          unique identifier of a interconnector (as `str`)
+        loss_constant           the constant term in the interconnector loss factor equation (as np.float64)
+        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation
+                                (as np.float64)
+        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the to
+                                region (as np.float64)
+        ======================  ========================================================================================
+    """
+
+    interconnector_paramaters = INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'LOSSCONSTANT',
+                                                                 'LOSSFLOWCOEFFICIENT', 'FROMREGIONLOSSSHARE']]
     interconnector_paramaters.columns = ['interconnector', 'loss_constant', 'flow_coefficient',
                                          'from_region_loss_share']
     return interconnector_paramaters
 
 
-def format_interconnector_loss_demand_coefficient(interconnector_demand_coefficients):
-    interconnector_demand_coefficients = \
-        interconnector_demand_coefficients.loc[:, ['INTERCONNECTORID', 'REGIONID', 'DEMANDCOEFFICIENT']]
-    interconnector_demand_coefficients.columns = ['interconnector', 'region', 'demand_coefficient']
-    return interconnector_demand_coefficients
+def format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL):
+    """Re-formats the AEMO MSS table LOSSFACTORMODEL to be compatible with the Spot market class.
+
+    Examples
+    --------
+
+    >>> LOSSMODEL = pd.DataFrame({
+    ... 'INTERCONNECTORID': ['X', 'X', 'X', 'Y', 'Y'],
+    ... 'REGIONID': ['A', 'B', 'C', 'C', 'D'],
+    ... 'DEMANDCOEFFICIENT': [0.001, 0.003, 0.005, 0.0001, 0.002]})
+
+    >>> demand_coefficients = format_interconnector_loss_demand_coefficient(LOSSMODEL)
+
+    >>> print(demand_coefficients)
+      interconnector region  demand_coefficient
+    0              X      A              0.0010
+    1              X      B              0.0030
+    2              X      C              0.0050
+    3              Y      C              0.0001
+    4              Y      D              0.0020
 
 
-def format_regional_demand(regional_demand):
-    regional_demand = regional_demand.loc[:, ['REGIONID', 'TOTALDEMAND', 'DEMANDFORECAST',
-                                              'INITIALSUPPLY']]
-    regional_demand.columns = ['region', 'demand', 'demand_forecast', 'initial_supply']
+    Parameters
+    ----------
+    LOSSMODEL : pd.DataFrame
+
+        =================  ======================================================================================
+        Columns:           Description:
+        INTERCONNECTORID   unique identifier of a interconnector (as `str`)
+        REGIONID           unique identifier of a market region (as `str`)
+        DEMANDCOEFFICIENT  the coefficient of regional demand variable in the loss factor equation (as `np.float64`)
+        =================  ======================================================================================
+
+    Returns
+    ----------
+    demand_coefficients : pd.DataFrame
+
+        ==================  =========================================================================================
+        Columns:            Description:
+        interconnector      unique identifier of a interconnector (as `str`)
+        region              the market region whose demand the coefficient applies too, required (as `str`)
+        demand_coefficient  the coefficient of regional demand variable in the loss factor equation (as `np.float64`)
+        ==================  =========================================================================================
+    """
+    demand_coefficients = LOSSFACTORMODEL.loc[:, ['INTERCONNECTORID', 'REGIONID', 'DEMANDCOEFFICIENT']]
+    demand_coefficients.columns = ['interconnector', 'region', 'demand_coefficient']
+    return demand_coefficients
+
+
+def format_regional_demand(DISPATCHREGIONSUM):
+    """Re-formats the AEMO MSS table DISPATCHREGIONSUM to be compatible with the Spot market class.
+
+    Note the demand term used in the interconnector loss functions is calculated by summing the initial supply and the
+    demand forecast.
+
+    Examples
+    --------
+
+    >>> DISPATCHREGIONSUM = pd.DataFrame({
+    ... 'REGIONID': ['NSW1', 'SA1'],
+    ... 'TOTALDEMAND': [8000.0, 4000.0],
+    ... 'DEMANDFORECAST': [10.0, -10.0],
+    ... 'INITIALSUPPLY': [7995.0, 4006.0]})
+
+    >>> regional_demand = format_regional_demand(DISPATCHREGIONSUM)
+
+    >>> print(regional_demand)
+      region  demand  loss_function_demand
+    0   NSW1  8000.0                8005.0
+    1    SA1  4000.0                3996.0
+
+    Parameters
+    ----------
+    DISPATCHREGIONSUM : pd.DataFrame
+
+        ================  ==========================================================================================
+        Columns:          Description:
+        REGIONID          unique identifier of a market region (as `str`)
+        TOTALDEMAND       the non dispatchable demand the region, in MW (as `np.float64`)
+        INITIALSUPPLY     the generation supplied in th region at the start of the interval, in MW (as `np.float64`)
+        DEMANDFORECAST    the expected change in demand over dispatch interval, in MW (as `np.float64`)
+        ================  ==========================================================================================
+
+    Returns
+    ----------
+    regional_demand : pd.DataFrame
+
+        ====================  ======================================================================================
+        Columns:              Description:
+        region                unique identifier of a market region (as `str`)
+        demand                the non dispatchable demand the region, in MW (as `np.float64`)
+        loss_function_demand  the measure of demand used when creating interconnector loss functions,
+                              in MW (as `np.float64`)
+        ====================  ======================================================================================
+    """
+
+    DISPATCHREGIONSUM['loss_function_demand'] = DISPATCHREGIONSUM['INITIALSUPPLY'] + DISPATCHREGIONSUM['DEMANDFORECAST']
+    regional_demand = DISPATCHREGIONSUM.loc[:, ['REGIONID', 'TOTALDEMAND', 'loss_function_demand']]
+    regional_demand.columns = ['region', 'demand', 'loss_function_demand']
     return regional_demand
 
 
-def format_interpolation_break_points(format_interpolation_break_points):
-    format_interpolation_break_points = format_interpolation_break_points.loc[:, ['INTERCONNECTORID', 'MWBREAKPOINT']]
-    format_interpolation_break_points.columns = ['interconnector', 'break_point']
-    return format_interpolation_break_points
+def format_interpolation_break_points(LOSSMODEL):
+    """Re-formats the AEMO MSS table LOSSMODEL to be compatible with the Spot market class.
+
+    Examples
+    --------
+
+    >>> LOSSMODEL = pd.DataFrame({
+    ... 'INTERCONNECTORID': ['X', 'X', 'X', 'X', 'X'],
+    ... 'MWBREAKPOINT': [-100.0, -50.0, 0.0, 50.0, 100.0]})
+
+    >>> interpolation_break_points = format_interpolation_break_points(LOSSMODEL)
+
+    >>> print(interpolation_break_points)
+      interconnector  break_point
+    0              X       -100.0
+    1              X        -50.0
+    2              X          0.0
+    3              X         50.0
+    4              X        100.0
+
+    Parameters
+    ----------
+    LOSSMODEL : pd.DataFrame
+
+        ================  ======================================================================================
+        Columns:          Description:
+        INTERCONNECTORID  unique identifier of a interconnector (as `str`)
+        MWBREAKPOINT      points between which the loss function will be linearly interpolated, in MW
+                          (as `np.float64`)
+        ================  ======================================================================================
+
+    Returns
+    ----------
+    interpolation_break_points : pd.DataFrame
+
+        ================  ======================================================================================
+        Columns:          Description:
+        interconnector    unique identifier of a interconnector (as `str`)
+        break_point       points between which the loss function will be linearly interpolated, in MW
+                          (as `np.float64`)
+        ================  ======================================================================================
+    """
+
+    interpolation_break_points = LOSSMODEL.loc[:, ['INTERCONNECTORID', 'MWBREAKPOINT']]
+    interpolation_break_points.columns = ['interconnector', 'break_point']
+    return interpolation_break_points
 
 
-def determine_unit_limits(initial_conditions, offered_capacity):
+def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
+    """Approximates the unit limits used in historical dispatch, returns inputs compatible with the Spot market class.
+
+    The exact method for determining unit limits in historical dispatch is not known. This function first assumes the
+    limits are set by the AVAILABILITY, INITIALMW, RAMPUPRATE and RAMPDOWNRATE columns in the MMS table DISPATCHLOAD.
+    Then if the historical dispatch amount recorded in TOTALCLEARED is outside these limits the limits are extended.
+    This occurs in the following circumstances:
+
+    * For units operating in fast start mode, i.e. dispatch mode not equal to 0.0, if the TOTALCLEARED is outside
+      the ramp rate limits then new less restrictive ramp rates are calculated that allow the unit to ramp to the
+      TOTALCLEARED amount.
+
+    * For units operating with a SEMIDISPATCHCAP of 1.0 and an offered MAXAVAIL (from the MMS table) amount less than
+      the AVAILABILITY, and a TOTALCLEARED amount less than or equal to MAXAVAIL, then MAXAVAIL is used as the upper
+      capacity limit instead of TOTALCLEARED.
+
+    * If the unit is incapable of ramping down to its capacity limit then the capacity limit is increased to the ramp
+      down limit, to prevent a set of infeasible unit limits.
+
+    From the testing conducted in the tests/historical_testing module these adjustments appear sufficient to ensure
+    units can be dispatched to their TOTALCLEARED amount.
+
+    Examples
+    --------
+
+    An example where a fast start units initial limits are too restrictive, note the non fast start unit with the same
+    paramaters does not have it ramp rates adjusted.
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C', 'D'],
+    ...   'INITIALMW': [50.0, 50.0, 50.0, 50.0],
+    ...   'AVAILABILITY': [90.0, 90.0, 90.0, 90.0],
+    ...   'RAMPDOWNRATE': [120.0, 120.0, 120.0, 120.0],
+    ...   'RAMPUPRATE': [120.0, 120.0, 120.0, 120.0],
+    ...   'TOTALCLEARED': [80.0, 80.0, 30.0, 30.0],
+    ...   'DISPATCHMODE': [1.0, 0.0, 4.0, 0.0],
+    ...   'SEMIDISPATCHCAP': [0.0, 0.0, 0.0, 0.0]})
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C', 'D'],
+    ...   'MAXAVAIL': [100.0, 100.0, 100.0, 100.0]})
+
+    >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+
+    >>> print(unit_limits)
+      unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
+    0    A            50.0      90.0           120.0         360.0
+    1    B            50.0      90.0           120.0         120.0
+    2    C            50.0      90.0           240.0         120.0
+    3    D            50.0      90.0           120.0         120.0
+
+    An example with a unit operating with a SEMIDISPATCHCAP  of 1.0. Only unit A meets all the criteria for having its
+    capacity adjusted from the reported AVAILABILITY value.
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C', 'D'],
+    ...   'INITIALMW': [50.0, 50.0, 50.0, 50.0],
+    ...   'AVAILABILITY': [90.0, 90.0, 90.0, 90.0],
+    ...   'RAMPDOWNRATE': [600.0, 600.0, 600.0, 600.0],
+    ...   'RAMPUPRATE': [600.0, 600.0, 600.0, 600.0],
+    ...   'TOTALCLEARED': [70.0, 90.0, 80.0, 70.0],
+    ...   'DISPATCHMODE': [0.0, 0.0, 0.0, 0.0],
+    ...   'SEMIDISPATCHCAP': [1.0, 1.0, 1.0, 0.0]})
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C', 'D'],
+    ...   'MAXAVAIL': [80.0, 80.0, 100.0, 80.0]})
+
+    >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+
+    >>> print(unit_limits)
+      unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
+    0    A            50.0      80.0           600.0         600.0
+    1    B            50.0      90.0           600.0         600.0
+    2    C            50.0      90.0           600.0         600.0
+    3    D            50.0      90.0           600.0         600.0
+
+    An example where the AVAILABILITY is lower than the ramp down limit.
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['A'],
+    ...   'INITIALMW': [50.0],
+    ...   'AVAILABILITY': [30.0],
+    ...   'RAMPDOWNRATE': [120.0],
+    ...   'RAMPUPRATE': [120.0],
+    ...   'TOTALCLEARED': [40.0],
+    ...   'DISPATCHMODE': [0.0],
+    ...   'SEMIDISPATCHCAP': [0.0]})
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['A'],
+    ...   'MAXAVAIL': [30.0]})
+
+    >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+
+    >>> print(unit_limits)
+      unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
+    0    A            50.0      40.0           120.0         120.0
+
+    Parameters
+    ----------
+    DISPATCHLOAD : pd.DataFrame
+
+        ===============  ======================================================================================
+        Columns:         Description:
+        DUID             unique identifier of a dispatch unit (as `str`)
+        INITIALMW        the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+        AVAILABILITY     the reported maximum output of the unit for dispatch interval, in MW (as `np.float64`)
+        RAMPDOWNRATE     the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
+        RAMPUPRATE       the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
+        TOTALCLEARED     the dispatch target for interval, in MW (as `np.float64`)
+        DISPATCHMODE     fast start operating mode, 0.0 for not in fast start mode, 1.0, 2.0, 3.0, 4.0 for in
+                         fast start mode, (as `np.float64`)
+        SEMIDISPATCHCAP  0.0 for not applicable, 1.0 if the semi scheduled unit output is capped by dispatch
+                         target.
+        ===============  ======================================================================================
+
+    BIDPEROFFER_D : pd.DataFrame
+        Should only be bids of type energy.
+
+        ===============  ======================================================================================
+        Columns:         Description:
+        DUID             unique identifier of a dispatch unit (as `str`)
+        MAXAVAIL         the maximum unit output as specified in the units bid, in MW (as `np.float64`)
+        ===============  ======================================================================================
+
+    Returns
+    -------
+    unit_limits : pd.DataFrame
+
+        ==============  =====================================================================================
+        Columns:        Description:
+        unit            unique identifier of a dispatch unit (as `str`)
+        initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+        capacity        the maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
+        ramp_down_rate  the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
+        ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
+        ==============  =====================================================================================
+
+    """
 
     # Override ramp rates for fast start units.
-    ic = initial_conditions
-    ic['RAMPMAX'] = ic['INITIALMW'] + ic['RAMPUPRATE'] * (5/60)
+    ic = DISPATCHLOAD  # DISPATCHLOAD provides the initial operating conditions (ic).
+    ic['RAMPMAX'] = ic['INITIALMW'] + ic['RAMPUPRATE'] * (5 / 60)
     ic['RAMPUPRATE'] = np.where((ic['TOTALCLEARED'] > ic['RAMPMAX']) & (ic['DISPATCHMODE'] != 0.0),
-                                (ic['TOTALCLEARED'] - ic['INITIALMW']) * (60/5), ic['RAMPUPRATE'])
-    ic['RAMPMIN'] = ic['INITIALMW'] - ic['RAMPDOWNRATE'] * (5/60)
+                                (ic['TOTALCLEARED'] - ic['INITIALMW']) * (60 / 5), ic['RAMPUPRATE'])
+    ic['RAMPMIN'] = ic['INITIALMW'] - ic['RAMPDOWNRATE'] * (5 / 60)
     ic['RAMPDOWNRATE'] = np.where((ic['TOTALCLEARED'] < ic['RAMPMIN']) & (ic['DISPATCHMODE'] != 0.0),
-                                  (ic['INITIALMW'] - ic['TOTALCLEARED'] ) * (60/5), ic['RAMPDOWNRATE'])
+                                  (ic['INITIALMW'] - ic['TOTALCLEARED']) * (60 / 5), ic['RAMPDOWNRATE'])
 
-    # Override ALAILABILITY when SEMIDISPATCHCAP is 1.0
-    ic = pd.merge(ic, offered_capacity.loc[:, ['DUID', 'MAXAVAIL']], 'inner', on='DUID')
+    # Override AVAILABILITY when SEMIDISPATCHCAP is 1.0
+    ic = pd.merge(ic, BIDPEROFFER_D.loc[:, ['DUID', 'MAXAVAIL']], 'inner', on='DUID')
     ic['AVAILABILITY'] = np.where((ic['MAXAVAIL'] < ic['AVAILABILITY']) & (ic['SEMIDISPATCHCAP'] == 1.0) &
-                                  (ic['MAXAVAIL'] > 0.01) & (ic['TOTALCLEARED'] < ic['MAXAVAIL']), ic['MAXAVAIL'],
+                                  (ic['TOTALCLEARED'] <= ic['MAXAVAIL']), ic['MAXAVAIL'],
                                   ic['AVAILABILITY'])
 
-    # Where the availability is lower than the ramp down min set the availibility to equal the ramp down min.
+    # Where the availability is lower than the ramp down min set the AVAILABILITY to equal the ramp down min.
     ic['AVAILABILITY'] = np.where(ic['AVAILABILITY'] < ic['RAMPMIN'], ic['RAMPMIN'], ic['AVAILABILITY'])
 
     # Format for compatibility with the Spot market class.
     ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
     ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
-
     return ic

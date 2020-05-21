@@ -41,8 +41,8 @@ for interval in dispatch_intervals:
     interconnector_demand_coefficients = inputs_manager.LOSSFACTORMODEL.get_data(interval)
     interconnector_demand_coefficients = hi.format_interconnector_loss_demand_coefficient(
         interconnector_demand_coefficients)
-    interpolation_break_points = inputs_manager.LOSSMODEL.get_data(interval)
-    interpolation_break_points = hi.format_interpolation_break_points(interpolation_break_points)
+    LOSSMODEL = inputs_manager.LOSSMODEL.get_data(interval)
+    interpolation_break_points = hi.format_interpolation_break_points(LOSSMODEL)
     regional_demand = inputs_manager.DISPATCHREGIONSUM.get_data(interval)
     regional_demand = hi.format_regional_demand(regional_demand)
 
