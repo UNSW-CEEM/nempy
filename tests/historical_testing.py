@@ -6,6 +6,7 @@ import os.path
 from datetime import datetime, timedelta
 import random
 from nempy import historical_spot_market_inputs as hi, markets
+from time import time
 
 
 # Define a set of random intervals to test
@@ -15,7 +16,7 @@ def get_test_intervals():
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
-    intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
+    intervals = random.sample(range(1, difference_in_5_min_intervals), 1)
     times = [start_time + timedelta(minutes=5*i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
@@ -28,7 +29,7 @@ def setup():
         con = sqlite3.connect('test_files/historical_inputs.db')
         inputs_manager = hi.DBManager(connection=con)
         #inputs_manager.create_tables()
-        inputs_manager.DISPATCHLOAD.create_table_in_sqlite_db()
+        inputs_manager.INTERCONNECTORCONSTRAINT.create_table_in_sqlite_db()
 
         # Download data were inputs are needed on a monthly basis.
         finished = False
@@ -39,7 +40,7 @@ def setup():
                     break
                 # inputs_manager.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
                 # inputs_manager.DISPATCHREGIONSUM.add_data(year=year, month=month)
-                inputs_manager.DISPATCHLOAD.add_data(year=year, month=month)
+                # inputs_manager.DISPATCHLOAD.add_data(year=year, month=month)
                 # inputs_manager.BIDPEROFFER_D.add_data(year=year, month=month)
                 # inputs_manager.BIDDAYOFFER_D.add_data(year=year, month=month)
 
@@ -51,8 +52,9 @@ def setup():
         # inputs_manager.LOSSFACTORMODEL.set_data(year=2020, month=3)
         # inputs_manager.LOSSMODEL.set_data(year=2020, month=3)
         # inputs_manager.DUDETAILSUMMARY.set_data(year=2020, month=3)
-        inputs_manager.DUDETAIL.create_table_in_sqlite_db()
-        inputs_manager.DUDETAIL.set_data(year=2020, month=3)
+        # inputs_manager.DUDETAIL.create_table_in_sqlite_db()
+        # inputs_manager.DUDETAIL.set_data(year=2020, month=3)
+        inputs_manager.INTERCONNECTORCONSTRAINT.set_data(year=2020, month=3)
 
         con.close()
 
@@ -83,7 +85,6 @@ def test_historical_interconnector_losses():
 
         market = markets.Spot()
 
-        # There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
         inter_flow = inter_flow.loc[:, ['INTERCONNECTORID', 'MWFLOW', 'MWLOSSES']]
         inter_flow.columns = ['interconnector', 'MWFLOW', 'MWLOSSES']
         interconnectors = pd.merge(interconnectors, inter_flow, 'inner', on='interconnector')
@@ -95,13 +96,14 @@ def test_historical_interconnector_losses():
         # Create loss functions on per interconnector basis.
         loss_functions = hi.create_loss_functions(interconnector_loss_coefficients,
                                                   interconnector_demand_coefficients,
-                                                  regional_demand.loc[:, ['region', 'demand']])
+                                                  regional_demand.loc[:, ['region', 'loss_function_demand']])
 
         market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
         # Calculate dispatch.
+        t0 = time()
         market.dispatch()
-
+        print(time() - t0)
         output = market.get_interconnector_flows()
 
         expected = inputs_manager.DISPATCHINTERCONNECTORRES.get_data(interval)
@@ -110,6 +112,7 @@ def test_historical_interconnector_losses():
         expected = expected.reset_index(drop=True)
         output = output.sort_values('interconnector').reset_index(drop=True)
         assert_frame_equal(output, expected)
+        print(interval)
 
 
 def test_using_availability_and_ramp_rates():

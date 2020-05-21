@@ -59,15 +59,21 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     #prob.verbose = 0
 
     # 1. Create the decision variables
+    sos_variables = decision_variables['binaries']
     decision_variables = pd.concat(decision_variables)
     lp_variables = {}
     variable_types = {'continuous': CONTINUOUS, 'binary': BINARY}
-    sos_one_weights = []
     for variable_id, lower_bound, upper_bound, variable_type in zip(
             list(decision_variables['variable_id']), list(decision_variables['lower_bound']),
             list(decision_variables['upper_bound']), list(decision_variables['type'])):
         lp_variables[variable_id] = prob.add_var(lb=lower_bound, ub=upper_bound, var_type=variable_types[variable_type],
                                                  name=str(variable_id))
+
+    def add_sos_vars(sos_group):
+        prob.add_sos(list(zip(sos_group['vars'], [0 for var in sos_group['vars']])), 1)
+
+    sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: lp_variables[x])
+    sos_variables.groupby('interconnector').apply(add_sos_vars)
 
     # 2. Create the objective function
     if len(objective_function) > 0:
@@ -80,8 +86,8 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     # 3. Create the constraints
     sos_constraints = []
     if len(constraints_rhs_and_type) > 0:
-        if 'interpolation_weights' in constraints_rhs_and_type:
-            sos_constraints = list(constraints_rhs_and_type['interpolation_weights']['constraint_id'])
+        if 'binary_constraints' in constraints_rhs_and_type:
+            sos_constraints = list(constraints_rhs_and_type['binary_constraints']['constraint_id'])
         constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
     else:
         constraints_rhs_and_type = pd.DataFrame({})
@@ -112,9 +118,9 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
         new_constraint = make_constraint(var_list, row, rhs[id], column_ids, enq_type[id])
         prob.add_constr(new_constraint, name=str(id))
 
-    for row_index in sos_constraints:
-        sos_set = get_sos(var_list, constraint_matrix_np[row_index], column_ids)
-        prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 2)
+    # for row_index in sos_constraints:
+    #     sos_set = get_sos(var_list, constraint_matrix_np[row_index], column_ids)
+     #   prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 1)
 
     # 4. Solve the problem
     k = prob.add_var(var_type=BINARY, obj=1.0)

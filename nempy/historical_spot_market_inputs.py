@@ -1710,12 +1710,12 @@ def format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL):
     Examples
     --------
 
-    >>> LOSSMODEL = pd.DataFrame({
+    >>> LOSSFACTORMODEL = pd.DataFrame({
     ... 'INTERCONNECTORID': ['X', 'X', 'X', 'Y', 'Y'],
     ... 'REGIONID': ['A', 'B', 'C', 'C', 'D'],
     ... 'DEMANDCOEFFICIENT': [0.001, 0.003, 0.005, 0.0001, 0.002]})
 
-    >>> demand_coefficients = format_interconnector_loss_demand_coefficient(LOSSMODEL)
+    >>> demand_coefficients = format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL)
 
     >>> print(demand_coefficients)
       interconnector region  demand_coefficient
@@ -1728,7 +1728,7 @@ def format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL):
 
     Parameters
     ----------
-    LOSSMODEL : pd.DataFrame
+    LOSSFACTORMODEL : pd.DataFrame
 
         =================  ======================================================================================
         Columns:           Description:
@@ -1814,17 +1814,18 @@ def format_interpolation_break_points(LOSSMODEL):
 
     >>> LOSSMODEL = pd.DataFrame({
     ... 'INTERCONNECTORID': ['X', 'X', 'X', 'X', 'X'],
+    ... 'LOSSSEGMENT': [1, 2, 3, 4, 5],
     ... 'MWBREAKPOINT': [-100.0, -50.0, 0.0, 50.0, 100.0]})
 
     >>> interpolation_break_points = format_interpolation_break_points(LOSSMODEL)
 
     >>> print(interpolation_break_points)
-      interconnector  break_point
-    0              X       -100.0
-    1              X        -50.0
-    2              X          0.0
-    3              X         50.0
-    4              X        100.0
+      interconnector  loss_segment  break_point
+    0              X             1       -100.0
+    1              X             2        -50.0
+    2              X             3          0.0
+    3              X             4         50.0
+    4              X             5        100.0
 
     Parameters
     ----------
@@ -1833,6 +1834,7 @@ def format_interpolation_break_points(LOSSMODEL):
         ================  ======================================================================================
         Columns:          Description:
         INTERCONNECTORID  unique identifier of a interconnector (as `str`)
+        LOSSSEGMENT       unique identifier of a loss segment on an interconnector basis (as `np.int64`)
         MWBREAKPOINT      points between which the loss function will be linearly interpolated, in MW
                           (as `np.float64`)
         ================  ======================================================================================
@@ -1849,8 +1851,9 @@ def format_interpolation_break_points(LOSSMODEL):
         ================  ======================================================================================
     """
 
-    interpolation_break_points = LOSSMODEL.loc[:, ['INTERCONNECTORID', 'MWBREAKPOINT']]
-    interpolation_break_points.columns = ['interconnector', 'break_point']
+    interpolation_break_points = LOSSMODEL.loc[:, ['INTERCONNECTORID', 'LOSSSEGMENT', 'MWBREAKPOINT']]
+    interpolation_break_points.columns = ['interconnector', 'loss_segment', 'break_point']
+    interpolation_break_points['loss_segment'] = interpolation_break_points['loss_segment'].apply(np.int64)
     return interpolation_break_points
 
 

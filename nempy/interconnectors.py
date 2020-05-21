@@ -423,6 +423,115 @@ def create_weights_must_sum_to_one(weight_variables, next_constraint_id):
     return lhs, rhs
 
 
+def create_binary_constraints(binary_variables, weight_variables, next_constraint_id):
+    """Create the constraint to force weight variable to sum to one, need for interpolation to work.
+
+    For one interconnector, if we had  three weight variables w1, w2, and w3, then the constraint would be of the form.
+
+        w1 * 1.0 + w2 * 1.0 + w3 * 1.0 = 1.0
+
+    Examples
+    --------
+
+    Setup function inputs
+
+    >>> weight_variables = pd.DataFrame({
+    ...   'interconnector': ['I', 'I', 'I'],
+    ...   'variable_id': [1, 2, 3],
+    ...   'loss_segment': [1, 2, 3]})
+
+    >>> binary_variables = pd.DataFrame({
+    ...   'interconnector': ['I', 'I'],
+    ...   'variable_id': [4, 5],
+    ...   'loss_segment': [1, 2]})
+
+    >>> next_constraint_id = 0
+
+    Create the constraints.
+
+    >>> lhs, rhs = create_binary_constraints(binary_variables, weight_variables, next_constraint_id)
+
+    >>> print(lhs)
+      interconnector  variable_id  constraint_id  coefficient  loss_segment
+    0              I            1              0          1.0             1
+    1              I            2              1          1.0             2
+    2              I            3              2          1.0             3
+    0              I            4              0         -1.0             1
+    1              I            5              1         -1.0             2
+    0              I            4              1         -1.0             2
+    1              I            5              2         -1.0             3
+
+    >>> print(rhs)
+      interconnector  loss_segment  constraint_id type  rhs
+    0              I             1              0   <=  0.0
+    1              I             2              1   <=  0.0
+    2              I             3              2   <=  0.0
+
+
+    Parameters
+    ----------
+    weight_variables : pd.DataFrame
+
+        ==============  ==============================================================================
+        Columns:        Description:
+        interconnector  unique identifier of a interconnector (as `str`)
+        variable_id     the id of the variable (as `np.int64`)
+        break_points    the interconnector flow values to interpolate losses between (as `np.int64`)
+        ==============  ==============================================================================
+
+    next_constraint_id : int
+
+    Returns
+    -------
+    lhs : pd.DataFrame
+
+        ==============  ==============================================================================
+        Columns:        Description:
+        variable_id     the id of the variable (as `np.int64`)
+        constraint_id   the id of the constraint (as `np.int64`)
+        coefficient     the coefficient of the variable on the lhs of the constraint (as `np.float64`)
+        ==============  ==============================================================================
+
+    rhs : pd.DataFrame
+
+        ================  ==============================================================================
+        Columns:          Description:
+        interconnector    unique identifier of a interconnector (as `str`)
+        constraint_id     the id of the constraint (as `np.int64`)
+        type              the type of the constraint, e.g. "=" (as `str`)
+        rhs               the rhs of the constraint (as `np.float64`)
+        ================  ==============================================================================
+    """
+
+    # Create a constraint for each set of weight variables.
+    constraint_ids = weight_variables.loc[:, ['interconnector', 'variable_id', 'loss_segment']]
+    constraint_ids = hf.save_index(constraint_ids, 'constraint_id', next_constraint_id)
+
+    # Map weight variables to their corresponding constraints.
+    lhs_weights = constraint_ids
+    lhs_weights['coefficient'] = 1.0
+    lhs_weights = lhs_weights.loc[:, ['interconnector', 'variable_id', 'constraint_id', 'coefficient', 'loss_segment']]
+
+    binaries_lhs_one = lhs_weights.loc[:, ['interconnector', 'constraint_id', 'coefficient', 'loss_segment']]
+    binaries_temp = binary_variables.loc[:, ['interconnector', 'variable_id', 'loss_segment']]
+    binaries_lhs_one = pd.merge(binaries_lhs_one, binaries_temp, 'inner', on=['interconnector', 'loss_segment'])
+    binaries_lhs_one['coefficient'] = -1.0
+
+    binaries_lhs_two = lhs_weights.loc[:, ['interconnector', 'constraint_id', 'coefficient', 'loss_segment']]
+    binaries_temp = binary_variables.loc[:, ['interconnector', 'variable_id', 'loss_segment']]
+    binaries_temp['loss_segment'] += 1
+    binaries_lhs_two = pd.merge(binaries_lhs_two, binaries_temp, 'inner', on=['interconnector', 'loss_segment'])
+    binaries_lhs_two['coefficient'] = -1.0
+
+    lhs = pd.concat([lhs_weights, binaries_lhs_one, binaries_lhs_two])
+
+    # Create rhs details for each constraint.
+    rhs = constraint_ids.loc[:, ['interconnector', 'loss_segment', 'constraint_id']]
+    rhs['type'] = '<='
+    rhs['rhs'] = 0.0
+    return lhs, rhs
+
+
 def create_weights(break_points, next_variable_id):
     """Create interpolation weight variables for each breakpoint.
 
@@ -431,17 +540,18 @@ def create_weights(break_points, next_variable_id):
 
     >>> break_points = pd.DataFrame({
     ...   'interconnector': ['I', 'I', 'I'],
-    ...   'break_point': [-100.0, 0, 100.0]})
+    ...   'loss_segment': [1, 2, 3],
+    ...   'break_point': [-100.0, 0.0, 100.0]})
 
     >>> next_variable_id = 0
 
     >>> weight_variables = create_weights(break_points, next_variable_id)
 
-    >>> print(weight_variables.loc[:, ['interconnector', 'break_point', 'variable_id']])
-      interconnector  break_point  variable_id
-    0              I       -100.0            0
-    1              I          0.0            1
-    2              I        100.0            2
+    >>> print(weight_variables.loc[:, ['interconnector', 'loss_segment', 'break_point', 'variable_id']])
+      interconnector  loss_segment  break_point  variable_id
+    0              I             1       -100.0            0
+    1              I             2          0.0            1
+    2              I             3        100.0            2
 
     >>> print(weight_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']])
        variable_id  lower_bound  upper_bound        type
@@ -452,11 +562,72 @@ def create_weights(break_points, next_variable_id):
     Parameters
     ----------
     break_points : pd.DataFrame
+        ==============  ================================================================================
+        Columns:        Description:
+        interconnector  unique identifier of a interconnector (as `str`)
+        loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
+        break_points    the interconnector flow values to interpolate losses between (as `np.float64`)
+        ==============  ================================================================================
+
+    next_variable_id : int
+
+    Returns
+    -------
+    weight_variables : pd.DataFrame
+
         ==============  ==============================================================================
         Columns:        Description:
         interconnector  unique identifier of a interconnector (as `str`)
+        loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
         break_points    the interconnector flow values to interpolate losses between (as `np.int64`)
+        variable_id     the id of the variable (as `np.int64`)
+        lower_bound    the lower bound of the variable, is zero for weight variables (as `np.float64`)
+        upper_bound    the upper bound of the variable, is one for weight variables (as `np.float64`)
+        type           the type of variable, is continuous for bids  (as `str`)
         ==============  ==============================================================================
+    """
+    # Create a variable for each break point.
+    weight_variables = hf.save_index(break_points, 'variable_id', next_variable_id)
+    weight_variables['lower_bound'] = 0.0
+    weight_variables['upper_bound'] = 1.0
+    weight_variables['type'] = 'continuous'
+    return weight_variables
+
+
+def create_binaries(break_points, next_variable_id):
+    """Create interpolation weight variables for each breakpoint.
+
+    Examples
+    --------
+
+    >>> break_points = pd.DataFrame({
+    ...   'interconnector': ['I', 'I', 'I'],
+    ...   'loss_segment': [1, 2, 3],
+    ...   'break_point': [-100.0, 0, 100.0]})
+
+    >>> next_variable_id = 0
+
+    >>> weight_variables = create_binaries(break_points, next_variable_id)
+
+    >>> print(weight_variables.loc[:, ['interconnector', 'loss_segment', 'break_point', 'variable_id']])
+      interconnector  loss_segment  break_point  variable_id
+    0              I             1       -100.0            0
+    1              I             2          0.0            1
+
+    >>> print(weight_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']])
+       variable_id  lower_bound  upper_bound    type
+    0            0          0.0          1.0  binary
+    1            1          0.0          1.0  binary
+
+    Parameters
+    ----------
+    break_points : pd.DataFrame
+        ==============  ================================================================================
+        Columns:        Description:
+        interconnector  unique identifier of a interconnector (as `str`)
+        loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
+        break_points    the interconnector flow values to interpolate losses between (as `np.int64`)
+        ==============  ================================================================================
 
     next_variable_id : int
 
@@ -471,14 +642,21 @@ def create_weights(break_points, next_variable_id):
         variable_id     the id of the variable (as `np.int64`)
         lower_bound    the lower bound of the variable, is zero for weight variables (as `np.float64`)
         upper_bound    the upper bound of the variable, is one for weight variables (as `np.float64`)
-        type           the type of variable, is continuous for bids  (as `str`)
+        type           the type of variable, is binary (as `str`)
         ==============  ==============================================================================
     """
+
+    # We only need binary variables for n-1 segments.
+    def drop_last_segment(group):
+        return group.sort_values('loss_segment').iloc[:-1]
+
+    break_points = break_points.groupby('interconnector').apply(drop_last_segment)
+
     # Create a variable for each break point.
     weight_variables = hf.save_index(break_points, 'variable_id', next_variable_id)
     weight_variables['lower_bound'] = 0.0
     weight_variables['upper_bound'] = 1.0
-    weight_variables['type'] = 'continuous'
+    weight_variables['type'] = 'binary'
     return weight_variables
 
 
