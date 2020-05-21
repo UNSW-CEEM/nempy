@@ -1385,11 +1385,66 @@ def datetime_dispatch_sequence(start_time, end_time):
     return date_times
 
 
-def format_unit_info(unit_info):
+dispatch_type_name_map = {'GENERATOR': 'generator', 'LOAD': 'load'}
+
+
+def format_unit_info(DUDETAILSUMMARY):
+    """Re-formats the AEMO MSS table DUDETAILSUMMARY to be compatible with the Spot market class.
+
+    Loss factors get combined into a single value.
+
+    Examples
+    --------
+
+    >>> DUDETAILSUMMARY = pd.DataFrame({
+    ...   'DUID': ['A', 'B'],
+    ...   'DISPATCHTYPE': ['GENERATOR', 'LOAD'],
+    ...   'CONNECTIONPOINTID': ['X2', 'Z30'],
+    ...   'REGIONID': ['NSW1', 'SA1'],
+    ...   'TRANSMISSIONLOSSFACTOR': [0.9, 0.85],
+    ...   'DISTRIBUTIONLOSSFACTOR': [0.9, 0.99]})
+
+    >>> unit_info = format_unit_info(DUDETAILSUMMARY)
+
+    >>> print(unit_info)
+      unit dispatch_type connection_point region  loss_factor
+    0    A     generator               X2   NSW1       0.8100
+    1    B          load              Z30    SA1       0.8415
+
+    Parameters
+    ----------
+    BIDPEROFFER_D : pd.DataFrame
+
+        ======================  =================================================================
+        Columns:                Description:
+        DUID                    unique identifier of a unit (as `str`)
+        DISPATCHTYPE            whether the unit is GENERATOR or LOAD (as `str`)
+        CONNECTIONPOINTID       the unique identifier of the units location (as `str`)
+        REGIONID                the unique identifier of the units market region (as `str`)
+        TRANSMISSIONLOSSFACTOR  the units loss factor at the transmission level (as `np.float64`)
+        DISTRIBUTIONLOSSFACTOR  the units loss factor at the distribution level (as `np.float64`)
+        ======================  =================================================================
+
+    Returns
+    ----------
+    unit_info : pd.DataFrame
+
+        ======================  ==============================================================================
+        Columns:                Description:
+        unit                    unique identifier of a unit (as `str`)
+        dispatch_type           whether the unit is GENERATOR or LOAD (as `str`)
+        connection_point        the unique identifier of the units location (as `str`)
+        region                  the unique identifier of the units market region (as `str`)
+        loss_factor             the units combined transmission and distribution loss factor (as `np.float64`)
+        ======================  ==============================================================================
+    """
+
     # Combine loss factors.
-    unit_info['LOSSFACTOR'] = unit_info['TRANSMISSIONLOSSFACTOR'] * unit_info['DISTRIBUTIONLOSSFACTOR']
-    unit_info = unit_info.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
+    DUDETAILSUMMARY['LOSSFACTOR'] = DUDETAILSUMMARY['TRANSMISSIONLOSSFACTOR'] * \
+                                    DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
+    unit_info = DUDETAILSUMMARY.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
     unit_info.columns = ['unit', 'dispatch_type', 'connection_point', 'region', 'loss_factor']
+    unit_info['dispatch_type'] = unit_info['dispatch_type'].apply(lambda x: dispatch_type_name_map[x])
     return unit_info
 
 

@@ -50,7 +50,7 @@ for interval in dispatch_intervals:
     simple_market = markets.Spot()
 
     # The only generator is located in NSW.
-    unit_info = unit_info[unit_info['dispatch_type'] == 'GENERATOR']
+    unit_info = unit_info[unit_info['dispatch_type'] == 'generator']
     simple_market.set_unit_info(unit_info.loc[:, ['unit', 'region']])
 
     # Volume of each bids.
