@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd
 from mip import Model, xsum, minimize, INTEGER, CONTINUOUS, OptimizationStatus, LinExpr, BINARY
+from nempy import check
+from time import time
 
 
 def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, market_rhs_and_type,
@@ -57,29 +59,40 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     prob = Model("market")
     prob.verbose = 0
 
+    sos_variables = None
+    if 'binaries' in decision_variables.keys():
+        sos_variables = decision_variables['binaries']
+
     # 1. Create the decision variables
     decision_variables = pd.concat(decision_variables)
     lp_variables = {}
     variable_types = {'continuous': CONTINUOUS, 'binary': BINARY}
-    sos_one_weights = []
     for variable_id, lower_bound, upper_bound, variable_type in zip(
             list(decision_variables['variable_id']), list(decision_variables['lower_bound']),
             list(decision_variables['upper_bound']), list(decision_variables['type'])):
         lp_variables[variable_id] = prob.add_var(lb=lower_bound, ub=upper_bound, var_type=variable_types[variable_type],
                                                  name=str(variable_id))
 
+    def add_sos_vars(sos_group):
+        prob.add_sos(list(zip(sos_group['vars'], [0 for var in sos_group['vars']])), 1)
+
+    if sos_variables is not None:
+        sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: lp_variables[x])
+        sos_variables.groupby('interconnector').apply(add_sos_vars)
+
     # 2. Create the objective function
-    objective_function = pd.concat(list(objective_function.values()))
-    objective_function = objective_function.sort_values('variable_id')
-    objective_function = objective_function.set_index('variable_id')
-    prob.objective = minimize(xsum(objective_function['cost'][i] * lp_variables[i] for i in
-                                   list(objective_function.index)))
+    if len(objective_function) > 0:
+        objective_function = pd.concat(list(objective_function.values()))
+        objective_function = objective_function.sort_values('variable_id')
+        objective_function = objective_function.set_index('variable_id')
+        prob.objective = minimize(xsum(objective_function['cost'][i] * lp_variables[i] for i in
+                                       list(objective_function.index)))
 
     # 3. Create the constraints
     sos_constraints = []
     if len(constraints_rhs_and_type) > 0:
-        if 'interpolation_weights' in constraints_rhs_and_type:
-            sos_constraints = list(constraints_rhs_and_type['interpolation_weights']['constraint_id'])
+        if 'binary_constraints' in constraints_rhs_and_type:
+            sos_constraints = list(constraints_rhs_and_type['binary_constraints']['constraint_id'])
         constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
     else:
         constraints_rhs_and_type = pd.DataFrame({})
@@ -95,26 +108,38 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
 
     constraint_matrix = constraints_lhs.pivot('constraint_id', 'variable_id', 'coefficient')
     constraint_matrix = constraint_matrix.sort_index(axis=1)
-    constraint_ids = np.asarray(constraint_matrix.index)
+    constraint_matrix = constraint_matrix.sort_index()
+    column_ids = np.asarray(constraint_matrix.columns)
+    row_ids = np.asarray(constraint_matrix.index)
     constraint_matrix_np = np.asarray(constraint_matrix)
+
+    # if len(constraint_matrix.columns) != max(decision_variables['variable_id']) + 1:
+    #     raise check.ModelBuildError("Not all variables used in constraint matrix")
 
     rhs = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['rhs']))
     enq_type = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['type']))
-    var_list = np.asarray([lp_variables[k] for k in sorted(list(lp_variables))])
-    for row, row_index in zip(constraint_matrix_np, constraint_ids):
-        new_constraint = make_constraint(var_list, row, rhs[row_index], enq_type[row_index], marginal_offset=0)
-        prob.add_constr(new_constraint, name=str(row_index))
-
-    for row_index in sos_constraints:
-        sos_set = get_sos(var_list, constraint_matrix_np[row_index])
-        prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 2)
+    #var_list = np.asarray([lp_variables[k] for k in sorted(list(lp_variables))])
+    #t0 = time()
+    for row, id in zip(constraint_matrix_np, row_ids):
+        new_constraint = make_constraint(lp_variables, row, rhs[id], column_ids, enq_type[id])
+        prob.add_constr(new_constraint, name=str(id))
+    #print(time() - t0)
+    # for row_index in sos_constraints:
+    #     sos_set = get_sos(var_list, constraint_matrix_np[row_index], column_ids)
+     #   prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 1)
 
     # 4. Solve the problem
+    k = prob.add_var(var_type=BINARY, obj=1.0)
+    #tc = 0
+    #t0 = time()
     status = prob.optimize()
+    #tc += time() - t0
+    #print(tc)
     if status != OptimizationStatus.OPTIMAL:
         raise ValueError('Linear program infeasible')
 
     # 5. Retrieve optimal values of each variable
+    #t0 = time()
     decision_variables = decision_variables.droplevel(1)
     decision_variables['lp_variables'] = [lp_variables[i] for i in decision_variables['variable_id']]
     decision_variables['value'] = decision_variables['lp_variables'].apply(lambda x: x.x)
@@ -123,19 +148,38 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     for variable_group in decision_variables.index.unique():
         split_decision_variables[variable_group] = \
             decision_variables[decision_variables.index == variable_group].reset_index(drop=True)
+    #print('get values {}'.format(time() - t0))
 
     # 6. Retrieve the shadow costs of market constraints
+    start_obj = prob.objective.x
+    #initial_solution = [(v, v.x) for v in list(sos_variables['vars']) if v.x > 0.01]
+    #print(initial_solution)
+    #prob.start = initial_solution
+    #prob.validate_mip_start()
     for constraint_group in market_rhs_and_type.keys():
-        market_rhs_and_type[constraint_group]['price'] = \
-            market_rhs_and_type[constraint_group].apply(lambda x: get_price(x['constraint_id'], prob), axis=1)
-
+        cg = constraint_group
+        market_rhs_and_type[cg]['price'] = 0.0
+        for id in list(market_rhs_and_type[cg]['constraint_id']):
+            constraint = prob.constr_by_name(str(id))
+            constraint.rhs += 1.0
+            #t0 = time()
+            prob.optimize()
+            #tc += time() - t0
+            marginal_cost = prob.objective.x - start_obj
+            market_rhs_and_type[cg].loc[market_rhs_and_type[cg]['constraint_id'] == id, 'price'] = marginal_cost
+            constraint.rhs -= 1.0
+        # market_rhs_and_type[constraint_group]['price'] = \
+        #     market_rhs_and_type[constraint_group].apply(lambda x: get_price(x['constraint_id'], prob), axis=1)
+    #print(tc)
     return split_decision_variables, market_rhs_and_type
 
 
-def make_constraint(var_list, lhs, rhs, enq_type, marginal_offset=0):
-    needed_variables_indices = np.argwhere(~np.isnan(lhs)).flatten()
-    lhs_variables = var_list[needed_variables_indices]
-    lhs = lhs[needed_variables_indices]
+def make_constraint(lp_variables, lhs, rhs, column_ids, enq_type, marginal_offset=0):
+    columns_in_constraint = np.argwhere(~np.isnan(lhs)).flatten()
+    column_ids_in_constraint = column_ids[columns_in_constraint]
+    # lhs_variables = lp_variables[column_ids_in_constraint]
+    lhs_variables = np.asarray([lp_variables[k] for k in column_ids_in_constraint])
+    lhs = lhs[columns_in_constraint]
     exp = lhs_variables * lhs
     exp = exp.tolist()
     exp = xsum(exp)
@@ -151,9 +195,10 @@ def make_constraint(var_list, lhs, rhs, enq_type, marginal_offset=0):
     return con
 
 
-def get_sos(var_list, lhs):
-    needed_variables_indices = np.argwhere(~np.isnan(lhs)).flatten()
-    lhs_variables = var_list[needed_variables_indices]
+def get_sos(var_list, lhs, column_ids):
+    columns_in_constraint = np.argwhere(~np.isnan(lhs)).flatten()
+    column_ids_in_constraint = column_ids[columns_in_constraint]
+    lhs_variables = var_list[column_ids_in_constraint]
     return lhs_variables
 
 

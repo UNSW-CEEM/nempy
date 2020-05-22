@@ -109,6 +109,7 @@ def bids(volume_bids, unit_info, next_variable_id):
     # Reshape the table so each bid band is on it own row.
     decision_variables = hf.stack_columns(volume_bids, cols_to_keep=['unit', 'service'], cols_to_stack=bid_bands,
                                           type_name='capacity_band', value_name='upper_bound')
+    decision_variables = decision_variables[decision_variables['upper_bound'] >= 0.0001]
     # Group units together in the decision variable table.
     decision_variables = decision_variables.sort_values(['unit', 'capacity_band'])
     # Create a unique identifier for each decision variable.

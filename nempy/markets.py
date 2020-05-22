@@ -69,9 +69,6 @@ class Spot:
                          optional (as `np.int64`)
             ===========  ==============================================================================================
 
-        dispatch_interval : int
-            The length of the dispatch interval in minutes.
-
         Raises
         ------
             RepeatedRowError
@@ -92,6 +89,7 @@ class Spot:
     @check.column_data_types('volume_bids', {'unit': str, 'service': str, 'else': np.float64})
     @check.column_values_must_be_real('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
     @check.column_values_not_negative('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+    @check.all_units_have_info
     def set_unit_volume_bids(self, volume_bids):
         """Creates the decision variables corresponding to energy bids.
 
@@ -136,7 +134,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         The market should now have the variables.
 
@@ -176,7 +174,7 @@ class Spot:
         volume_bids : pd.DataFrame
             Bids by unit, in MW, can contain up to 10 bid bands, these should be labeled '1' to '10'.
 
-            ========  ===============================================================
+            ========  ================================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
             service   the service being provided, optional, if missing energy assumed
@@ -266,7 +264,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids. Bids for each unit need to be monotonically increasing.
 
@@ -278,25 +276,25 @@ class Spot:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_energy_price_bids(price_bids)
+        >>> simple_market.set_unit_price_bids(price_bids)
 
         The market should now have costs.
 
         >>> print(simple_market.objective_function_components['bids'])
-           variable_id unit capacity_band   cost
-        0            0    A             1   50.0
-        1            1    A             2  100.0
-        2            2    A             3  100.0
-        3            3    B             1  100.0
-        4            4    B             2  130.0
-        5            5    B             3  150.0
+           variable_id unit service capacity_band   cost
+        0            0    A  energy             1   50.0
+        1            1    A  energy             2  100.0
+        2            2    A  energy             3  100.0
+        3            3    B  energy             1  100.0
+        4            4    B  energy             2  130.0
+        5            5    B  energy             3  150.0
 
         Parameters
         ----------
         price_bids : pd.DataFrame
             Bids by unit, in $/MW, can contain up to 10 bid bands.
 
-            ========  ======================================================
+            ========  ===============================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
             service   the service being provided, optional, if missing energy assumed
@@ -304,7 +302,7 @@ class Spot:
             1         bid price in the 1st band, in $/MW (as `np.float64`)
             2         bid price in the 2nd band, in $/MW (as `np.float64`)
             n         bid price in the nth band, in $/MW (as `np.float64`)
-            ========  ======================================================
+            ========  ===============================================================
 
         Returns
         -------
@@ -332,7 +330,7 @@ class Spot:
             energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function,
                                                                                  self.unit_info)
         self.objective_function_components['bids'] = \
-            energy_objective_function.loc[:, ['variable_id', 'unit', 'capacity_band', 'cost']]
+            energy_objective_function.loc[:, ['variable_id', 'unit', 'service', 'capacity_band', 'cost']]
 
     @check.energy_bid_ids_exist
     @check.required_columns('unit_limits', ['unit', 'capacity'])
@@ -378,7 +376,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of unit capacities.
 
@@ -448,8 +446,8 @@ class Spot:
     @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
     @check.repeated_rows('unit_limits', ['unit'])
     @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_up_rate'])
-    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_up_rate'])
+    @check.column_values_must_be_real('unit_limits', ['ramp_up_rate'])
+    @check.column_values_not_negative('unit_limits', ['ramp_up_rate'])
     def set_unit_ramp_up_constraints(self, unit_limits):
         """Creates constraints on unit output based on ramp up rate.
 
@@ -489,7 +487,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of unit ramp up rates.
 
@@ -525,7 +523,7 @@ class Spot:
             Columns:        Description:
             unit            unique identifier of a dispatch unit (as `str`)
             initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
+            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
             ==============  =====================================================================================
 
         Returns
@@ -561,7 +559,7 @@ class Spot:
     @check.repeated_rows('unit_limits', ['unit'])
     @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
     @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_down_rate'])
-    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_down_rate'])
+    @check.column_values_not_negative('unit_limits', ['ramp_down_rate'])
     def set_unit_ramp_down_constraints(self, unit_limits):
         """Creates constraints on unit output based on ramp down rate.
 
@@ -601,7 +599,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of unit ramp down rates, also need to provide the initial output of the units at the start of
         dispatch interval.
@@ -998,6 +996,7 @@ class Spot:
 
         unit_limits : pd.DataFrame
             The initial output and ramp rates of units
+
             ==============  =====================================================================================
             Columns:        Description:
             unit            unique identifier of a dispatch unit (as `str`)
@@ -1041,9 +1040,11 @@ class Spot:
     @check.repeated_rows('contingency_trapeziums', ['unit', 'service'], arg=1)
     @check.column_data_types('contingency_trapeziums', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
     @check.column_values_must_be_real('contingency_trapeziums', ['max_availability', 'enablement_min',
-                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+                                                                 'low_break_point', 'high_break_point',
+                                                                 'enablement_max'], arg=1)
     @check.column_values_not_negative('contingency_trapeziums', ['max_availability', 'enablement_min',
-                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+                                                                 'low_break_point', 'high_break_point',
+                                                                 'enablement_max'], arg=1)
     def set_joint_capacity_constraints(self, contingency_trapeziums):
         """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch.
 
@@ -1142,15 +1143,17 @@ class Spot:
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
-                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
-    @check.allowed_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+    @check.allowed_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
+                                                     'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
     @check.repeated_rows('regulation_trapeziums', ['unit', 'service'], arg=1)
     @check.column_data_types('regulation_trapeziums', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
     @check.column_values_must_be_real('regulation_trapeziums', ['max_availability', 'enablement_min',
-                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+                                                                'low_break_point', 'high_break_point',
+                                                                'enablement_max'], arg=1)
     @check.column_values_not_negative('regulation_trapeziums', ['max_availability', 'enablement_min',
-                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
+                                                                'low_break_point', 'high_break_point',
+                                                                'enablement_max'], arg=1)
     def set_energy_and_regulation_capacity_constraints(self, regulation_trapeziums):
         """Creates constraints to ensure there is adequate capacity for regulation and energy dispatch targets.
 
@@ -1343,10 +1346,11 @@ class Spot:
                                                 'loss_function': 'callable'}, arg=1)
     @check.column_values_must_be_real('loss_functions', ['break_point'], arg=1)
     @check.column_values_outside_range('loss_functions', {'from_region_loss_share': [0.0, 1.0]}, arg=1)
-    @check.required_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=2)
-    @check.allowed_columns('interpolation_break_point', ['interconnector', 'break_point'], arg=2)
-    @check.repeated_rows('interpolation_break_point', ['interconnector', 'break_point'], arg=2)
-    @check.column_data_types('interpolation_break_point', {'interconnector': str, 'break_point': np.float64}, arg=2)
+    @check.required_columns('interpolation_break_point', ['interconnector', 'loss_segment', 'break_point'], arg=2)
+    @check.allowed_columns('interpolation_break_point', ['interconnector', 'loss_segment', 'break_point'], arg=2)
+    @check.repeated_rows('interpolation_break_point', ['interconnector', 'loss_segment', 'break_point'], arg=2)
+    @check.column_data_types('interpolation_break_point', {'interconnector': str, 'loss_segment': np.int64,
+                                                           'break_point': np.float64}, arg=2)
     @check.column_values_must_be_real('interpolation_break_point', ['break_point'], arg=2)
     def set_interconnector_losses(self, loss_functions, interpolation_break_points):
         """Creates linearised loss functions for interconnectors.
@@ -1405,7 +1409,7 @@ class Spot:
 
         Define the interconnector loss function. In this case losses are always 5 % of line flow.
 
-        >>> def constant_losses(flow):
+        >>> def constant_losses(flow=None):
         ...     return abs(flow) * 0.05
 
         Define the function on a per interconnector basis. Also details how the losses should be proportioned to the
@@ -1422,6 +1426,7 @@ class Spot:
 
         >>> interpolation_break_points = pd.DataFrame({
         ...    'interconnector': ['little_link', 'little_link', 'little_link'],
+        ...    'loss_segment': [1, 2, 3],
         ...    'break_point': [-120.0, 0.0, 100]})
 
         >>> simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
@@ -1443,11 +1448,11 @@ class Spot:
         between the break points.
 
         >>> print(simple_market.decision_variables['interpolation_weights'].loc[:,
-        ...       ['interconnector', 'break_point', 'variable_id']])
-          interconnector  break_point  variable_id
-        0    little_link       -120.0            2
-        1    little_link          0.0            3
-        2    little_link        100.0            4
+        ...       ['interconnector', 'loss_segment', 'break_point', 'variable_id']])
+          interconnector  loss_segment  break_point  variable_id
+        0    little_link             1       -120.0            2
+        1    little_link             2          0.0            3
+        2    little_link             3        100.0            4
 
         >>> print(simple_market.decision_variables['interpolation_weights'].loc[:,
         ...       ['variable_id', 'lower_bound', 'upper_bound', 'type']])
@@ -1497,6 +1502,7 @@ class Spot:
             ==============  ============================================================================================
             Columns:        Description:
             interconnector  unique identifier of a interconnector (as `str`)
+            loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
             break_point     points between which the loss function will be linearly interpolated, in MW
                             (as `np.float64`)
             ==============  ============================================================================================
@@ -1533,10 +1539,19 @@ class Spot:
         # Create weight variables.
         weight_variables = inter.create_weights(interpolation_break_points, next_variable_id)
 
+        next_variable_id = weight_variables['variable_id'].max() + 1
+
         # Creates weights sum constraint.
         weights_sum_lhs, weights_sum_rhs = inter.create_weights_must_sum_to_one(weight_variables,
                                                                                 self.next_constraint_id)
         next_constraint_id = weights_sum_rhs['constraint_id'].max() + 1
+
+        # Create binary variables.
+        binary_variables = inter.create_binaries(interpolation_break_points, next_variable_id)
+
+        # Creates binary constraint.
+        binary_lhs, binary_rhs = inter.create_binary_constraints(binary_variables, weight_variables, next_constraint_id)
+        next_constraint_id = binary_rhs['constraint_id'].max() + 1
 
         # Link weights to interconnector flow.
         link_to_flow_lhs, link_to_flow_rhs = inter.link_weights_to_inter_flow(weight_variables,
@@ -1551,7 +1566,7 @@ class Spot:
                                                            next_constraint_id)
 
         # Combine lhs sides, note these are complete lhs and don't need to be mapped to constraints.
-        lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs])
+        lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs, binary_lhs])
 
         # Combine constraints with a dynamic rhs i.e. a variable on the rhs.
         dynamic_rhs = pd.concat([link_to_flow_rhs, link_to_loss_rhs])
@@ -1560,11 +1575,13 @@ class Spot:
         self.decision_variables['interconnector_losses'] = loss_variables
         self.variable_to_constraint_map['regional']['interconnector_losses'] = loss_variables_constraint_map
         self.decision_variables['interpolation_weights'] = weight_variables
-        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
+        self.decision_variables['binaries'] = binary_variables
+        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])  # TODO pontential bug if losses adde twice.
         self.constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
+        self.constraints_rhs_and_type['binary_constraints'] = binary_rhs
         self.constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
-        self.next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
-        self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
+        self.next_variable_id = pd.concat([loss_variables, weight_variables, binary_variables])['variable_id'].max() + 1
+        self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs, binary_rhs])['constraint_id'].max() + 1
 
     @check.pre_dispatch
     def dispatch(self):
@@ -1604,7 +1621,7 @@ class Spot:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_energy_volume_bids(volume_bids)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -1616,7 +1633,7 @@ class Spot:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_energy_price_bids(price_bids)
+        >>> simple_market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region.
 
@@ -1634,7 +1651,7 @@ class Spot:
 
         Now the market dispatch can be retrieved.
 
-        >>> print(simple_market.get_energy_dispatch())
+        >>> print(simple_market.get_unit_dispatch())
           unit  dispatch
         0    A      45.0
         1    B      55.0

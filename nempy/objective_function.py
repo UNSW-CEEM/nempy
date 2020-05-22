@@ -2,7 +2,7 @@ import pandas as pd
 from nempy import helper_functions as hf
 
 
-def bids(variable_ids, price_bids, unit_info=None):
+def bids(variable_ids, price_bids):
     """Create the cost coefficients of energy in bids in the objective function.
 
     This function defines the cost associated with each decision variable that represents a unit's energy bid. Costs are
@@ -54,6 +54,7 @@ def bids(variable_ids, price_bids, unit_info=None):
     price_bids = hf.stack_columns(price_bids, cols_to_keep=['unit', 'service'], cols_to_stack=bid_bands,
                                   type_name='capacity_band', value_name='cost')
     # Match bid cost with existing variable ids
+    price_bids = price_bids[price_bids['cost'] != 0.0]
     objective_function = pd.merge(variable_ids, price_bids, how='inner', on=['unit', 'service', 'capacity_band'])
     return objective_function
 
