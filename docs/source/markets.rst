@@ -1,6 +1,6 @@
 .. _spot:
 
-Spot market class
+markets module
 ===============================
 A model of the NEM spot market dispatch process.
 

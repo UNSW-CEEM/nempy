@@ -12,7 +12,7 @@ Welcome to nempy's documentation!
 
    intro
    examples
-   Spot
+   markets
    historical_spot_market_inputs
 
 Indices and tables
