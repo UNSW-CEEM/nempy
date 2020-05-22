@@ -32,18 +32,18 @@ demand = pd.DataFrame({
 # Create the market model
 simple_market = markets.Spot(dispatch_interval=5)
 simple_market.set_unit_info(unit_info)
-simple_market.set_unit_energy_volume_bids(volume_bids)
-simple_market.set_unit_energy_bids(price_bids)
+simple_market.set_unit_volume_bids(volume_bids)
+simple_market.set_unit_price_bids(price_bids)
 simple_market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing
 simple_market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_energy_dispatch())
-#   unit  dispatch
-# 0    A      40.0
-# 1    B      80.0
+print(simple_market.get_unit_dispatch())
+#   unit service  dispatch
+# 0    A  energy      40.0
+# 1    B  energy      80.0
 
 # Return the price of energy in each region.
 print(simple_market.get_energy_prices())

@@ -19,7 +19,7 @@ volume_bids = pd.DataFrame({
     '1': [100.0]  # MW
 })
 
-simple_market.set_unit_energy_volume_bids(volume_bids)
+simple_market.set_unit_volume_bids(volume_bids)
 
 # Price of each bid.
 price_bids = pd.DataFrame({
@@ -27,7 +27,7 @@ price_bids = pd.DataFrame({
     '1': [50.0]  # $/MW
 })
 
-simple_market.set_unit_energy_bids(price_bids)
+simple_market.set_unit_price_bids(price_bids)
 
 # NSW has no demand but VIC has 90 MW.
 demand = pd.DataFrame({
@@ -64,6 +64,7 @@ loss_functions = pd.DataFrame({
 # three points are needed, but if a non linear loss function was used then more points would be better.
 interpolation_break_points = pd.DataFrame({
     'interconnector': ['little_link', 'little_link', 'little_link'],
+    'loss_segment': [1, 2, 3],
     'break_point': [-120.0, 0.0, 100]
 })
 
@@ -73,9 +74,9 @@ simple_market.set_interconnector_losses(loss_functions, interpolation_break_poin
 simple_market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_energy_dispatch())
-#   unit   dispatch
-# 0    A  94.615385
+print(simple_market.get_unit_dispatch())
+#   unit service   dispatch
+# 0    A  energy  94.615385
 
 # Return interconnector flow and losses.
 print(simple_market.get_interconnector_flows())

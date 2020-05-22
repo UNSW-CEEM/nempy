@@ -32,12 +32,6 @@ def test_download_to_df_raises_on_missing_data():
     server.terminate()
 
 
-def test_download_to_df_raises_on_url_down():
-    with pytest.raises(historical_spot_market_inputs._MissingData):
-        output = historical_spot_market_inputs._download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
-                                                               table_name='table_one', year=2020, month=3)
-
-
 def test_download_to_df_raises_on_data_not_on_nemweb():
     with pytest.raises(historical_spot_market_inputs._MissingData):
         url = ('http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' +
@@ -56,7 +50,7 @@ def test_create_loss_function():
     qld_demand = 5000.0
     demand = pd.DataFrame({
         'region': ['NSW1', 'QLD1'],
-        'demand': [nsw_demand, qld_demand]
+        'loss_function_demand': [nsw_demand, qld_demand]
     })
 
     # Loss model details from 2020 Jan NEM web files.
@@ -94,7 +88,7 @@ def test_create_loss_function_vic_nsw():
     sa_demand = 3000.0
     demand = pd.DataFrame({
         'region': ['NSW1', 'VIC1', 'SA1'],
-        'demand': [nsw_demand, vic_demand, sa_demand]
+        'loss_function_demand': [nsw_demand, vic_demand, sa_demand]
     })
 
     # Loss model details from 2020 Jan NEM web files.
@@ -132,7 +126,7 @@ def test_create_loss_function_bass_link():
     qld_demand = 7000.0
     demand = pd.DataFrame({
         'region': ['VIC1', 'QLD1'],
-        'demand': [nsw_demand, qld_demand]
+        'loss_function_demand': [nsw_demand, qld_demand]
     })
 
     # Loss model details from 2020 Jan NEM web files.

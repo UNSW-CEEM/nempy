@@ -16,7 +16,7 @@ def get_test_intervals():
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
-    intervals = random.sample(range(1, difference_in_5_min_intervals), 1)
+    intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
     times = [start_time + timedelta(minutes=5*i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
@@ -70,17 +70,16 @@ def test_historical_interconnector_losses():
 
     for interval in get_test_intervals():
 
-        interconnector_directions = inputs_manager.INTERCONNECTOR.get_data()
-        interconnector_paramaters = inputs_manager.INTERCONNECTORCONSTRAINT.get_data(interval)
-        interconnectors = hi.format_interconnector_definitions(interconnector_directions, interconnector_paramaters)
-        interconnector_loss_coefficients = hi.format_interconnector_loss_coefficients(interconnector_paramaters)
-        interconnector_demand_coefficients = inputs_manager.LOSSFACTORMODEL.get_data(interval)
-        interconnector_demand_coefficients = hi.format_interconnector_loss_demand_coefficient(
-            interconnector_demand_coefficients)
-        interpolation_break_points = inputs_manager.LOSSMODEL.get_data(interval)
-        interpolation_break_points = hi.format_interpolation_break_points(interpolation_break_points)
-        regional_demand = inputs_manager.DISPATCHREGIONSUM.get_data(interval)
-        regional_demand = hi.format_regional_demand(regional_demand)
+        INTERCONNECTOR = inputs_manager.INTERCONNECTOR.get_data()
+        INTERCONNECTORCONSTRAINT = inputs_manager.INTERCONNECTORCONSTRAINT.get_data(interval)
+        interconnectors = hi.format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
+        interconnector_loss_coefficients = hi.format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT)
+        LOSSFACTORMODEL = inputs_manager.LOSSFACTORMODEL.get_data(interval)
+        interconnector_demand_coefficients = hi.format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL)
+        LOSSMODEL = inputs_manager.LOSSMODEL.get_data(interval)
+        interpolation_break_points = hi.format_interpolation_break_points(LOSSMODEL)
+        DISPATCHREGIONSUM = inputs_manager.DISPATCHREGIONSUM.get_data(interval)
+        regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
         inter_flow = inputs_manager.DISPATCHINTERCONNECTORRES.get_data(interval)
 
         market = markets.Spot()
@@ -101,9 +100,7 @@ def test_historical_interconnector_losses():
         market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
         # Calculate dispatch.
-        t0 = time()
         market.dispatch()
-        print(time() - t0)
         output = market.get_interconnector_flows()
 
         expected = inputs_manager.DISPATCHINTERCONNECTORRES.get_data(interval)
@@ -111,8 +108,11 @@ def test_historical_interconnector_losses():
         expected.columns = ['interconnector', 'flow', 'losses']
         expected = expected.reset_index(drop=True)
         output = output.sort_values('interconnector').reset_index(drop=True)
-        assert_frame_equal(output, expected)
-        print(interval)
+        comparison = pd.merge(expected, output, 'inner', on='interconnector')
+        comparison['diff'] = comparison['losses_x'] - comparison['losses_y']
+        comparison['diff'] = comparison['diff'].abs()
+        comparison['ok'] = comparison['diff'] < 0.5
+        assert(comparison['ok'].all())
 
 
 def test_using_availability_and_ramp_rates():

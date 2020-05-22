@@ -281,20 +281,20 @@ class Spot:
         The market should now have costs.
 
         >>> print(simple_market.objective_function_components['bids'])
-           variable_id unit capacity_band   cost
-        0            0    A             1   50.0
-        1            1    A             2  100.0
-        2            2    A             3  100.0
-        3            3    B             1  100.0
-        4            4    B             2  130.0
-        5            5    B             3  150.0
+           variable_id unit service capacity_band   cost
+        0            0    A  energy             1   50.0
+        1            1    A  energy             2  100.0
+        2            2    A  energy             3  100.0
+        3            3    B  energy             1  100.0
+        4            4    B  energy             2  130.0
+        5            5    B  energy             3  150.0
 
         Parameters
         ----------
         price_bids : pd.DataFrame
             Bids by unit, in $/MW, can contain up to 10 bid bands.
 
-            ========  ======================================================
+            ========  ===============================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
             service   the service being provided, optional, if missing energy assumed
@@ -302,7 +302,7 @@ class Spot:
             1         bid price in the 1st band, in $/MW (as `np.float64`)
             2         bid price in the 2nd band, in $/MW (as `np.float64`)
             n         bid price in the nth band, in $/MW (as `np.float64`)
-            ========  ======================================================
+            ========  ===============================================================
 
         Returns
         -------
@@ -330,7 +330,7 @@ class Spot:
             energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function,
                                                                                  self.unit_info)
         self.objective_function_components['bids'] = \
-            energy_objective_function.loc[:, ['variable_id', 'unit', 'capacity_band', 'cost']]
+            energy_objective_function.loc[:, ['variable_id', 'unit', 'service', 'capacity_band', 'cost']]
 
     @check.energy_bid_ids_exist
     @check.required_columns('unit_limits', ['unit', 'capacity'])
@@ -446,8 +446,8 @@ class Spot:
     @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
     @check.repeated_rows('unit_limits', ['unit'])
     @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_up_rate'])
-    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_up_rate'])
+    @check.column_values_must_be_real('unit_limits', ['ramp_up_rate'])
+    @check.column_values_not_negative('unit_limits', ['ramp_up_rate'])
     def set_unit_ramp_up_constraints(self, unit_limits):
         """Creates constraints on unit output based on ramp up rate.
 
@@ -559,7 +559,7 @@ class Spot:
     @check.repeated_rows('unit_limits', ['unit'])
     @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
     @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_down_rate'])
-    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_down_rate'])
+    @check.column_values_not_negative('unit_limits', ['ramp_down_rate'])
     def set_unit_ramp_down_constraints(self, unit_limits):
         """Creates constraints on unit output based on ramp down rate.
 

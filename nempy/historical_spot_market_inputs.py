@@ -153,7 +153,7 @@ class _MMSTable:
             'LOSSFLOWCOEFFICIENT': 'REAL', 'IMPORTLIMIT': 'REAL', 'EXPORTLIMIT': 'REAL', 'LOSSSEGMENT': 'TEXT',
             'MWBREAKPOINT': 'REAL', 'DEMANDCOEFFICIENT': 'REAL', 'INTERCONNECTORID': 'TEXT', 'REGIONFROM': 'TEXT',
             'REGIONTO': 'TEXT', 'MWFLOW': 'REAL', 'MWLOSSES': 'REAL', 'MINIMUMLOAD': 'REAL', 'MAXCAPACITY': 'REAL',
-            'SEMIDISPATCHCAP': 'REAL'
+            'SEMIDISPATCHCAP': 'REAL', 'RRP': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1034,14 +1034,14 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical_inputs.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
-            SETTLEMENTDATE     DUID     BIDTYPE  PRICEBAND1  ...    T1   T2    T3   T4
-    0  2020/01/10 00:00:00   AGLHAL      ENERGY     -974.80  ...  10.0  3.0  10.0  2.0
-    1  2020/01/10 00:00:00   AGLSOM      ENERGY     -980.69  ...  20.0  2.0  35.0  2.0
-    2  2020/01/10 00:00:00  ANGAST1      ENERGY     -941.23  ...   0.0  0.0   0.0  0.0
-    3  2020/01/10 00:00:00    APD01   LOWER5MIN        0.00  ...   0.0  0.0   0.0  0.0
-    4  2020/01/10 00:00:00    APD01  LOWER60SEC        0.00  ...   0.0  0.0   0.0  0.0
+            SETTLEMENTDATE     DUID     BIDTYPE  ...    T3   T4  MINIMUMLOAD
+    0  2020/01/10 00:00:00   AGLHAL      ENERGY  ...  10.0  2.0          2.0
+    1  2020/01/10 00:00:00   AGLSOM      ENERGY  ...  35.0  2.0         16.0
+    2  2020/01/10 00:00:00  ANGAST1      ENERGY  ...   0.0  0.0         46.0
+    3  2020/01/10 00:00:00    APD01   LOWER5MIN  ...   0.0  0.0          0.0
+    4  2020/01/10 00:00:00    APD01  LOWER60SEC  ...   0.0  0.0          0.0
     <BLANKLINE>
-    [5 rows x 17 columns]
+    [5 rows x 18 columns]
 
     Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
     provided by AEMO contains all historical data for this table. In this case if multiple calls to the set_data method
@@ -1132,6 +1132,9 @@ class DBManager:
                                                       'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN',
                                                       'SEMIDISPATCHCAP'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
+        self.DISPATCHPRICE = InputsBySettlementDate(
+            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'RRP'],
+            table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
                                                          'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
@@ -1501,10 +1504,10 @@ def format_volume_bids(BIDPEROFFER_D):
         Columns:  Description:
         unit      unique identifier of a dispatch unit (as `str`)
         service   the service being provided, optional, if missing energy assumed
-                  (as `str`)
+                   (as `str`)
         1         bid volume in the 1st band, in MW (as `np.float64`)
         2         bid volume in the 2nd band, in MW (as `np.float64`)
-          :
+        :
         10         bid volume in the nth band, in MW (as `np.float64`)
         ========  ================================================================
     """
@@ -1616,7 +1619,7 @@ def format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT):
         REGIONTO             the region that receives power when flow is in the positive direction (as `str`)
         ===================  ======================================================================================
 
-    INTERCONNECTOR : pd.DataFrame
+    INTERCONNECTORCONSTRAINT : pd.DataFrame
 
         ===================  ======================================================================================
         Columns:             Description:
@@ -1648,7 +1651,7 @@ def format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT):
 
 
 def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
-    """Re-formats the AEMO MSS table LOSSFACTORMODEL to be compatible with the Spot market class.
+    """Re-formats the AEMO MSS table INTERCONNECTORCONSTRAINT to be compatible with the Spot market class.
 
     Examples
     --------
@@ -1670,21 +1673,21 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
 
     Parameters
     ----------
-    LOSSMODEL : pd.DataFrame
+    INTERCONNECTORCONSTRAINT : pd.DataFrame
 
-        ===================  ======================================================================================
+        ===================  =======================================================================================
         Columns:             Description:
         INTERCONNECTORID     unique identifier of a interconnector (as `str`)
         LOSSCONSTANT         the constant term in the interconnector loss factor equation (as np.float64)
         LOSSFLOWCOEFFICIENT  the coefficient of the interconnector flow variable in the loss factor equation
                              (as np.float64)
-        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainer are attributed to the to
+        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainder is attributed to the to
                              region (as np.float64)
-        ===================  ======================================================================================
+        ===================  =======================================================================================
 
     Returns
     ----------
-    demand_coefficients : pd.DataFrame
+    interconnector_paramaters : pd.DataFrame
 
         ======================  ========================================================================================
         Columns:                Description:

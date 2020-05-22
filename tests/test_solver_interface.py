@@ -10,7 +10,7 @@ def test_dispatch():
             'upper_bound': [1, 6, 5, 7],
             'variable_id': [4, 5, 6, 7],
             'lower_bound': [0.0, 0.0, 0.0, 0.0],
-            'type': ['continuous', 'continuous', 'continuous','continuous'],
+            'type': ['continuous', 'continuous', 'continuous', 'continuous'],
         })
     }
     constraints_rhs_and_type = {

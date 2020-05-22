@@ -178,6 +178,7 @@ def test_one_interconnector():
     # three points are needed, but if a non linear loss function was used then more points would be better.
     interpolation_break_points = pd.DataFrame({
         'interconnector': ['little_link', 'little_link', 'little_link'],
+        'loss_segment': [1, 2, 3],
         'break_point': [-120.0, 0.0, 100]
     })
 

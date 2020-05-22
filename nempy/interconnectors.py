@@ -460,12 +460,15 @@ def create_binary_constraints(binary_variables, weight_variables, next_constrain
     1              I            5              1         -1.0             2
     0              I            4              1         -1.0             2
     1              I            5              2         -1.0             3
+    0              I            4              3          1.0             1
+    1              I            5              3          1.0             2
 
     >>> print(rhs)
       interconnector  loss_segment  constraint_id type  rhs
-    0              I             1              0   <=  0.0
-    1              I             2              1   <=  0.0
-    2              I             3              2   <=  0.0
+    0              I           1.0              0   <=  0.0
+    1              I           2.0              1   <=  0.0
+    2              I           3.0              2   <=  0.0
+    0              I           NaN              3    =  1.0
 
 
     Parameters
@@ -507,6 +510,11 @@ def create_binary_constraints(binary_variables, weight_variables, next_constrain
     constraint_ids = weight_variables.loc[:, ['interconnector', 'variable_id', 'loss_segment']]
     constraint_ids = hf.save_index(constraint_ids, 'constraint_id', next_constraint_id)
 
+    #
+    next_constraint_id = constraint_ids['constraint_id'].max() + 1
+    constraint_bs_ids = weight_variables.loc[:, ['interconnector']].drop_duplicates('interconnector')
+    constraint_bs_ids = hf.save_index(constraint_bs_ids, 'constraint_id', next_constraint_id)
+
     # Map weight variables to their corresponding constraints.
     lhs_weights = constraint_ids
     lhs_weights['coefficient'] = 1.0
@@ -523,12 +531,22 @@ def create_binary_constraints(binary_variables, weight_variables, next_constrain
     binaries_lhs_two = pd.merge(binaries_lhs_two, binaries_temp, 'inner', on=['interconnector', 'loss_segment'])
     binaries_lhs_two['coefficient'] = -1.0
 
-    lhs = pd.concat([lhs_weights, binaries_lhs_one, binaries_lhs_two])
+    #
+    bs_lhs = binary_variables.loc[:, ['interconnector', 'variable_id', 'loss_segment']]
+    bs_lhs = pd.merge(bs_lhs, constraint_bs_ids, 'inner', on=['interconnector'])
+    bs_lhs['coefficient'] = 1.0
+
+    lhs = pd.concat([lhs_weights, binaries_lhs_one, binaries_lhs_two, bs_lhs])
 
     # Create rhs details for each constraint.
     rhs = constraint_ids.loc[:, ['interconnector', 'loss_segment', 'constraint_id']]
     rhs['type'] = '<='
     rhs['rhs'] = 0.0
+    bs_rhs = constraint_bs_ids.loc[:, ['interconnector', 'constraint_id']]
+    bs_rhs['type'] = '='
+    bs_rhs['rhs'] = 1.0
+    rhs = pd.concat([rhs, bs_rhs])
+
     return lhs, rhs
 
 
