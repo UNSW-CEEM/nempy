@@ -1503,12 +1503,11 @@ def format_volume_bids(BIDPEROFFER_D):
         ========  ================================================================
         Columns:  Description:
         unit      unique identifier of a dispatch unit (as `str`)
-        service   the service being provided, optional, if missing energy assumed
-                   (as `str`)
+        service   the service being provided, optional, if missing energy assumed (as `str`)
         1         bid volume in the 1st band, in MW (as `np.float64`)
         2         bid volume in the 2nd band, in MW (as `np.float64`)
         :
-        10         bid volume in the nth band, in MW (as `np.float64`)
+        10        bid volume in the nth band, in MW (as `np.float64`)
         ========  ================================================================
     """
 
@@ -1567,11 +1566,9 @@ def format_price_bids(BIDDAYOFFER_D):
         ========  ================================================================
         Columns:  Description:
         unit      unique identifier of a dispatch unit (as `str`)
-        service   the service being provided, optional, if missing energy assumed
-                  (as `str`)
+        service   the service being provided, optional, if missing energy assumed (as `str`)
         1         bid price in the 1st band, in MW (as `np.float64`)
         2         bid price in the 2nd band, in MW (as `np.float64`)
-          :
         10         bid price in the nth band, in MW (as `np.float64`)
         ========  ================================================================
     """
@@ -1679,10 +1676,8 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
         Columns:             Description:
         INTERCONNECTORID     unique identifier of a interconnector (as `str`)
         LOSSCONSTANT         the constant term in the interconnector loss factor equation (as np.float64)
-        LOSSFLOWCOEFFICIENT  the coefficient of the interconnector flow variable in the loss factor equation
-                             (as np.float64)
-        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainder is attributed to the to
-                             region (as np.float64)
+        LOSSFLOWCOEFFICIENT  the coefficient of the interconnector flow variable in the loss factor equation (as np.float64)
+        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainder is attributed to the to region (as np.float64)
         ===================  =======================================================================================
 
     Returns
@@ -1693,10 +1688,8 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
         Columns:                Description:
         interconnector          unique identifier of a interconnector (as `str`)
         loss_constant           the constant term in the interconnector loss factor equation (as np.float64)
-        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation
-                                (as np.float64)
-        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the to
-                                region (as np.float64)
+        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation (as np.float64)
+        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the to region (as np.float64)
         ======================  ========================================================================================
     """
 
@@ -1798,8 +1791,7 @@ def format_regional_demand(DISPATCHREGIONSUM):
         Columns:              Description:
         region                unique identifier of a market region (as `str`)
         demand                the non dispatchable demand the region, in MW (as `np.float64`)
-        loss_function_demand  the measure of demand used when creating interconnector loss functions,
-                              in MW (as `np.float64`)
+        loss_function_demand  the measure of demand used when creating interconnector loss functions, in MW (as `np.float64`)
         ====================  ======================================================================================
     """
 
@@ -1849,8 +1841,7 @@ def format_interpolation_break_points(LOSSMODEL):
         ================  ======================================================================================
         Columns:          Description:
         interconnector    unique identifier of a interconnector (as `str`)
-        break_point       points between which the loss function will be linearly interpolated, in MW
-                          (as `np.float64`)
+        break_point       points between which the loss function will be linearly interpolated, in MW (as `np.float64`)
         ================  ======================================================================================
     """
 
