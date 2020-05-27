@@ -153,7 +153,7 @@ class _MMSTable:
             'LOSSFLOWCOEFFICIENT': 'REAL', 'IMPORTLIMIT': 'REAL', 'EXPORTLIMIT': 'REAL', 'LOSSSEGMENT': 'TEXT',
             'MWBREAKPOINT': 'REAL', 'DEMANDCOEFFICIENT': 'REAL', 'INTERCONNECTORID': 'TEXT', 'REGIONFROM': 'TEXT',
             'REGIONTO': 'TEXT', 'MWFLOW': 'REAL', 'MWLOSSES': 'REAL', 'MINIMUMLOAD': 'REAL', 'MAXCAPACITY': 'REAL',
-            'SEMIDISPATCHCAP': 'REAL', 'RRP': 'REAL'
+            'SEMIDISPATCHCAP': 'REAL', 'RRP': 'REAL', 'SCHEDULE_TYPE': 'TEXT'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1138,7 +1138,7 @@ class DBManager:
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
                                                          'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
-                                                         'DISTRIBUTIONLOSSFACTOR'],
+                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
         self.DUDETAIL = InputsByEffectiveDateVersionNo(
             table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'MAXCAPACITY'],
@@ -2480,48 +2480,47 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
 
     Examples
     --------
-    In this case AGC limits more restrictive then offered values so the trapezium slopes are scaled.
+    In this case the ramp rates do not allow the full deilvery of the offered FCAS, because of this the offered MAXAIL
+    is adjusted down and break points are adjusted to matain the slopes of the trapezium sides.
 
     >>> BIDPEROFFER_D = pd.DataFrame({
     ...   'DUID': ['B', 'B', 'B'],
     ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'LOWERREG'],
+    ...   'MAXAVAIL': [0.0, 20.0, 20.0],
     ...   'ENABLEMENTMIN': [0.0, 20.0, 30.0],
-    ...   'LOWBREAKPOINT': [0.0, 50.0, 50.0],
-    ...   'HIGHBREAKPOINT': [0.0, 70.0, 70.0],
+    ...   'LOWBREAKPOINT': [0.0, 40.0, 50.0],
+    ...   'HIGHBREAKPOINT': [0.0, 80.0, 70.0],
     ...   'ENABLEMENTMAX': [0.0, 100.0, 90.0]})
 
     >>> DISPATCHLOAD = pd.DataFrame({
     ...   'DUID': ['B'],
-    ...   'RAISEREGENABLEMENTMAX': [90.0],
-    ...   'RAISEREGENABLEMENTMIN': [30.0],
-    ...   'LOWERREGENABLEMENTMAX': [80.0],
-    ...   'LOWERREGENABLEMENTMIN': [40.0]})
+    ...   'RAMPUPRATE': [120.0],
+    ...   'RAMPDOWNRATE': [120.0]})
 
-    >>> BIDPEROFFER_D_out = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+    >>> BIDPEROFFER_D_out = scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
 
-    >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    B    ENERGY            0.0            0.0             0.0            0.0
-    0    B  LOWERREG           40.0           60.0            60.0           80.0
-    0    B  RAISEREG           30.0           60.0            60.0           90.0
+    >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'LOWBREAKPOINT', 'HIGHBREAKPOINT']])
+      DUID   BIDTYPE  MAXAVAIL  LOWBREAKPOINT  HIGHBREAKPOINT
+    0    B    ENERGY       0.0            0.0             0.0
+    0    B  LOWERREG      10.0           40.0            80.0
+    0    B  RAISEREG      10.0           30.0            90.0
 
     In this case we change the AGC limits to be less restrictive then offered values so the trapezium slopes are not
     scaled.
 
     >>> DISPATCHLOAD = pd.DataFrame({
     ...   'DUID': ['B'],
-    ...   'RAISEREGENABLEMENTMAX': [110.0],
-    ...   'RAISEREGENABLEMENTMIN': [10.0],
-    ...   'LOWERREGENABLEMENTMAX': [100.0],
-    ...   'LOWERREGENABLEMENTMIN': [20.0]})
+    ...   'INITIALMW': [50.0],
+    ...   'RAMPUPRATE': [360.0],
+    ...   'RAMPDOWNRATE': [360.0]})
 
-    >>> BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+    >>> BIDPEROFFER_D_out = scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
 
-    >>> print(BIDPEROFFER_D)
-      DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    B    ENERGY            0.0            0.0             0.0            0.0
-    0    B  LOWERREG           30.0           50.0            70.0           90.0
-    0    B  RAISEREG           20.0           50.0            70.0          100.0
+    >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'LOWBREAKPOINT', 'HIGHBREAKPOINT']])
+      DUID   BIDTYPE  MAXAVAIL  LOWBREAKPOINT  HIGHBREAKPOINT
+    0    B    ENERGY       0.0            0.0             0.0
+    0    B  LOWERREG      20.0           50.0            70.0
+    0    B  RAISEREG      20.0           40.0            80.0
 
     Parameters
     ----------
@@ -2550,8 +2549,6 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
         ===============  ======================================================================================
         Columns:         Description:
         DUID             unique identifier of a dispatch unit (as `str`)
-        INITIALMW        the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-        AVAILABILITY     the reported maximum output of the unit for dispatch interval, in MW (as `np.float64`)
         RAMPDOWNRATE     the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
         RAMPUPRATE       the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
         ===============  ======================================================================================
@@ -2563,43 +2560,166 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     bids_not_subject_to_scaling = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
 
     # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
-    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']], 'inner', on='DUID')
-    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']], 'inner', on='DUID')
+    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPDOWNRATE']], 'inner', on='DUID')
+    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPUPRATE']], 'inner', on='DUID')
 
     # Calculate the max FCAS possible based on ramp rates.
-    lower_reg['RAMPMAX'] = lower_reg['INITIALMW'] - lower_reg['RAMPDOWNRATE'] * (5 / 60)
-    raise_reg['RAMPMAX'] = raise_reg['INITIALMW'] + raise_reg['RAMPUPRATE'] * (5 / 60)
+    lower_reg['RAMPMAX'] = lower_reg['RAMPDOWNRATE'] * (5 / 60)
+    raise_reg['RAMPMAX'] = raise_reg['RAMPUPRATE'] * (5 / 60)
 
-    lower_reg = lower_reg.drop(['INITIALMW', 'RAMPDOWNRATE'], axis=1)
-    raise_reg = raise_reg.drop(['INITIALMW', 'RAMPUPRATE'], axis=1)
+    lower_reg = lower_reg.drop(['RAMPDOWNRATE'], axis=1)
+    raise_reg = raise_reg.drop(['RAMPUPRATE'], axis=1)
 
     reg = pd.concat([lower_reg, raise_reg])
 
     def get_new_low_break_point(old_max, ramp_max, low_break_point, enablement_min):
-        if old_max < ramp_max:
+        if old_max > ramp_max:
             # Get slope of trapezium
             m = old_max / (low_break_point - enablement_min)
             # Substitute new_max into the slope equation and re-arrange to find the new break point needed to keep the
             # slope the same.
-            low_break_point = enablement_min - (ramp_max / m)
+            low_break_point = ramp_max / m + enablement_min
         return low_break_point
 
-    def get_new_low_high_point(old_max, ramp_max, low_break_point, enablement_min):
-        if old_max < ramp_max:
+    def get_new_high_break_point(old_max, ramp_max, high_break_point, enablement_max):
+        if old_max > ramp_max:
             # Get slope of trapezium
-            m = old_max / (low_break_point - enablement_min)
+            m = old_max / (enablement_max - high_break_point)
             # Substitute new_max into the slope equation and re-arrange to find the new break point needed to keep the
             # slope the same.
-            low_break_point = enablement_min - (ramp_max / m)
-        return low_break_point
+            high_break_point = enablement_max - (ramp_max / m)
+        return high_break_point
 
-    # Scale lower reg lower trapezium slope.
+    # Scale break points to maintain slopes.
     reg['LOWBREAKPOINT'] = reg.apply(lambda x: get_new_low_break_point(x['MAXAVAIL'], x['RAMPMAX'], x['LOWBREAKPOINT'],
-                                                                       x['ENABLEMENTMIN']), axis=1)
-    reg['HIGHBREAKPOINT'] = reg.apply(lambda x: get_new_low_high_point(x['MAXAVAIL'], x['RAMPMAX'], x['HIGHBREAKPOINT'],
-                                                                       x['ENABLEMENTMAX']), axis=1)
+                                                                       x['ENABLEMENTMIN']),
+                                     axis=1)
+    reg['HIGHBREAKPOINT'] = reg.apply(lambda x: get_new_high_break_point(x['MAXAVAIL'], x['RAMPMAX'],
+                                                                         x['HIGHBREAKPOINT'], x['ENABLEMENTMAX']),
+                                      axis=1)
+
+    # Adjust max FCAS availability.
+    reg['MAXAVAIL'] = np.where(reg['MAXAVAIL'] > reg['RAMPMAX'], reg['RAMPMAX'], reg['MAXAVAIL'])
+
+    reg.drop(['RAMPMAX'], axis=1)
 
     # Combined bids back together.
     BIDPEROFFER_D = pd.concat([bids_not_subject_to_scaling, reg])
+
+    return BIDPEROFFER_D
+
+
+def scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY):
+    """Scale semi-schedualed units FCAS enablement max and break points where their UIGF is less than enablement max.
+
+    The scaling is caried out as per the
+    :download:`FCAS MODEL IN NEMDE documentation section 4.3  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+    Examples
+    --------
+    In this case the semi-scheduled unit has an availability less than its enablement max so it upper slope is scalled.
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'LOWER60SEC'],
+    ...   'HIGHBREAKPOINT': [0.0, 80.0, 70.0],
+    ...   'ENABLEMENTMAX': [0.0, 100.0, 90.0]})
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'AVAILABILITY': [120.0, 90.0, 80.0]})
+
+    >>> DUDETAILSUMMARY = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'SCHEDULE_TYPE': ['SCHEDULED', 'SCHEDULED', 'SEMI-SCHEDULED']})
+
+    >>> BIDPEROFFER_D_out = scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+
+    >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'HIGHBREAKPOINT', 'ENABLEMENTMAX']])
+      DUID     BIDTYPE  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A      ENERGY             0.0            0.0
+    1    B    RAISEREG            80.0          100.0
+    0    C  LOWER60SEC            60.0           80.0
+
+    In this case we change the availability of unit C so it does not need scaling.
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'AVAILABILITY': [120.0, 90.0, 91.0]})
+
+    >>> BIDPEROFFER_D_out = scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+
+    >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'HIGHBREAKPOINT', 'ENABLEMENTMAX']])
+      DUID     BIDTYPE  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A      ENERGY             0.0            0.0
+    1    B    RAISEREG            80.0          100.0
+    0    C  LOWER60SEC            70.0           90.0
+
+    Parameters
+    ----------
+
+    BIDPEROFFER_D : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        DUID            unique identifier of a unit (as `str`)
+        BIDTYPE         the service being provided (as `str`)
+        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
+        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
+                        longer provide the full FCAS service offered,
+                        in MW (as `np.float64`)
+        ENABLEMENTMAX   the energy dispatch level at which the unit can
+                        no longer provide any FCAS service,
+                        in MW (as `np.float64`)
+        ==============  ====================================================
+
+    DISPATCHLOAD : pd.DataFrame
+
+        ===============  ======================================================================================
+        Columns:         Description:
+        DUID             unique identifier of a dispatch unit (as `str`)
+        AVAILABILITY     the reported maximum output of the unit for dispatch interval, in MW (as `np.float64`)
+        ===============  ======================================================================================
+
+    DUDETAILSUMMARY : pd.DataFrame
+
+        ===============  ======================================================================================
+        Columns:         Description:
+        DUID             unique identifier of a dispatch unit (as `str`)
+        SCHEDULE_TYPE    the schedule type of the plant i.e. SCHEDULED, SEMI-SCHEDULED or NON-SCHEDULED (as `str`)
+        ===============  ======================================================================================
+
+    """
+    # Split bid based on the scaling that needs to be done.
+    semi_scheduled_units = list(DUDETAILSUMMARY[DUDETAILSUMMARY['SCHEDULE_TYPE'] == 'SEMI-SCHEDULED']['DUID'])
+    energy_bids = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
+    fcas_bids = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
+    fcas_semi_scheduled = fcas_bids[fcas_bids['DUID'].isin(semi_scheduled_units)]
+    fcas_not_semi_scheduled = fcas_bids[~fcas_bids['DUID'].isin(semi_scheduled_units)]
+
+    # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
+    fcas_semi_scheduled = pd.merge(fcas_semi_scheduled, DISPATCHLOAD.loc[:, ['DUID', 'AVAILABILITY']],
+                                   'inner', on='DUID')
+
+    def get_new_high_break_point(availability, high_break_point, enablement_max):
+        if enablement_max > availability:
+            high_break_point = high_break_point - (enablement_max - availability)
+        return high_break_point
+
+    # Scale high break points.
+    fcas_semi_scheduled['HIGHBREAKPOINT'] = \
+        fcas_semi_scheduled.apply(lambda x:  get_new_high_break_point(x['AVAILABILITY'],  x['HIGHBREAKPOINT'],
+                                                                          x['ENABLEMENTMAX']),
+                                      axis=1)
+
+    # Adjust ENABLEMENTMAX.
+    fcas_semi_scheduled['ENABLEMENTMAX'] = \
+        np.where(fcas_semi_scheduled['ENABLEMENTMAX'] > fcas_semi_scheduled['AVAILABILITY'],
+                 fcas_semi_scheduled['AVAILABILITY'], fcas_semi_scheduled['ENABLEMENTMAX'])
+
+    fcas_semi_scheduled.drop(['AVAILABILITY'], axis=1)
+
+    # Combined bids back together.
+    BIDPEROFFER_D = pd.concat([energy_bids, fcas_not_semi_scheduled, fcas_semi_scheduled])
 
     return BIDPEROFFER_D
