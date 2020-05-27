@@ -2,10 +2,11 @@ import os
 import sqlite3
 import pandas as pd
 from nempy import markets, historical_spot_market_inputs as hi
+from time import time
 
 # Create a list of the historical dispatch intervals to be used.
-dispatch_intervals = hi.datetime_dispatch_sequence(start_time='2020/01/02 15:00:00',
-                                                   end_time='2020/01/02 21:00:00')
+dispatch_intervals = hi.datetime_dispatch_sequence(start_time='2020/01/02 00:00:00',
+                                                   end_time='2020/01/03 00:00:00')
 
 # Build a database of historical inputs if it doesn't already exist.
 if not os.path.isfile('historical_inputs.db'):

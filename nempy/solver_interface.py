@@ -60,8 +60,8 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     prob.verbose = 0
 
     sos_variables = None
-    if 'binaries' in decision_variables.keys():
-        sos_variables = decision_variables['binaries']
+    if 'interpolation_weights' in decision_variables.keys():
+        sos_variables = decision_variables['interpolation_weights']
 
     # 1. Create the decision variables
     decision_variables = pd.concat(decision_variables)
@@ -74,7 +74,7 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
                                                  name=str(variable_id))
 
     def add_sos_vars(sos_group):
-        prob.add_sos(list(zip(sos_group['vars'], [0 for var in sos_group['vars']])), 1)
+        prob.add_sos(list(zip(sos_group['vars'], sos_group['loss_segment'])), 2)
 
     if sos_variables is not None:
         sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: lp_variables[x])
@@ -91,8 +91,6 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     # 3. Create the constraints
     sos_constraints = []
     if len(constraints_rhs_and_type) > 0:
-        if 'binary_constraints' in constraints_rhs_and_type:
-            sos_constraints = list(constraints_rhs_and_type['binary_constraints']['constraint_id'])
         constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
     else:
         constraints_rhs_and_type = pd.DataFrame({})

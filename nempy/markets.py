@@ -1546,13 +1546,6 @@ class Spot:
                                                                                 self.next_constraint_id)
         next_constraint_id = weights_sum_rhs['constraint_id'].max() + 1
 
-        # Create binary variables.
-        binary_variables = inter.create_binaries(interpolation_break_points, next_variable_id)
-
-        # Creates binary constraint.
-        binary_lhs, binary_rhs = inter.create_binary_constraints(binary_variables, weight_variables, next_constraint_id)
-        next_constraint_id = binary_rhs['constraint_id'].max() + 1
-
         # Link weights to interconnector flow.
         link_to_flow_lhs, link_to_flow_rhs = inter.link_weights_to_inter_flow(weight_variables,
                                                                               self.decision_variables[
@@ -1566,7 +1559,7 @@ class Spot:
                                                            next_constraint_id)
 
         # Combine lhs sides, note these are complete lhs and don't need to be mapped to constraints.
-        lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs, binary_lhs])
+        lhs = pd.concat([weights_sum_lhs, link_to_flow_lhs, link_to_loss_lhs])
 
         # Combine constraints with a dynamic rhs i.e. a variable on the rhs.
         dynamic_rhs = pd.concat([link_to_flow_rhs, link_to_loss_rhs])
@@ -1575,13 +1568,11 @@ class Spot:
         self.decision_variables['interconnector_losses'] = loss_variables
         self.variable_to_constraint_map['regional']['interconnector_losses'] = loss_variables_constraint_map
         self.decision_variables['interpolation_weights'] = weight_variables
-        self.decision_variables['binaries'] = binary_variables
         self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])  # TODO pontential bug if losses adde twice.
         self.constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
-        self.constraints_rhs_and_type['binary_constraints'] = binary_rhs
         self.constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
-        self.next_variable_id = pd.concat([loss_variables, weight_variables, binary_variables])['variable_id'].max() + 1
-        self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs, binary_rhs])['constraint_id'].max() + 1
+        self.next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
+        self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
 
     @check.pre_dispatch
     def dispatch(self):
