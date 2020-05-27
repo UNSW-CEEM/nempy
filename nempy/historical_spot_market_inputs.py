@@ -1494,26 +1494,28 @@ def format_volume_bids(BIDPEROFFER_D):
         PRICEBAND1   bid volume in the 1st band, in MW (as `np.float64`)
         PRICEBAND2   bid volume in the 2nd band, in MW (as `np.float64`)
         PRICEBAND10  bid volume in the 10th band, in MW (as `np.float64`)
+        MAXAVAIL     the offered cap on dispatch, in MW (as `np.float64`)
         ===========  ====================================================
 
     Returns
     ----------
     demand_coefficients : pd.DataFrame
 
-        ========  ================================================================
-        Columns:  Description:
-        unit      unique identifier of a dispatch unit (as `str`)
-        service   the service being provided, optional, if missing energy assumed (as `str`)
-        1         bid volume in the 1st band, in MW (as `np.float64`)
-        2         bid volume in the 2nd band, in MW (as `np.float64`)
+        ================  =====================================================================================
+        Columns:          Description:
+        unit              unique identifier of a dispatch unit (as `str`)
+        service           the service being provided, optional, if missing energy assumed (as `str`)
+        1                 bid volume in the 1st band, in MW (as `np.float64`)
+        2                 bid volume in the 2nd band, in MW (as `np.float64`)
         :
-        10        bid volume in the nth band, in MW (as `np.float64`)
-        ========  ================================================================
+        10                bid volume in the nth band, in MW (as `np.float64`)
+        max_availability  the offered cap on dispatch, only used directly for fcas bids, in MW (as `np.float64`)
+        ================  ======================================================================================
     """
 
     volume_bids = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4',
-                                      'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
-                                      'BANDAVAIL10']]
+                                        'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
+                                        'BANDAVAIL10']]
     volume_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
     volume_bids['service'] = volume_bids['service'].apply(lambda x: service_name_mapping[x])
     return volume_bids
@@ -1569,7 +1571,7 @@ def format_price_bids(BIDDAYOFFER_D):
         service   the service being provided, optional, if missing energy assumed (as `str`)
         1         bid price in the 1st band, in MW (as `np.float64`)
         2         bid price in the 2nd band, in MW (as `np.float64`)
-        10         bid price in the nth band, in MW (as `np.float64`)
+        10        bid price in the nth band, in MW (as `np.float64`)
         ========  ================================================================
     """
 
@@ -2014,3 +2016,590 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
     ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
     return ic
+
+
+def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits):
+    """Checks that fcas bids meet criteria for being considered, returns a filtered version of volume and price bids.
+
+    The criteria are based on the
+    :download:`FCAS MODEL IN NEMDE documentation section 5  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`. Note the
+    remaining energy condition is not applied because it relates to pre-dispatch. Also note that for the Energy
+    Max Availability term we use the interval specific capacity determined in the determine_unit_limits function.
+
+    The criteria used are
+     - FCAS MAX AVAILABILITY > 0.0
+     - At least one price band must have a no zero volume bid
+     - The maximum energy availability >= FCAS enablement min
+     - FCAS enablement max > 0.0
+     - FCAS enablement min <= initial ouput <= FCAS enablement max
+     - AGCSTATUS == 0.0
+
+    Examples
+    --------
+    Inputs for three unit who meet all criteria for being enabled.
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'RAISEREG'],
+    ...   'BANDAVAIL1': [100.0, 50.0, 50.0],
+    ...   'BANDAVAIL2': [10.0, 10.0, 0.0],
+    ...   'MAXAVAIL': [0.0, 100.0, 100.0],
+    ...   'ENABLEMENTMIN': [0.0, 20.0, 20.0],
+    ...   'LOWBREAKPOINT': [0.0, 50.0, 50.0],
+    ...   'HIGHBREAKPOINT': [0.0, 70.0, 70.0],
+    ...   'ENABLEMENTMAX': [0.0, 100.0, 100.0],})
+
+    >>> BIDDAYOFFER_D = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'RAISEREG'],
+    ...   'PRICEBAND1': [100.0, 50.0, 60.0],
+    ...   'PRICEBAND2': [110.0, 60.0, 80.0]})
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['A', 'B', 'C'],
+    ...   'INITIALMW': [50.0, 60.0, 60.0],
+    ...   'AGCSTATUS': [0.0, 1.0, 1.0]})
+
+    >>> capacity_limits = pd.DataFrame({
+    ...   'unit': ['A', 'B', 'C'],
+    ...   'capacity': [50.0, 120.0, 80.0]})
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    1    C  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [3 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+    1    C  RAISEREG        60.0        80.0
+
+    If unit C's FCAS MAX AVAILABILITY is changed to zero then it gets filtered out.
+
+    >>> BIDPEROFFER_D_mod = BIDPEROFFER_D.copy()
+
+    >>> BIDPEROFFER_D_mod['MAXAVAIL'] = np.where(BIDPEROFFER_D_mod['DUID'] == 'C', 0.0, BIDPEROFFER_D_mod['MAXAVAIL'])
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D_mod, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+
+    If unit C's BANDAVAIL1 is changed to zero then it gets filtered out.
+
+    >>> BIDPEROFFER_D_mod = BIDPEROFFER_D.copy()
+
+    >>> BIDPEROFFER_D_mod['BANDAVAIL1'] = np.where(BIDPEROFFER_D_mod['DUID'] == 'C', 0.0,
+    ...                                            BIDPEROFFER_D_mod['BANDAVAIL1'])
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D_mod, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+
+    If unit C's capacity is changed to less than its enablement min then it gets filtered out.
+
+    >>> capacity_limits_mod = capacity_limits.copy()
+
+    >>> capacity_limits_mod['capacity'] = np.where(capacity_limits_mod['unit'] == 'C', 0.0,
+    ...                                            capacity_limits_mod['capacity'])
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits_mod)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+
+    If unit C's ENABLEMENTMIN ENABLEMENTMAX and INITIALMW are changed to zero and its then it gets filtered out.
+
+    >>> BIDPEROFFER_D_mod = BIDPEROFFER_D.copy()
+
+    >>> DISPATCHLOAD_mod = DISPATCHLOAD.copy()
+
+    >>> BIDPEROFFER_D_mod['ENABLEMENTMAX'] = np.where(BIDPEROFFER_D_mod['DUID'] == 'C', 0.0,
+    ...   BIDPEROFFER_D_mod['ENABLEMENTMAX'])
+
+    >>> BIDPEROFFER_D_mod['ENABLEMENTMIN'] = np.where(BIDPEROFFER_D_mod['DUID'] == 'C', 0.0,
+    ...   BIDPEROFFER_D_mod['ENABLEMENTMIN'])
+
+    >>> DISPATCHLOAD_mod['INITIALMW'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 0.0, DISPATCHLOAD_mod['INITIALMW'])
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D_mod, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+
+    If unit C's INITIALMW is changed to less than its enablement min then it gets filtered out.
+
+    >>> DISPATCHLOAD_mod = DISPATCHLOAD.copy()
+
+    >>> DISPATCHLOAD_mod['INITIALMW'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 19.0, DISPATCHLOAD_mod['INITIALMW'])
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+
+    If unit C's AGCSTATUS is changed to  0.0 then it gets filtered out.
+
+    >>> DISPATCHLOAD_mod = DISPATCHLOAD.copy()
+
+    >>> DISPATCHLOAD_mod['AGCSTATUS'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 0.0, DISPATCHLOAD_mod['AGCSTATUS'])
+
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
+
+    All criteria are meet so no units are filtered out.
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
+    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    >>> print(BIDDAYOFFER_D_out)
+      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A    ENERGY       100.0       110.0
+    0    B  RAISEREG        50.0        60.0
+
+    Parameters
+    ----------
+    BIDPEROFFER_D : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        DUID            unique identifier of a unit (as `str`)
+        BIDTYPE         the service being provided (as `str`)
+        PRICEBAND1      bid volume in the 1st band, in MW (as `np.float64`)
+        PRICEBAND2      bid volume in the 2nd band, in MW (as `np.float64`)
+        PRICEBAND10     bid volume in the 10th band, in MW (as `np.float64`)
+        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
+        ENABLEMENTMIN   the energy dispatch level at which the unit can begin to
+                        provide the contingency service, in MW (as `np.float64`)
+        LOWBREAKPOINT   the energy dispatch level at which the unit can provide
+                        the full contingency service offered, in MW (as `np.float64`)
+        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
+                        longer provide the full contingency service offered,
+                        in MW (as `np.float64`)
+        ENABLEMENTMAX   the energy dispatch level at which the unit can
+                        no longer provide any contingency service,
+                        in MW (as `np.float64`)
+        ==============  ====================================================
+
+    BIDDAYOFFER_D : pd.DataFrame
+
+        ===========  ====================================================
+        Columns:     Description:
+        DUID         unique identifier of a unit (as `str`)
+        BIDTYPE      the service being provided (as `str`)
+        PRICEBAND1   bid price in the 1st band, in MW (as `np.float64`)
+        PRICEBAND2   bid price in the 2nd band, in MW (as `np.float64`)
+        PRICEBAND10  bid price in the 10th band, in MW (as `np.float64`)
+        ===========  ====================================================
+
+    DISPATCHLOAD : pd.DataFrame
+
+        ===============  ======================================================================================
+        Columns:         Description:
+        DUID             unique identifier of a dispatch unit (as `str`)
+        INITIALMW        the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+        AGCSTATUS        flag for if the units automatic generation control is enabled 0.0 for no, 1.0 for yes,
+                         (as `np.float64`)
+        ===============  ======================================================================================
+
+    capacity_limits : pd.DataFrame
+
+        ==============  =====================================================================================
+        Columns:        Description:
+        unit            unique identifier of a dispatch unit (as `str`)
+        capacity        the maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
+        ==============  =====================================================================================
+
+    Returns
+    -------
+    BIDPEROFFER_D : pd.DataFrame
+
+    BIDDAYOFFER_D : pd.DataFrame
+
+    """
+    # Split bids based on type, no filtering will occur to energy bids.
+    energy_bids = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
+    fcas_bids = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
+    energy_price_bids = BIDDAYOFFER_D[BIDDAYOFFER_D['BIDTYPE'] == 'ENERGY']
+    fcas_price_bids = BIDDAYOFFER_D[BIDDAYOFFER_D['BIDTYPE'] != 'ENERGY']
+
+    # Filter out fcas_bids that don't have an offered availability greater than zero.
+    fcas_bids = fcas_bids[fcas_bids['MAXAVAIL'] > 0.0]
+
+    # Filter out fcas_bids that do not have one bid band availability greater than zero.
+    fcas_bids['band_greater_than_zero'] = 0.0
+    for band in ['BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7',
+                 'BANDAVAIL8', 'BANDAVAIL9', 'BANDAVAIL10']:
+        if band in fcas_bids.columns:
+            fcas_bids['band_greater_than_zero'] = np.where(fcas_bids[band] > 0.0, 1.0,
+                                                           fcas_bids['band_greater_than_zero'])
+    fcas_bids = fcas_bids[fcas_bids['band_greater_than_zero'] > 0.0]
+    fcas_bids = fcas_bids.drop(['band_greater_than_zero'], axis=1)
+
+    # Filter out fcas_bids where their maximum energy output is less than the fcas enablement minimum value. If the
+    fcas_bids = pd.merge(fcas_bids, capacity_limits, 'inner', left_on='DUID', right_on='unit')
+    fcas_bids = fcas_bids[fcas_bids['capacity'] >= fcas_bids['ENABLEMENTMIN']]
+    fcas_bids = fcas_bids.drop(['unit', 'capacity'], axis=1)
+
+    # Filter out fcas_bids where the enablement max is not greater than zero.
+    fcas_bids = fcas_bids[fcas_bids['ENABLEMENTMAX'] > 0.0]
+
+    # Filter out fcas_bids where the unit is not initially operating between the enablement min and max.
+    fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD, 'inner', on='DUID')
+    fcas_bids = fcas_bids[(fcas_bids['ENABLEMENTMAX'] >= fcas_bids['INITIALMW']) &
+                          (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'])]
+
+    # Filter out fcas_bids where the AGC status is not set to 1.0
+    fcas_bids = fcas_bids[fcas_bids['AGCSTATUS'] != 0.0]
+    fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW'], axis=1)
+
+    # Filter the fcas price bids use the remaining volume bids.
+    fcas_price_bids = pd.merge(fcas_price_bids, fcas_bids.loc[:, ['DUID', 'BIDTYPE']], 'inner', on=['DUID', 'BIDTYPE'])
+
+    # Combine fcas and energy bid back together.
+    BIDDAYOFFER_D = pd.concat([energy_price_bids, fcas_price_bids])
+    BIDPEROFFER_D = pd.concat([energy_bids, fcas_bids])
+
+    return BIDPEROFFER_D, BIDDAYOFFER_D
+
+
+def scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
+    """Scale regulating FCAS enablement and break points where AGC enablement limits are more restrictive than offers.
+
+    The scaling is caried out as per the
+    :download:`FCAS MODEL IN NEMDE documentation section 4.1  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+    Examples
+    --------
+    In this case AGC limits more restrictive then offered values so the trapezium slopes are scaled.
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['B', 'B', 'B'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'LOWERREG'],
+    ...   'ENABLEMENTMIN': [0.0, 20.0, 30.0],
+    ...   'LOWBREAKPOINT': [0.0, 50.0, 50.0],
+    ...   'HIGHBREAKPOINT': [0.0, 70.0, 70.0],
+    ...   'ENABLEMENTMAX': [0.0, 100.0, 90.0]})
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['B'],
+    ...   'RAISEREGENABLEMENTMAX': [90.0],
+    ...   'RAISEREGENABLEMENTMIN': [30.0],
+    ...   'LOWERREGENABLEMENTMAX': [80.0],
+    ...   'LOWERREGENABLEMENTMIN': [40.0]})
+
+    >>> BIDPEROFFER_D_out = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    B    ENERGY            0.0            0.0             0.0            0.0
+    0    B  LOWERREG           40.0           60.0            60.0           80.0
+    0    B  RAISEREG           30.0           60.0            60.0           90.0
+
+    In this case we change the AGC limits to be less restrictive then offered values so the trapezium slopes are not
+    scaled.
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['B'],
+    ...   'RAISEREGENABLEMENTMAX': [110.0],
+    ...   'RAISEREGENABLEMENTMIN': [10.0],
+    ...   'LOWERREGENABLEMENTMAX': [100.0],
+    ...   'LOWERREGENABLEMENTMIN': [20.0]})
+
+    >>> BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+
+    >>> print(BIDPEROFFER_D)
+      DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    B    ENERGY            0.0            0.0             0.0            0.0
+    0    B  LOWERREG           30.0           50.0            70.0           90.0
+    0    B  RAISEREG           20.0           50.0            70.0          100.0
+
+    Parameters
+    ----------
+
+    BIDPEROFFER_D : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        DUID            unique identifier of a unit (as `str`)
+        BIDTYPE         the service being provided (as `str`)
+        ENABLEMENTMIN   the energy dispatch level at which the unit can begin to
+                        provide the FCAS service, in MW (as `np.float64`)
+        LOWBREAKPOINT   the energy dispatch level at which the unit can provide
+                        the full FCAS offered, in MW (as `np.float64`)
+        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
+                        longer provide the full FCAS service offered,
+                        in MW (as `np.float64`)
+        ENABLEMENTMAX   the energy dispatch level at which the unit can
+                        no longer provide any FCAS service,
+                        in MW (as `np.float64`)
+        ==============  ====================================================
+
+    DISPATCHLOAD : pd.DataFrame
+
+        =====================  ======================================================================================
+        Columns:               Description:
+        DUID                   unique identifier of a dispatch unit (as `str`)
+        RAISEREGENABLEMENTMAX  AGC telemetered ENABLEMENTMAX for raise regulation, in MW (as `np.float64`)
+        RAISEREGENABLEMENTMIN  AGC telemetered ENABLEMENTMIN for raise regulation, in MW (as `np.float64`)
+        LOWERREGENABLEMENTMAX  AGC telemetered ENABLEMENTMAX for lower regulation, in MW (as `np.float64`)
+        LOWERREGENABLEMENTMIN  AGC telemetered ENABLEMENTMIN for lower regulation, in MW (as `np.float64`)
+        =====================  ======================================================================================
+
+    """
+    # Split bid based on the scaling that needs to be done.
+    lower_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG']
+    raise_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG']
+    bids_not_subject_to_scaling = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
+
+    # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
+    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN']],
+                         'inner', on='DUID')
+    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN']],
+                         'inner', on='DUID')
+
+    # Scale lower reg lower trapezium slope.
+    lower_reg['LOWBREAKPOINT'] = np.where(lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN'],
+                                          lower_reg['LOWBREAKPOINT'] +
+                                          (lower_reg['LOWERREGENABLEMENTMIN'] - lower_reg['ENABLEMENTMIN']),
+                                          lower_reg['LOWBREAKPOINT'])
+    lower_reg['ENABLEMENTMIN'] = np.where(lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN'],
+                                          lower_reg['LOWERREGENABLEMENTMIN'], lower_reg['ENABLEMENTMIN'])
+    # Scale lower reg upper trapezium slope.
+    lower_reg['HIGHBREAKPOINT'] = np.where(lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX'],
+                                           lower_reg['HIGHBREAKPOINT'] -
+                                           (lower_reg['ENABLEMENTMAX'] - lower_reg['LOWERREGENABLEMENTMAX']),
+                                           lower_reg['HIGHBREAKPOINT'])
+    lower_reg['ENABLEMENTMAX'] = np.where(lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX'],
+                                          lower_reg['LOWERREGENABLEMENTMAX'], lower_reg['ENABLEMENTMAX'])
+
+    # Scale raise reg lower trapezium slope.
+    raise_reg['LOWBREAKPOINT'] = np.where(raise_reg['RAISEREGENABLEMENTMIN'] > raise_reg['ENABLEMENTMIN'],
+                                          raise_reg['LOWBREAKPOINT'] +
+                                          (raise_reg['RAISEREGENABLEMENTMIN'] - raise_reg['ENABLEMENTMIN']),
+                                          raise_reg['LOWBREAKPOINT'])
+    raise_reg['ENABLEMENTMIN'] = np.where(raise_reg['RAISEREGENABLEMENTMIN'] > raise_reg['ENABLEMENTMIN'],
+                                          raise_reg['RAISEREGENABLEMENTMIN'], raise_reg['ENABLEMENTMIN'])
+    # Scale raise reg upper trapezium slope.
+    raise_reg['HIGHBREAKPOINT'] = np.where(raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX'],
+                                           raise_reg['HIGHBREAKPOINT'] -
+                                           (raise_reg['ENABLEMENTMAX'] - raise_reg['RAISEREGENABLEMENTMAX']),
+                                           raise_reg['HIGHBREAKPOINT'])
+    raise_reg['ENABLEMENTMAX'] = np.where(raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX'],
+                                          raise_reg['RAISEREGENABLEMENTMAX'], raise_reg['ENABLEMENTMAX'])
+
+    # Drop un need columns
+    raise_reg = raise_reg.drop(['RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN'], axis=1)
+    lower_reg = lower_reg.drop(['LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN'], axis=1)
+
+    # Combined bids back together.
+    BIDPEROFFER_D = pd.concat([bids_not_subject_to_scaling, lower_reg, raise_reg])
+
+    return BIDPEROFFER_D
+
+
+def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
+    """Scale regulating FCAS max availability and break points where AGC ramp rates are less than offered availability.
+
+    The scaling is caried out as per the
+    :download:`FCAS MODEL IN NEMDE documentation section 4.2  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+    Examples
+    --------
+    In this case AGC limits more restrictive then offered values so the trapezium slopes are scaled.
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ...   'DUID': ['B', 'B', 'B'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'LOWERREG'],
+    ...   'ENABLEMENTMIN': [0.0, 20.0, 30.0],
+    ...   'LOWBREAKPOINT': [0.0, 50.0, 50.0],
+    ...   'HIGHBREAKPOINT': [0.0, 70.0, 70.0],
+    ...   'ENABLEMENTMAX': [0.0, 100.0, 90.0]})
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['B'],
+    ...   'RAISEREGENABLEMENTMAX': [90.0],
+    ...   'RAISEREGENABLEMENTMIN': [30.0],
+    ...   'LOWERREGENABLEMENTMAX': [80.0],
+    ...   'LOWERREGENABLEMENTMIN': [40.0]})
+
+    >>> BIDPEROFFER_D_out = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+
+    >>> print(BIDPEROFFER_D_out)
+      DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    B    ENERGY            0.0            0.0             0.0            0.0
+    0    B  LOWERREG           40.0           60.0            60.0           80.0
+    0    B  RAISEREG           30.0           60.0            60.0           90.0
+
+    In this case we change the AGC limits to be less restrictive then offered values so the trapezium slopes are not
+    scaled.
+
+    >>> DISPATCHLOAD = pd.DataFrame({
+    ...   'DUID': ['B'],
+    ...   'RAISEREGENABLEMENTMAX': [110.0],
+    ...   'RAISEREGENABLEMENTMIN': [10.0],
+    ...   'LOWERREGENABLEMENTMAX': [100.0],
+    ...   'LOWERREGENABLEMENTMIN': [20.0]})
+
+    >>> BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+
+    >>> print(BIDPEROFFER_D)
+      DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    B    ENERGY            0.0            0.0             0.0            0.0
+    0    B  LOWERREG           30.0           50.0            70.0           90.0
+    0    B  RAISEREG           20.0           50.0            70.0          100.0
+
+    Parameters
+    ----------
+
+    BIDPEROFFER_D : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        DUID            unique identifier of a unit (as `str`)
+        BIDTYPE         the service being provided (as `str`)
+        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
+        ENABLEMENTMIN   the energy dispatch level at which the unit can begin to
+                        provide the FCAS service, in MW (as `np.float64`)
+        LOWBREAKPOINT   the energy dispatch level at which the unit can provide
+                        the full FCAS offered, in MW (as `np.float64`)
+        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
+                        longer provide the full FCAS service offered,
+                        in MW (as `np.float64`)
+        ENABLEMENTMAX   the energy dispatch level at which the unit can
+                        no longer provide any FCAS service,
+                        in MW (as `np.float64`)
+        ==============  ====================================================
+
+    DISPATCHLOAD : pd.DataFrame
+
+        ===============  ======================================================================================
+        Columns:         Description:
+        DUID             unique identifier of a dispatch unit (as `str`)
+        INITIALMW        the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
+        AVAILABILITY     the reported maximum output of the unit for dispatch interval, in MW (as `np.float64`)
+        RAMPDOWNRATE     the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
+        RAMPUPRATE       the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
+        ===============  ======================================================================================
+
+    """
+    # Split bid based on the scaling that needs to be done.
+    lower_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG']
+    raise_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG']
+    bids_not_subject_to_scaling = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
+
+    # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
+    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']], 'inner', on='DUID')
+    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']], 'inner', on='DUID')
+
+    # Calculate the max FCAS possible based on ramp rates.
+    lower_reg['RAMPMAX'] = lower_reg['INITIALMW'] - lower_reg['RAMPDOWNRATE'] * (5 / 60)
+    raise_reg['RAMPMAX'] = raise_reg['INITIALMW'] + raise_reg['RAMPUPRATE'] * (5 / 60)
+
+    lower_reg = lower_reg.drop(['INITIALMW', 'RAMPDOWNRATE'], axis=1)
+    raise_reg = raise_reg.drop(['INITIALMW', 'RAMPUPRATE'], axis=1)
+
+    reg = pd.concat([lower_reg, raise_reg])
+
+    def get_new_low_break_point(old_max, ramp_max, low_break_point, enablement_min):
+        if old_max < ramp_max:
+            # Get slope of trapezium
+            m = old_max / (low_break_point - enablement_min)
+            # Substitute new_max into the slope equation and re-arrange to find the new break point needed to keep the
+            # slope the same.
+            low_break_point = enablement_min - (ramp_max / m)
+        return low_break_point
+
+    def get_new_low_high_point(old_max, ramp_max, low_break_point, enablement_min):
+        if old_max < ramp_max:
+            # Get slope of trapezium
+            m = old_max / (low_break_point - enablement_min)
+            # Substitute new_max into the slope equation and re-arrange to find the new break point needed to keep the
+            # slope the same.
+            low_break_point = enablement_min - (ramp_max / m)
+        return low_break_point
+
+    # Scale lower reg lower trapezium slope.
+    reg['LOWBREAKPOINT'] = reg.apply(lambda x: get_new_low_break_point(x['MAXAVAIL'], x['RAMPMAX'], x['LOWBREAKPOINT'],
+                                                                       x['ENABLEMENTMIN']), axis=1)
+    reg['HIGHBREAKPOINT'] = reg.apply(lambda x: get_new_low_high_point(x['MAXAVAIL'], x['RAMPMAX'], x['HIGHBREAKPOINT'],
+                                                                       x['ENABLEMENTMAX']), axis=1)
+
+    # Combined bids back together.
+    BIDPEROFFER_D = pd.concat([bids_not_subject_to_scaling, reg])
+
+    return BIDPEROFFER_D

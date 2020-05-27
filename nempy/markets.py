@@ -1219,8 +1219,8 @@ class Spot:
                                contingency service offered, in MW (as `np.float64`)
             high_break_point   the energy dispatch level at which the unit can no longer provide the
                                full contingency service offered, in MW (as `np.float64`)
-            enablement_max     the energy dispatch level at which the unit can no longer begin
-                               the contingency service, in MW (as `np.float64`)
+            enablement_max     the energy dispatch level at which the unit can no longer provide any
+                               contingency service, in MW (as `np.float64`)
             ================   ======================================================================
 
         Returns
