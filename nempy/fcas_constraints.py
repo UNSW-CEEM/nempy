@@ -113,8 +113,8 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
     constraints = pd.merge(constraints, unit_limits, 'left', on='unit')
     constraints['rhs'] = np.where(
         constraints['service'] == 'raise_reg',
-        constraints['initial_output'] + constraints['ramp_up_rate'] / (dispatch_interval / 60),
-        constraints['initial_output'] - constraints['ramp_down_rate'] / (dispatch_interval / 60))
+        constraints['initial_output'] + constraints['ramp_up_rate'] * (dispatch_interval / 60),
+        constraints['initial_output'] - constraints['ramp_down_rate'] * (dispatch_interval / 60))
     # Set the inequality type based on the regulation service being provided.
     constraints['type'] = np.where(constraints['service'] == 'raise_reg', '<=', '>=')
     rhs_and_type = constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
@@ -131,7 +131,7 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
     return rhs_and_type, variable_mapping
 
 
-def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
+def joint_capacity_constraints(contingency_trapeziums, unit_info, next_constraint_id):
     """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch targets.
 
     Create two constraints for each contingency services, one ensures operation on upper slope of the fcas contingency
@@ -154,9 +154,14 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
     ... 'high_break_point': [60.0],
     ... 'enablement_max': [80.0]})
 
+    >>> unit_info = pd.DataFrame({
+    ... 'unit': ['A'],
+    ... 'dispatch_type': ['generator']})
+
     >>> next_constraint_id = 1
 
-    >>> type_and_rhs, variable_mapping = joint_capacity_constraints(contingency_trapeziums, next_constraint_id)
+    >>> type_and_rhs, variable_mapping = joint_capacity_constraints(contingency_trapeziums, unit_info,
+    ...                                                             next_constraint_id)
 
     >>> print(type_and_rhs)
       unit   service  constraint_id type   rhs
@@ -192,6 +197,13 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
                        the contingency service, in MW (as `np.float64`)
     ================   ======================================================================
 
+    unit_info : pd.DataFrame
+    ================   ======================================================================
+    Columns:           Description:
+    unit               unique identifier of a dispatch unit (as `str`)
+    dispatch_type      "load" or "generator" (as `str`)
+    ================   ======================================================================
+
 
     next_constraint_id : int
         The next integer to start using for constraint ids
@@ -224,6 +236,7 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
     """
 
     # Create each constraint set.
+    contingency_trapeziums = pd.merge(contingency_trapeziums, unit_info, 'inner', on='unit')
     constraints_upper_slope = hf.save_index(contingency_trapeziums, 'constraint_id', next_constraint_id)
     next_constraint_id = max(constraints_upper_slope['constraint_id']) + 1
     constraints_lower_slope = hf.save_index(contingency_trapeziums, 'constraint_id', next_constraint_id)
@@ -254,8 +267,10 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
                                                                       'upper_slope_coefficient']]
     contingency_mapping_upper_slope = \
         contingency_mapping_upper_slope.rename(columns={"upper_slope_coefficient": "coefficient"})
-    regulation_mapping_upper_slope = constraints_upper_slope.loc[:, ['constraint_id', 'unit']]
-    regulation_mapping_upper_slope['service'] = 'raise_reg'
+    regulation_mapping_upper_slope = constraints_upper_slope.loc[:, ['constraint_id', 'unit', 'dispatch_type']]
+    regulation_mapping_upper_slope['service'] = np.where(regulation_mapping_upper_slope['dispatch_type'] == 'generator',
+                                                         'raise_reg', 'lower_reg')
+    regulation_mapping_upper_slope = regulation_mapping_upper_slope.drop('dispatch_type', axis=1)
     regulation_mapping_upper_slope['coefficient'] = 1.0
 
     # Define the variables on the lhs of the lower slope constraints and their coefficients.
@@ -267,8 +282,10 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
     contingency_mapping_lower_slope = \
         contingency_mapping_lower_slope.rename(columns={"lower_slope_coefficient": "coefficient"})
     contingency_mapping_lower_slope['coefficient'] = -1 * contingency_mapping_lower_slope['coefficient']
-    regulation_mapping_lower_slope = constraints_lower_slope.loc[:, ['constraint_id', 'unit']]
-    regulation_mapping_lower_slope['service'] = 'lower_reg'
+    regulation_mapping_lower_slope = constraints_lower_slope.loc[:, ['constraint_id', 'unit', 'dispatch_type']]
+    regulation_mapping_lower_slope['service'] = np.where(regulation_mapping_lower_slope['dispatch_type'] == 'generator',
+                                                         'lower_reg', 'raise_reg')
+    regulation_mapping_lower_slope = regulation_mapping_lower_slope.drop('dispatch_type', axis=1)
     regulation_mapping_lower_slope['coefficient'] = -1.0
 
     # Combine type_and_rhs and variable_mapping.

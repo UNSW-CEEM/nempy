@@ -22,10 +22,10 @@ class Spot:
         self.next_constraint_id = 0
         self.check = True
 
-    @check.required_columns('unit_info', ['unit'])
-    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.float64})
     @check.required_columns('unit_info', ['unit', 'region'])
-    @check.allowed_columns('unit_info', ['unit', 'region', 'loss_factor'])
+    @check.allowed_columns('unit_info', ['unit', 'region', 'loss_factor', 'dispatch_type'])
+    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.float64,
+                                           'dispatch_type': str})
     @check.column_values_must_be_real('unit_info', ['loss_factor'])
     @check.column_values_not_negative('unit_info', ['loss_factor'])
     def set_unit_info(self, unit_info):
@@ -60,14 +60,15 @@ class Spot:
         unit_info : pd.DataFrame
             Information on a unit basis, not all columns are required.
 
-            ===========  ==============================================================================================
-            Columns:     Description:
-            unit         unique identifier of a dispatch unit, required (as `str`)
-            region       location of unit, required (as `str`)
-            loss_factor  marginal, average or combined loss factors, \n
-                         :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
-                         optional (as `np.int64`)
-            ===========  ==============================================================================================
+            ===========    ============================================================================================
+            Columns:       Description:
+            unit           unique identifier of a dispatch unit, required (as `str`)
+            region         location of unit, required (as `str`)
+            loss_factor    marginal, average or combined loss factors, \n
+                           :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
+                           optional (as `np.int64`)
+            dispatch_type  "load" or "generator" (as `str`)
+            =============  ============================================================================================
 
         Raises
         ------
@@ -923,7 +924,7 @@ class Spot:
     @check.repeated_rows('unit_limits', ['unit'], arg=2)
     @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64}, arg=2)
     @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_up_rate', 'ramp_down_rate'], arg=2)
-    @check.column_values_not_negative('unit_limits', ['initial_output', 'ramp_up_rate', 'ramp_down_rate'], arg=2)
+    @check.column_values_not_negative('unit_limits', ['ramp_up_rate', 'ramp_down_rate'], arg=2)
     def set_joint_ramping_constraints(self, regulation_units, unit_limits):
         """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
 
@@ -1043,8 +1044,7 @@ class Spot:
                                                                  'low_break_point', 'high_break_point',
                                                                  'enablement_max'], arg=1)
     @check.column_values_not_negative('contingency_trapeziums', ['max_availability', 'enablement_min',
-                                                                 'low_break_point', 'high_break_point',
-                                                                 'enablement_max'], arg=1)
+                                                                 'low_break_point', 'enablement_max'], arg=1)
     def set_joint_capacity_constraints(self, contingency_trapeziums):
         """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch.
 
@@ -1136,8 +1136,8 @@ class Spot:
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
 
-        rhs_and_type, variable_map = fcas_constraints.joint_capacity_constraints(contingency_trapeziums,
-                                                                                 self.next_constraint_id)
+        rhs_and_type, variable_map = fcas_constraints.joint_capacity_constraints(
+            contingency_trapeziums, self.unit_info.loc[:, ['unit', 'dispatch_type']], self.next_constraint_id)
         self.constraints_rhs_and_type['joint_capacity'] = rhs_and_type
         self.constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
@@ -1152,8 +1152,7 @@ class Spot:
                                                                 'low_break_point', 'high_break_point',
                                                                 'enablement_max'], arg=1)
     @check.column_values_not_negative('regulation_trapeziums', ['max_availability', 'enablement_min',
-                                                                'low_break_point', 'high_break_point',
-                                                                'enablement_max'], arg=1)
+                                                                'low_break_point', 'enablement_max'], arg=1)
     def set_energy_and_regulation_capacity_constraints(self, regulation_trapeziums):
         """Creates constraints to ensure there is adequate capacity for regulation and energy dispatch targets.
 

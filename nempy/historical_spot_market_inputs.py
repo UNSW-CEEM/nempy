@@ -153,7 +153,13 @@ class _MMSTable:
             'LOSSFLOWCOEFFICIENT': 'REAL', 'IMPORTLIMIT': 'REAL', 'EXPORTLIMIT': 'REAL', 'LOSSSEGMENT': 'TEXT',
             'MWBREAKPOINT': 'REAL', 'DEMANDCOEFFICIENT': 'REAL', 'INTERCONNECTORID': 'TEXT', 'REGIONFROM': 'TEXT',
             'REGIONTO': 'TEXT', 'MWFLOW': 'REAL', 'MWLOSSES': 'REAL', 'MINIMUMLOAD': 'REAL', 'MAXCAPACITY': 'REAL',
-            'SEMIDISPATCHCAP': 'REAL', 'RRP': 'REAL', 'SCHEDULE_TYPE': 'TEXT'
+            'SEMIDISPATCHCAP': 'REAL', 'RRP': 'REAL', 'SCHEDULE_TYPE': 'TEXT', 'LOWER5MIN': 'REAL',
+            'LOWER60SEC': 'REAL', 'LOWER6SEC': 'REAL', 'RAISE5MIN': 'REAL', 'RAISE60SEC': 'REAL', 'RAISE6SEC': 'REAL',
+            'LOWERREG': 'REAL', 'RAISEREG': 'REAL', 'RAISEREGAVAILABILITY': 'REAL',
+            'RAISE6SECACTUALAVAILABILITY': 'REAL', 'RAISE60SECACTUALAVAILABILITY': 'REAL',
+            'RAISE5MINACTUALAVAILABILITY': 'REAL', 'RAISEREGACTUALAVAILABILITY': 'REAL',
+            'LOWER6SECACTUALAVAILABILITY': 'REAL', 'LOWER60SECACTUALAVAILABILITY': 'REAL',
+            'LOWER5MINACTUALAVAILABILITY': 'REAL', 'LOWERREGACTUALAVAILABILITY': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1130,7 +1136,13 @@ class DBManager:
                                                       'INITIALMW', 'TOTALCLEARED', 'RAMPDOWNRATE', 'RAMPUPRATE',
                                                       'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
                                                       'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN',
-                                                      'SEMIDISPATCHCAP'],
+                                                      'SEMIDISPATCHCAP', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC',
+                                                      'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'LOWERREG', 'RAISEREG',
+                                                      'RAISEREGAVAILABILITY', 'RAISE6SECACTUALAVAILABILITY',
+                                                      'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
+                                                      'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
+                                                      'LOWER60SECACTUALAVAILABILITY', 'LOWER5MINACTUALAVAILABILITY',
+                                                      'LOWERREGACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
             table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'RRP'],
@@ -1435,7 +1447,7 @@ def format_unit_info(DUDETAILSUMMARY):
         ======================  ==============================================================================
         Columns:                Description:
         unit                    unique identifier of a unit (as `str`)
-        dispatch_type           whether the unit is GENERATOR or LOAD (as `str`)
+        dispatch_type           whether the unit is 'generator' or 'load' (as `str`)
         connection_point        the unique identifier of the units location (as `str`)
         region                  the unique identifier of the units market region (as `str`)
         loss_factor             the units combined transmission and distribution loss factor (as `np.float64`)
@@ -1581,6 +1593,78 @@ def format_price_bids(BIDDAYOFFER_D):
     price_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
     price_bids['service'] = price_bids['service'].apply(lambda x: service_name_mapping[x])
     return price_bids
+
+
+def format_fcas_trapezium_constraints(BIDPEROFFER_D):
+    """Extracts and re-formats the fcas trapezium data from the AEMO MSS table BIDDAYOFFER_D.
+
+    Examples
+    --------
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ... 'DUID': ['A', 'B'],
+    ... 'BIDTYPE': ['RAISE60SEC', 'ENERGY'],
+    ... 'MAXAVAIL': [60.0, 0.0],
+    ... 'ENABLEMENTMIN': [20.0, 0.0],
+    ... 'LOWBREAKPOINT': [40.0, 0.0],
+    ... 'HIGHBREAKPOINT': [60.0, 0.0],
+    ... 'ENABLEMENTMAX': [80.0, 0.0]})
+
+    >>> fcas_trapeziums = format_fcas_trapezium_constraints(BIDPEROFFER_D)
+
+    >>> print(fcas_trapeziums)
+      unit    service  ...  high_break_point  enablement_max
+    0    A  raise_60s  ...              60.0            80.0
+    <BLANKLINE>
+    [1 rows x 7 columns]
+
+    Parameters
+    ----------
+    BIDPEROFFER_D : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        DUID            unique identifier of a unit (as `str`)
+        BIDTYPE         the service being provided (as `str`)
+        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
+        ENABLEMENTMIN   the energy dispatch level at which the unit can begin to
+                        provide the FCAS service, in MW (as `np.float64`)
+        LOWBREAKPOINT   the energy dispatch level at which the unit can provide
+                        the full FCAS offered, in MW (as `np.float64`)
+        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
+                        longer provide the full FCAS service offered,
+                        in MW (as `np.float64`)
+        ENABLEMENTMAX   the energy dispatch level at which the unit can
+                        no longer provide any FCAS service,
+                        in MW (as `np.float64`)
+        ==============  ====================================================
+
+    Returns
+    ----------
+    fcas_trapeziums : pd.DataFrame
+
+            ================   ======================================================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit (as `str`)
+            service            the contingency service being offered (as `str`)
+            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
+            enablement_min     the energy dispatch level at which the unit can begin to provide the
+                               contingency service, in MW (as `np.float64`)
+            low_break_point    the energy dispatch level at which the unit can provide the full
+                               contingency service offered, in MW (as `np.float64`)
+            high_break_point   the energy dispatch level at which the unit can no longer provide the
+                               full contingency service offered, in MW (as `np.float64`)
+            enablement_max     the energy dispatch level at which the unit can no longer begin
+                               the contingency service, in MW (as `np.float64`)
+            ================   ======================================================================
+    """
+    BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
+    trapezium_cons = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'ENABLEMENTMIN', 'LOWBREAKPOINT',
+                                           'HIGHBREAKPOINT', 'ENABLEMENTMAX']]
+    trapezium_cons.columns = ['unit', 'service', 'max_availability', 'enablement_min', 'low_break_point',
+                              'high_break_point', 'enablement_max']
+    trapezium_cons['service'] = trapezium_cons['service'].apply(lambda x: service_name_mapping[x])
+    return trapezium_cons
 
 
 def format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT):
@@ -2004,6 +2088,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
                                   (ic['INITIALMW'] - ic['TOTALCLEARED']) * (60 / 5), ic['RAMPDOWNRATE'])
 
     # Override AVAILABILITY when SEMIDISPATCHCAP is 1.0
+    BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
     ic = pd.merge(ic, BIDPEROFFER_D.loc[:, ['DUID', 'MAXAVAIL']], 'inner', on='DUID')
     ic['AVAILABILITY'] = np.where((ic['MAXAVAIL'] < ic['AVAILABILITY']) & (ic['SEMIDISPATCHCAP'] == 1.0) &
                                   (ic['TOTALCLEARED'] <= ic['MAXAVAIL']), ic['MAXAVAIL'],
@@ -2319,7 +2404,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     fcas_bids = fcas_bids[fcas_bids['ENABLEMENTMAX'] > 0.0]
 
     # Filter out fcas_bids where the unit is not initially operating between the enablement min and max.
-    fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD, 'inner', on='DUID')
+    fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'AGCSTATUS']], 'inner', on='DUID')
     fcas_bids = fcas_bids[(fcas_bids['ENABLEMENTMAX'] >= fcas_bids['INITIALMW']) &
                           (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'])]
 
@@ -2573,7 +2658,7 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     reg = pd.concat([lower_reg, raise_reg])
 
     def get_new_low_break_point(old_max, ramp_max, low_break_point, enablement_min):
-        if old_max > ramp_max:
+        if old_max > ramp_max and (low_break_point - enablement_min) != 0.0:
             # Get slope of trapezium
             m = old_max / (low_break_point - enablement_min)
             # Substitute new_max into the slope equation and re-arrange to find the new break point needed to keep the
@@ -2582,7 +2667,7 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
         return low_break_point
 
     def get_new_high_break_point(old_max, ramp_max, high_break_point, enablement_max):
-        if old_max > ramp_max:
+        if old_max > ramp_max and (enablement_max - high_break_point) != 0.0:
             # Get slope of trapezium
             m = old_max / (enablement_max - high_break_point)
             # Substitute new_max into the slope equation and re-arrange to find the new break point needed to keep the

@@ -127,17 +127,14 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
      #   prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 1)
 
     # 4. Solve the problem
-    k = prob.add_var(var_type=BINARY, obj=1.0)
-    #tc = 0
-    #t0 = time()
     status = prob.optimize()
-    #tc += time() - t0
-    #print(tc)
     if status != OptimizationStatus.OPTIMAL:
+        # Attempt find constraint causing infeasibility.
+        con_index = find_problem_constraint(prob)
+        print('Couldn\'t find an optimal solution, but removing con {} fixed INFEASIBLITY'.format(con_index))
         raise ValueError('Linear program infeasible')
 
     # 5. Retrieve optimal values of each variable
-    #t0 = time()
     decision_variables = decision_variables.droplevel(1)
     decision_variables['lp_variables'] = [lp_variables[i] for i in decision_variables['variable_id']]
     decision_variables['value'] = decision_variables['lp_variables'].apply(lambda x: x.x)
@@ -193,22 +190,13 @@ def make_constraint(lp_variables, lhs, rhs, column_ids, enq_type, marginal_offse
     return con
 
 
-def get_sos(var_list, lhs, column_ids):
-    columns_in_constraint = np.argwhere(~np.isnan(lhs)).flatten()
-    column_ids_in_constraint = column_ids[columns_in_constraint]
-    lhs_variables = var_list[column_ids_in_constraint]
-    return lhs_variables
-
-
-def get_price(row_index, prob):
-    row_index = get_con_by_name(prob.constrs, str(row_index))
-    constraint = prob.constrs[row_index]
-    return constraint.pi
-
-
-def get_con_by_name(constraints, name):
-    i = 0
-    for con in constraints:
-        if con.name == name:
-            return i
-        i += 1
+def find_problem_constraint(base_prob):
+    cons = []
+    test_prob = base_prob.copy()
+    for con in [con.name for con in base_prob.constrs]:
+        [test_prob.remove(c) for c in test_prob.constrs if c.name == con]
+        status = test_prob.optimize()
+        cons.append(con)
+        if status == OptimizationStatus.OPTIMAL:
+            return cons
+    return []
