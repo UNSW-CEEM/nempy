@@ -3,7 +3,7 @@ import numpy as np
 from nempy import helper_functions as hf
 
 
-def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, next_constraint_id):
+def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch_interval, next_constraint_id):
     """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
 
     The constraints are described in the
@@ -32,12 +32,16 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
     ...   'ramp_up_rate': [20.0, 10.0],
     ...   'ramp_down_rate': [15.0, 25.0]})
 
+    >>> unit_info = pd.DataFrame({
+    ... 'unit': ['A', 'B'],
+    ... 'dispatch_type': ['generator', 'generator']})
+
     >>> dispatch_interval = 60
 
     >>> next_constraint_id = 1
 
-    >>> type_and_rhs, variable_mapping = joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval,
-    ...                                                            next_constraint_id)
+    >>> type_and_rhs, variable_mapping = joint_ramping_constraints(regulation_units, unit_limits, unit_info,
+    ...                                                            dispatch_interval, next_constraint_id)
 
     >>> print(type_and_rhs)
       unit  constraint_id type    rhs
@@ -48,7 +52,7 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
     >>> print(variable_mapping)
        constraint_id unit    service  coefficient
     0              1    A  raise_reg          1.0
-    1              2    B  lower_reg          1.0
+    1              2    B  lower_reg         -1.0
     2              3    B  raise_reg          1.0
     0              1    A     energy          1.0
     1              2    B     energy          1.0
@@ -74,6 +78,14 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
         ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
         ramp_down_rate  the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
         ==============  =====================================================================================
+
+    unit_info : pd.DataFrame
+
+        ================   ======================================================================
+        Columns:           Description:
+        unit               unique identifier of a dispatch unit (as `str`)
+        dispatch_type      "load" or "generator" (as `str`)
+        ================   ======================================================================
 
     dispatch_interval : int
         The length of the dispatch interval in minutes
@@ -111,22 +123,45 @@ def joint_ramping_constraints(regulation_units, unit_limits, dispatch_interval, 
     constraints = hf.save_index(regulation_units, 'constraint_id', next_constraint_id)
     # Map the unit limit information to the constraints so the rhs values can be calculated.
     constraints = pd.merge(constraints, unit_limits, 'left', on='unit')
-    constraints['rhs'] = np.where(
-        constraints['service'] == 'raise_reg',
-        constraints['initial_output'] + constraints['ramp_up_rate'] * (dispatch_interval / 60),
-        constraints['initial_output'] - constraints['ramp_down_rate'] * (dispatch_interval / 60))
+
+    constraints = pd.merge(constraints, unit_info, 'left', on='unit')
+
+    def calc_rhs(initial, ramp_down, ramp_up, dispatch_interval, dispatch_type, service):
+        if dispatch_type == 'generator':
+            if service == 'raise_reg':
+                rhs = initial + ramp_up * dispatch_interval / 60
+            elif service == 'lower_reg':
+                rhs = initial - ramp_down * dispatch_interval / 60
+        elif dispatch_type == 'load':
+            if service == 'raise_reg':
+                rhs = initial - ramp_down * dispatch_interval / 60
+            elif service == 'lower_reg':
+                rhs = initial + ramp_up * dispatch_interval / 60
+        return rhs
+
+    constraints['rhs'] = constraints.apply(lambda x: calc_rhs(x['initial_output'], x['ramp_down_rate'],
+                                                              x['ramp_up_rate'], dispatch_interval,
+                                                              x['dispatch_type'], x['service']), axis=1)
+
     # Set the inequality type based on the regulation service being provided.
-    constraints['type'] = np.where(constraints['service'] == 'raise_reg', '<=', '>=')
+    type_map = {'generator': {'raise_reg': '<=', 'lower_reg': '>='},
+                'load': {'raise_reg': '>=', 'lower_reg': '<='}}
+    constraints['type'] = constraints.apply(lambda x: type_map[x['dispatch_type']][x['service']], axis=1)
     rhs_and_type = constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
 
     # Map each constraint to it corresponding unit and regulation service.
-    variable_mapping_reg = constraints.loc[:, ['constraint_id', 'unit', 'service']]
+    variable_mapping_reg = constraints.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type']]
     # Also map to the energy service being provided by the unit.
-    variable_mapping_energy = constraints.loc[:, ['constraint_id', 'unit', 'service']]
+    variable_mapping_energy = constraints.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type']]
     variable_mapping_energy['service'] = 'energy'
     # Combine mappings.
     variable_mapping = pd.concat([variable_mapping_reg, variable_mapping_energy])
-    variable_mapping['coefficient'] = 1.0
+    type_map = {'generator': {'raise_reg': 1.0, 'lower_reg': -1.0, 'energy': 1.0},
+                'load': {'raise_reg': -1.0, 'lower_reg': 1.0, 'energy': 1.0}}
+    variable_mapping['coefficient'] = variable_mapping.apply(lambda x: type_map[x['dispatch_type']][x['service']],
+                                                             axis=1)
+
+    variable_mapping = variable_mapping.drop('dispatch_type', axis=1)
 
     return rhs_and_type, variable_mapping
 
@@ -182,27 +217,28 @@ def joint_capacity_constraints(contingency_trapeziums, unit_info, next_constrain
     contingency_trapeziums : pd.DataFrame
         The FCAS trapeziums for the contingency services being offered.
 
-    ================   ======================================================================
-    Columns:           Description:
-    unit               unique identifier of a dispatch unit (as `str`)
-    service            the contingency service being offered (as `str`)
-    max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
-    enablement_min     the energy dispatch level at which the unit can begin to provide the
-                       contingency service, in MW (as `np.float64`)
-    low_break_point    the energy dispatch level at which the unit can provide the full
-                       contingency service offered, in MW (as `np.float64`)
-    high_break_point   the energy dispatch level at which the unit can no longer provide the
-                       full contingency service offered, in MW (as `np.float64`)
-    enablement_max     the energy dispatch level at which the unit can no longer begin
-                       the contingency service, in MW (as `np.float64`)
-    ================   ======================================================================
+        ================   ======================================================================
+        Columns:           Description:
+        unit               unique identifier of a dispatch unit (as `str`)
+        service            the contingency service being offered (as `str`)
+        max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
+        enablement_min     the energy dispatch level at which the unit can begin to provide the
+                           contingency service, in MW (as `np.float64`)
+        low_break_point    the energy dispatch level at which the unit can provide the full
+                           contingency service offered, in MW (as `np.float64`)
+        high_break_point   the energy dispatch level at which the unit can no longer provide the
+                           full contingency service offered, in MW (as `np.float64`)
+        enablement_max     the energy dispatch level at which the unit can no longer begin
+                           the contingency service, in MW (as `np.float64`)
+        ================   ======================================================================
 
     unit_info : pd.DataFrame
-    ================   ======================================================================
-    Columns:           Description:
-    unit               unique identifier of a dispatch unit (as `str`)
-    dispatch_type      "load" or "generator" (as `str`)
-    ================   ======================================================================
+
+        ================   ======================================================================
+        Columns:           Description:
+        unit               unique identifier of a dispatch unit (as `str`)
+        dispatch_type      "load" or "generator" (as `str`)
+        ================   ======================================================================
 
 
     next_constraint_id : int
@@ -256,6 +292,8 @@ def joint_capacity_constraints(contingency_trapeziums, unit_info, next_constrain
 
     # Define the direction of the lower slope constraints and the rhs value.
     constraints_lower_slope['type'] = '>='
+    # constraints_lower_slope['enablement_min'] = np.where(constraints_lower_slope['enablement_min'] == 0.0, 1.0,
+    #                                                      constraints_lower_slope['enablement_min'])
     constraints_lower_slope['rhs'] = constraints_lower_slope['enablement_min']
     type_and_rhs_lower_slope = constraints_lower_slope.loc[:, ['unit', 'service', 'constraint_id', 'type', 'rhs']]
 
@@ -407,6 +445,8 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
 
     # Define the direction of the lower slope constraints and the rhs value.
     constraints_lower_slope['type'] = '>='
+    # constraints_lower_slope['enablement_min'] = np.where(constraints_lower_slope['enablement_min'] == 0.0, 1.0,
+    #                                                      constraints_lower_slope['enablement_min'])
     constraints_lower_slope['rhs'] = constraints_lower_slope['enablement_min']
     type_and_rhs_lower_slope = constraints_lower_slope.loc[:, ['unit', 'service', 'constraint_id', 'type', 'rhs']]
 

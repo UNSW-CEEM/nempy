@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import os
 import numpy as np
 
-from nempy import check
+from nempy import helper_functions as hf
 
 
 def _download_to_df(url, table_name, year, month):
@@ -2143,7 +2143,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     >>> DISPATCHLOAD = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
     ...   'INITIALMW': [50.0, 60.0, 60.0],
-    ...   'AGCSTATUS': [0.0, 1.0, 1.0]})
+    ...   'AGCSTATUS': ['0.0', '1.0', '1.0']})
 
     >>> capacity_limits = pd.DataFrame({
     ...   'unit': ['A', 'B', 'C'],
@@ -2297,7 +2297,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
     >>> DISPATCHLOAD_mod = DISPATCHLOAD.copy()
 
-    >>> DISPATCHLOAD_mod['AGCSTATUS'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 0.0, DISPATCHLOAD_mod['AGCSTATUS'])
+    >>> DISPATCHLOAD_mod['AGCSTATUS'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', '0.0', DISPATCHLOAD_mod['AGCSTATUS'])
 
     >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
@@ -2409,7 +2409,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
                           (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'])]
 
     # Filter out fcas_bids where the AGC status is not set to 1.0
-    fcas_bids = fcas_bids[fcas_bids['AGCSTATUS'] != 0.0]
+    fcas_bids = fcas_bids[fcas_bids['AGCSTATUS'] == '1.0']
     fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW'], axis=1)
 
     # Filter the fcas price bids use the remaining volume bids.
@@ -2645,12 +2645,20 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     bids_not_subject_to_scaling = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
 
     # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
-    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPDOWNRATE']], 'inner', on='DUID')
-    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPUPRATE']], 'inner', on='DUID')
+    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPDOWNRATE', 'LOWERREGACTUALAVAILABILITY']],
+                         'inner', on='DUID')
+    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPUPRATE', 'RAISEREGACTUALAVAILABILITY']],
+                         'inner', on='DUID')
 
     # Calculate the max FCAS possible based on ramp rates.
     lower_reg['RAMPMAX'] = lower_reg['RAMPDOWNRATE'] * (5 / 60)
     raise_reg['RAMPMAX'] = raise_reg['RAMPUPRATE'] * (5 / 60)
+
+    # Check these ramp maxs are consistent with other AEMO outputs, otherwise increase unitl consistency is achieved.
+    lower_reg['RAMPMAX'] = np.where(lower_reg['RAMPMAX'] < lower_reg['LOWERREGACTUALAVAILABILITY'],
+                                    lower_reg['LOWERREGACTUALAVAILABILITY'], lower_reg['RAMPMAX'])
+    raise_reg['RAMPMAX'] = np.where(raise_reg['RAMPMAX'] < raise_reg['RAISEREGACTUALAVAILABILITY'],
+                                    raise_reg['RAISEREGACTUALAVAILABILITY'], raise_reg['RAMPMAX'])
 
     lower_reg = lower_reg.drop(['RAMPDOWNRATE'], axis=1)
     raise_reg = raise_reg.drop(['RAMPUPRATE'], axis=1)
@@ -2808,3 +2816,104 @@ def scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY):
     BIDPEROFFER_D = pd.concat([energy_bids, fcas_not_semi_scheduled, fcas_semi_scheduled])
 
     return BIDPEROFFER_D
+
+
+def use_historical_actual_availability_to_filter_fcas_bids(BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD):
+    """Where AEMO determined zero actual availability of an FCAS offer filter it from the set of bids.
+
+    Note there is an additional condition that the historical dispatch of the service must be zero, sometimes
+    the MMS table dispatch load records a zero availability when there was a nom-zero dispatch.
+
+    Also energy bids are excluded from filtering.
+
+    Parameters
+    ----------
+    BIDPEROFFER_D : pd.DataFrame
+
+        ================  ====================================================
+        Columns:          Description:
+        DUID              unique identifier of a unit (as `str`)
+        BIDTYPE           the service being provided (as `str`)
+        others optional
+        ================  ====================================================
+
+    BIDDAYOFFER_D : pd.DataFrame
+
+        ================  ====================================================
+        Columns:          Description:
+        DUID              unique identifier of a unit (as `str`)
+        BIDTYPE           the service being provided (as `str`)
+        others optional
+        ================  ====================================================
+
+    DISPATCHLOAD : pd.DataFrame
+
+        ============================  ====================================================
+        Columns:                      Description:
+        RAISE6SECACTUALAVAILABILITY   calculated availabity after consider all unit based
+                                      constraints on FCAS dispatch and assuming other
+                                      service offered by the unit are at their dispatch level
+        RAISE60SECACTUALAVAILABILITY
+        RAISE5MINACTUALAVAILABILITY
+        RAISEREGACTUALAVAILABILITY
+        LOWER6SECACTUALAVAILABILITY
+        LOWER60SECACTUALAVAILABILITY
+        LOWER5MINACTUALAVAILABILITY
+        LOWERREGACTUALAVAILABILITY
+        LOWER5MIN                     dispatched volume of FCAS
+        LOWER60SEC
+        LOWER6SEC
+        RAISE5MIN
+        RAISE60SEC
+        RAISE6SEC
+        LOWERREG
+        RAISEREG
+        ============================  ====================================================
+
+    Returns
+    -------
+    BIDPEROFFER_D : pd.DataFrame
+
+    BIDDAYOFFER_D : pd.DataFrame
+
+    """
+
+    # The columns in DISPATCHLOAD containing post constraint availability of FCAS.
+    availabilities = ['RAISE6SECACTUALAVAILABILITY', 'RAISE60SECACTUALAVAILABILITY',
+                      'RAISE5MINACTUALAVAILABILITY', 'RAISEREGACTUALAVAILABILITY',
+                      'LOWER6SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
+                      'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY']
+
+    # The columns in DISPATCHLOAD containing the dispatch volume of each FCAS.
+    bid_types = ['LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'LOWERREG', 'RAISEREG']
+
+    # Reshape the data frame so the availability values are by row rather than in different columns.
+    availabilities = hf.stack_columns(DISPATCHLOAD, cols_to_keep=['DUID'], cols_to_stack=availabilities,
+                                      type_name='BIDTYPE', value_name='availability')
+
+    # Change BIDTYPE column to exclude the suffix ACTUALAVAILABILITY
+    availabilities['BIDTYPE'] = availabilities['BIDTYPE'].apply(lambda x: x.replace('ACTUALAVAILABILITY', ''))
+
+    # Reshape the data frame so the dispatch values are by row rather than in different columns.
+    dispatch = hf.stack_columns(DISPATCHLOAD, cols_to_keep=['DUID'], cols_to_stack=bid_types,
+                                type_name='BIDTYPE', value_name='dispatch')
+
+    # Combine dispatch and availabilities into a single data frame.
+    availabilities = pd.merge(availabilities, dispatch, 'inner', on=['DUID', 'BIDTYPE'])
+
+    # Only retain bids that either have non
+    availabilities = availabilities[(availabilities['availability'] > 0.0) |
+                                    (availabilities['dispatch']) > 0.0]
+
+    BIDPEROFFER_D_energy = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
+    BIDDAYOFFER_D_energy = BIDDAYOFFER_D[BIDDAYOFFER_D['BIDTYPE'] == 'ENERGY']
+
+    BIDPEROFFER_D = pd.merge(BIDPEROFFER_D, availabilities.loc[:, ['DUID', 'BIDTYPE']], 'inner',
+                             on=['DUID', 'BIDTYPE'])
+    BIDPEROFFER_D = pd.concat([BIDPEROFFER_D, BIDPEROFFER_D_energy])
+
+    BIDDAYOFFER_D = pd.merge(BIDDAYOFFER_D, availabilities.loc[:, ['DUID', 'BIDTYPE']], 'inner',
+                             on=['DUID', 'BIDTYPE'])
+    BIDDAYOFFER_D = pd.concat([BIDDAYOFFER_D, BIDDAYOFFER_D_energy])
+
+    return BIDPEROFFER_D, BIDDAYOFFER_D

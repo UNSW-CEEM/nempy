@@ -978,7 +978,7 @@ class Spot:
         >>> print(simple_market.constraint_to_variable_map['unit_level']['joint_ramping'])
            constraint_id unit    service  coefficient
         0              0    A  raise_reg          1.0
-        1              1    B  lower_reg          1.0
+        1              1    B  lower_reg         -1.0
         2              2    B  raise_reg          1.0
         0              0    A     energy          1.0
         1              1    B     energy          1.0
@@ -1027,9 +1027,10 @@ class Spot:
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
 
-        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(regulation_units, unit_limits,
-                                                                                self.dispatch_interval,
-                                                                                self.next_constraint_id)
+        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(
+            regulation_units, unit_limits, self.unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
+            self.next_constraint_id)
+
         self.constraints_rhs_and_type['joint_ramping'] = rhs_and_type
         self.constraint_to_variable_map['unit_level']['joint_ramping'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
