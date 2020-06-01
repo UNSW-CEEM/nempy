@@ -217,8 +217,10 @@ def test_fcas_trapezium_scaled_availability():
         print('##########  {}'.format(interval))
         for unit in list(DISPATCHLOAD['DUID']):
             for BIDTYPE in ['LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                            # 'LOWERREG',
-                            'RAISEREG']:
+                            'LOWERREG', 'RAISEREG']:
+
+                if not BIDTYPE == 'LOWERREG':
+                    continue
 
                 service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
                                         'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
@@ -226,12 +228,20 @@ def test_fcas_trapezium_scaled_availability():
 
                 service = service_name_mapping[BIDTYPE]
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/30 04:30:00 ER01 lower_reg':
+                # if '{} {} {}'.format(interval, unit, service) == '2019/01/30 04:30:00 ER01 lower_reg':
+                #     # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
+                #     continue
+                #
+                # if '{} {} {}'.format(interval, unit, service) == '2019/01/30 04:30:00 ER01 lower_5min':
+                #     # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
+                #     continue
+                #
+                if '{} {}'.format(interval, unit) == '2019/01/08 17:00:00 GSTONE6':
                     # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
                     continue
 
-                if '{} {}'.format(interval, unit) == '2019/01/08 17:00:00 GSTONE6':
-                    # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
+                if not '{} {} {}'.format(interval, unit, service) == '2019/01/13 22:40:00 TORRB2 lower_reg':
+                    # Looks like the joint capacity constraint was incorrect historically.
                     continue
 
                 if '{} {} {}'.format(interval, unit, service) == '2019/01/16 12:20:00 HPRL1 lower_reg':
@@ -247,8 +257,8 @@ def test_fcas_trapezium_scaled_availability():
                     continue
 
                 if '{} {} {}'.format(interval, unit, service) == '2019/01/23 14:20:00 DARTM1 lower_reg':
-                        # not checked yet
-                        continue
+                    # not checked yet
+                    continue
 
                 if '{} {} {}'.format(interval, unit, service) == '2019/01/13 22:40:00 DARTM1 lower_reg':
                     # not checked yet
@@ -390,6 +400,24 @@ def test_fcas_trapezium_scaled_availability():
                                                 decision_variables_remaining_bids])
 
                 market.decision_variables['bids'] = decision_variables
+
+                if 'joint_ramping' in market.constraints_rhs_and_type:
+                    reg_vars = bounds[bounds['service'].isin(['raise_reg', 'lower_reg'])]
+                    energy_vars = bounds[bounds['service'].isin(['energy'])]
+                    energy_vars = energy_vars.loc[:, ['unit', 'dispatched']]
+                    energy_vars.columns = ['unit', 'energy']
+                    check_ramping_feasibility = pd.merge(reg_vars, energy_vars, on='unit')
+                    check_ramping_feasibility = pd.merge(check_ramping_feasibility,
+                                                         market.constraints_rhs_and_type['joint_ramping'].loc[:, ['unit', 'service', 'rhs']],
+                                                         on=['unit', 'service'])
+                    check_ramping_feasibility['not_infeasible'] = np.where(
+                        check_ramping_feasibility['service'] == 'raise_reg',
+                        check_ramping_feasibility['energy'] + check_ramping_feasibility['dispatched'] <= check_ramping_feasibility['rhs'],
+                        check_ramping_feasibility['energy'] - check_ramping_feasibility['dispatched'] >= check_ramping_feasibility['rhs'])
+
+                    if not check_ramping_feasibility['not_infeasible'].all():
+                        print('Test aborted for {} {}, historical joint ramping cons infeasible'.format(unit, service))
+                        continue
 
                 market.dispatch()
 

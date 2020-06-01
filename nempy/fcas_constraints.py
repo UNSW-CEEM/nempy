@@ -147,7 +147,7 @@ def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch
     type_map = {'generator': {'raise_reg': '<=', 'lower_reg': '>='},
                 'load': {'raise_reg': '>=', 'lower_reg': '<='}}
     constraints['type'] = constraints.apply(lambda x: type_map[x['dispatch_type']][x['service']], axis=1)
-    rhs_and_type = constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+    rhs_and_type = constraints.loc[:, ['unit', 'service', 'constraint_id', 'type', 'rhs']]
 
     # Map each constraint to it corresponding unit and regulation service.
     variable_mapping_reg = constraints.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type']]
