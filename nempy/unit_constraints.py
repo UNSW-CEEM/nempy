@@ -71,7 +71,7 @@ def capacity(unit_limits, next_constraint_id):
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
     """
     type_and_rhs, variable_map = create_constraints(unit_limits, next_constraint_id, 'capacity', '<=')
@@ -155,7 +155,7 @@ def ramp_up(unit_limits, next_constraint_id, dispatch_interval):
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
     """
     unit_limits['max_output'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (dispatch_interval / 60)
@@ -240,7 +240,7 @@ def ramp_down(unit_limits, next_constraint_id, dispatch_interval):
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
     """
     unit_limits['min_output'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (dispatch_interval / 60)
@@ -319,7 +319,7 @@ def fcas_max_availability(fcas_availability, next_constraint_id):
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
     """
     type_and_rhs, variable_map = create_constraints(fcas_availability, next_constraint_id, 'max_availability', '<=')

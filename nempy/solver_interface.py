@@ -89,7 +89,7 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
                                        list(objective_function.index)))
 
     # 3. Create the constraints
-    sos_constraints = []
+    constraints_rhs_and_type_original = constraints_rhs_and_type.copy()
     if len(constraints_rhs_and_type) > 0:
         constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
     else:
@@ -143,6 +143,12 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     for variable_group in decision_variables.index.unique():
         split_decision_variables[variable_group] = \
             decision_variables[decision_variables.index == variable_group].reset_index(drop=True)
+
+    for constraint_group in constraints_rhs_and_type_original.keys():
+        constraints_rhs_and_type_original[constraint_group]['slack'] = \
+            constraints_rhs_and_type_original[constraint_group]['constraint_id']. \
+        apply(lambda x: prob.constr_by_name(str(x)).slack, prob)
+
     #print('get values {}'.format(time() - t0))
 
     # 6. Retrieve the shadow costs of market constraints
@@ -166,7 +172,7 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
         # market_rhs_and_type[constraint_group]['price'] = \
         #     market_rhs_and_type[constraint_group].apply(lambda x: get_price(x['constraint_id'], prob), axis=1)
     #print(tc)
-    return split_decision_variables, market_rhs_and_type
+    return split_decision_variables, market_rhs_and_type, constraints_rhs_and_type_original
 
 
 def make_constraint(lp_variables, lhs, rhs, column_ids, enq_type, marginal_offset=0):

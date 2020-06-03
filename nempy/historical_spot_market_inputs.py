@@ -357,6 +357,90 @@ class _MultiDataSource(_MMSTable):
             self.con.commit()
 
 
+class _AllHistDataSource(_MMSTable):
+    """Manages downloading data from nemweb for tables where relevant data could be stored in any previous monthly file.
+    """
+
+    def __init__(self, table_name, table_columns, table_primary_keys, con):
+        _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
+
+    def set_data(self, year, month):
+        """"Download data for the given table and time, replace any existing data.
+
+        Note
+        ----
+        This method and its documentation is inherited from the _SingleDataSource class.
+
+        Examples
+        --------
+        Set up a database or connect to an existing one.
+
+        >>> con = sqlite3.connect('historical_inputs.db')
+
+        Create the table object.
+
+        >>> table = _SingleDataSource(table_name='DUDETAILSUMMARY',
+        ...                          table_columns=['DUID', 'START_DATE', 'CONNECTIONPOINTID', 'REGIONID'],
+        ...                          table_primary_keys=['START_DATE', 'DUID'], con=con)
+
+        Create the table in the database.
+
+        >>> table.create_table_in_sqlite_db()
+
+        Downloading data from http://nemweb.com.au/#mms-data-model into the table.
+
+        >>> table.set_data(year=2020, month=1)
+
+        Now the database should contain data for this table that is up to date as the end of Janurary.
+
+        >>> query = "Select * from DUDETAILSUMMARY order by START_DATE DESC limit 1;"
+
+        >>> print(pd.read_sql_query(query, con=con))
+              DUID           START_DATE CONNECTIONPOINTID REGIONID
+        0  URANQ11  2020/02/04 00:00:00            NURQ1U     NSW1
+
+        However if we subsequently set data from a previous date then any existing data will be replaced. Note the
+        change in the most recent record in the data set below.
+
+        >>> table.set_data(year=2019, month=1)
+
+        >>> print(pd.read_sql_query(query, con=con))
+               DUID           START_DATE CONNECTIONPOINTID REGIONID
+        0  WEMENSF1  2019/03/04 00:00:00            VWES2W     VIC1
+
+        Clean up by closing the database and deleting if its no longer needed.
+
+        >>> con.close()
+        >>> os.remove('historical_inputs.db')
+
+        Parameters
+        ----------
+        year : int
+            The year to download data for.
+        month : int
+            The month to download data for.
+
+        Return
+        ------
+        None
+        """
+        for y in range(2009, year):
+            for m in range(1, 13):
+                if y == year and m > month:
+                    continue
+                try:
+                    data = _download_to_df(self.url, self.table_name, y, m)
+                    data = data.loc[:, self.table_columns]
+                    with self.con:
+                        if y == 2009 and m == 1:
+                            data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)
+                        else:
+                            data.to_sql(self.table_name, con=self.con, if_exists='append', index=False)
+                        self.con.commit()
+                except _MissingData:
+                    pass
+
+
 class InputsBySettlementDate(_MultiDataSource):
     """Manages retrieving dispatch inputs by SETTLEMENTDATE."""
 
@@ -637,7 +721,7 @@ class InputsStartAndEnd(_SingleDataSource):
         return pd.read_sql_query(query, con=self.con)
 
 
-class InputsByMatchDispatchConstraints(_SingleDataSource):
+class InputsByMatchDispatchConstraints(_AllHistDataSource):
     """Manages retrieving dispatch inputs by matching against the DISPATCHCONSTRAINTS table"""
 
     def __init__(self, table_name, table_columns, table_primary_keys, con):
@@ -2917,3 +3001,26 @@ def use_historical_actual_availability_to_filter_fcas_bids(BIDPEROFFER_D, BIDDAY
     BIDDAYOFFER_D = pd.concat([BIDDAYOFFER_D, BIDDAYOFFER_D_energy])
 
     return BIDPEROFFER_D, BIDDAYOFFER_D
+
+
+def format_fcas_market_requirements(SPDREGIONCONSTRAINT, DISPATCHCONSTRAINT, GENCONDATA):
+    """
+
+    Parameters
+    ----------
+    SPDREGIONCONSTRAINT
+
+    Returns
+    -------
+
+    """
+    # Assume we only use constraints with rhs greater than zero, and the that the rest are swamped
+    DISPATCHCONSTRAINT = DISPATCHCONSTRAINT[DISPATCHCONSTRAINT['RHS'] > 0.0]
+    fcas_market_requirements = pd.merge(SPDREGIONCONSTRAINT, DISPATCHCONSTRAINT, left_on='GENCONID',
+                                        right_on='CONSTRAINTID')
+    fcas_market_requirements = pd.merge(fcas_market_requirements, GENCONDATA, on='GENCONID')
+    fcas_market_requirements = fcas_market_requirements.loc[:, ['GENCONID', 'BIDTYPE', 'REGIONID', 'RHS',
+                                                                'CONSTRAINTTYPE']]
+    fcas_market_requirements.columns = ['set', 'service', 'region', 'volume', 'type']
+    fcas_market_requirements['service'] = fcas_market_requirements['service'].apply(lambda x: service_name_mapping[x])
+    return fcas_market_requirements

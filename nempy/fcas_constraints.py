@@ -102,7 +102,7 @@ def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch
         Columns:       Description:
         unit           unique identifier of a dispatch unit (as `str`)
         service        the regulation service the constraint is associated with (as `str`)
-        constraint_id  the id of the variable (as `int`)
+        constraint_id  the id of the constraint (as `int`)
         type           the type of the constraint, e.g. "=" (as `str`)
         rhs            the rhs of the constraint (as `np.float64`)
         =============  ====================================================================
@@ -115,7 +115,7 @@ def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
     """
 
@@ -266,7 +266,7 @@ def joint_capacity_constraints(contingency_trapeziums, unit_info, next_constrain
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
 
     """
@@ -420,7 +420,7 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
         constraint_id  the id of the constraint (as `np.int64`)
         unit           the unit variables the constraint should map too (as `str`)
         service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
         =============  ==========================================================================
 
     """

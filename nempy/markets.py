@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
-    create_lhs, interconnectors as inter, fcas_constraints
+    create_lhs, interconnectors as inter, fcas_constraints, elastic_constraints
 
 
 class Spot:
@@ -82,6 +82,9 @@ class Spot:
                 There is a column that is not 'units', 'regions' or 'loss_factor'.
             ColumnValues
                 If there are inf, null or negative values in the 'loss_factor' column."""
+
+        if 'dispatch_type' not in unit_info.columns:
+            unit_info['dispatch_type'] = 'generator'
         self.unit_info = unit_info
 
     @check.required_columns('volume_bids', ['unit'])
@@ -748,10 +751,11 @@ class Spot:
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
-    @check.allowed_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
+    @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume', 'type'])
+    @check.allowed_columns('fcas_requirements', ['set', 'service', 'region', 'volume', 'type'])
     @check.repeated_rows('fcas_requirements', ['set', 'service', 'region'])
-    @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'else': np.float64})
+    @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'type':str,
+                                                   'else': np.float64})
     @check.column_values_must_be_real('fcas_requirements', ['volume'])
     @check.column_values_not_negative('fcas_requirements', ['volume'])
     def set_fcas_requirements_constraints(self, fcas_requirements):
@@ -1035,6 +1039,17 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['joint_ramping'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        rhs_and_type['violation_cost'] = 14000.0
+        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
+
+        self.decision_variables['joint_ramping_deficit'] = deficit_variables.loc[:, ['variable_id', 'lower_bound',
+                                                                                     'upper_bound', 'type']]
+        self.objective_function_components['joint_ramping_deficit'] = deficit_variables.loc[:, ['variable_id', 'cost']]
+        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
+        self.next_variable_id = max(deficit_variables['variable_id']) + 1
+
+
+
     @check.required_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                        'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
     @check.allowed_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
@@ -1143,6 +1158,17 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        rhs_and_type['violation_cost'] = 14000.0
+        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
+
+        self.decision_variables['joint_capacity_deficit'] = deficit_variables.loc[:, ['variable_id', 'lower_bound',
+                                                                                     'upper_bound', 'type']]
+        self.objective_function_components['joint_capacity_deficit'] = deficit_variables.loc[:, ['variable_id', 'cost']]
+        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
+        self.next_variable_id = max(deficit_variables['variable_id']) + 1
+
+
+
     @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
     @check.allowed_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
@@ -1248,6 +1274,16 @@ class Spot:
         self.constraints_rhs_and_type['energy_and_regulation_capacity'] = rhs_and_type
         self.constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+        rhs_and_type['violation_cost'] = 14000.0
+        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
+
+        self.decision_variables['energy_and_regulation_capacity_deficit'] = \
+            deficit_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']]
+        self.objective_function_components['energy_and_regulation_capacity_deficit'] = \
+            deficit_variables.loc[:, ['variable_id', 'cost']]
+        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
+        self.next_variable_id = max(deficit_variables['variable_id']) + 1
 
     @check.required_columns('interconnector_directions_and_limits',
                             ['interconnector', 'to_region', 'from_region', 'max', 'min'])
@@ -1678,12 +1714,13 @@ class Spot:
                                                      ['unit', 'service'])
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
 
-        decision_variables, market_constraints_rhs_and_type = solver_interface.dispatch(
+        decision_variables, market_constraints_rhs_and_type, rhs_and_type = solver_interface.dispatch(
             self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
             self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
             self.objective_function_components)
         self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
         self.decision_variables = decision_variables
+        self.constraints_rhs_and_type = rhs_and_type
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.
@@ -1862,7 +1899,10 @@ class Spot:
         -------
         pd.DateFrame
         """
-        prices = self.market_constraints_rhs_and_type['fcas'].loc[:, ['set', 'price']]
+        prices = pd.merge(
+            self.constraint_to_variable_map['regional']['fcas'].loc[:, ['service', 'region', 'constraint_id']],
+            self.market_constraints_rhs_and_type['fcas'].loc[:, ['set', 'price', 'constraint_id']], on='constraint_id')
+        prices = prices.groupby(['region', 'service'], as_index=False).aggregate({'price': 'max'})
         return prices
 
     def get_interconnector_flows(self):
@@ -1968,3 +2008,141 @@ class Spot:
             flow = pd.merge(flow, losses, 'left', on='interconnector')
 
         return flow.reset_index(drop=True)
+
+    def get_fcas_availability(self):
+        """Get the availability of fcas service on a unit level, after constraints.
+
+        Examples
+        --------
+        This example dispatches a simple fcas market and the shows the resulting fcas availability.
+
+        >>> from nempy import markets
+
+        Volume of each bid.
+
+        >>> volume_bids = pd.DataFrame({
+        ...   'unit': ['A', 'A', 'B', 'B', 'B'],
+        ...   'service': ['energy', 'raise_6s', 'energy', 'raise_6s', 'raise_reg'],
+        ...   '1': [100.0, 10.0, 110.0, 15.0, 15.0]})
+
+        Price of each bid.
+
+        >>> price_bids = pd.DataFrame({
+        ...   'unit': ['A', 'A', 'B', 'B', 'B'],
+        ...   'service': ['energy', 'raise_6s', 'energy', 'raise_6s', 'raise_reg'],
+        ...   '1': [50.0, 35.0, 60.0, 20.0, 30.0]})
+
+        Participant defined operational constraints on FCAS enablement.
+
+        >>> fcas_trapeziums = pd.DataFrame({
+        ...   'unit': ['B', 'B', 'A'],
+        ...   'service': ['raise_reg', 'raise_6s', 'raise_6s'],
+        ...   'max_availability': [15.0, 15.0, 10.0],
+        ...   'enablement_min': [50.0, 50.0, 70.0],
+        ...   'low_break_point': [65.0, 65.0, 80.0],
+        ...   'high_break_point': [95.0, 95.0, 100.0],
+        ...   'enablement_max': [110.0, 110.0, 110.0]})
+
+        Unit locations.
+
+        >>> unit_info = pd.DataFrame({
+        ...   'unit': ['A', 'B'],
+        ...   'region': ['NSW', 'NSW']})
+
+        The demand in the region\s being dispatched.
+
+        >>> demand = pd.DataFrame({
+        ...   'region': ['NSW'],
+        ...   'demand': [195.0]})
+
+        FCAS requirement in the region\s being dispatched.
+
+        >>> fcas_requirements = pd.DataFrame({
+        ...   'set': ['nsw_regulation_requirement', 'nsw_raise_6s_requirement'],
+        ...   'region': ['NSW', 'NSW'],
+        ...   'service': ['raise_reg', 'raise_6s'],
+        ...   'volume': [10.0, 10.0]})
+
+        Create the market model with unit service bids.
+
+        >>> simple_market = markets.Spot()
+        >>> simple_market.set_unit_info(unit_info)
+        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> simple_market.set_unit_price_bids(price_bids)
+
+        Create constraints that enforce the top of the FCAS trapezium.
+
+        >>> fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
+        >>> simple_market.set_fcas_max_availability(fcas_availability)
+
+        Create constraints the enforce the lower and upper slope of the FCAS regulation service trapeziums.
+
+        >>> regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_reg']
+        >>> simple_market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+
+        Create constraints that enforce the lower and upper slope of the FCAS contingency
+        trapezium. These constrains also scale slopes of the trapezium to ensure the
+        co-dispatch of contingency and regulation services is technically feasible.
+
+        >>> contingency_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_6s']
+        >>> simple_market.set_joint_capacity_constraints(contingency_trapeziums)
+
+        Set the demand for energy.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Set the required volume of FCAS services.
+
+        >>> simple_market.set_fcas_requirements_constraints(fcas_requirements)
+
+        Calculate dispatch and pricing
+
+        >>> simple_market.dispatch()
+
+        Return the total dispatch of each unit in MW.
+
+        >>> print(simple_market.get_unit_dispatch())
+          unit    service  dispatch
+        0    A     energy     100.0
+        1    A   raise_6s       5.0
+        2    B     energy      95.0
+        3    B   raise_6s       5.0
+        4    B  raise_reg      10.0
+
+        Return the constrained availability of each units fcas service.
+
+        >>> print(simple_market.get_fcas_availability())
+          unit    service  availability
+        0    A   raise_6s          10.0
+        1    B   raise_6s           5.0
+        2    B  raise_reg          10.0
+
+        Returns
+        -------
+
+        """
+        fcas_variable_slack = []
+        for constraint_type in ['fcas_max_availability', 'joint_ramping', 'joint_capacity',
+                                'energy_and_regulation_capacity']:
+            if constraint_type in self.constraints_rhs_and_type.keys():
+                service_coefficients = self.constraint_to_variable_map['unit_level'][constraint_type]
+                service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit','service', 'coefficient']]
+                constraint_slack = self.constraints_rhs_and_type[constraint_type].loc[:, ['constraint_id', 'slack']]
+                slack_temp = pd.merge(service_coefficients, constraint_slack, on='constraint_id')
+                fcas_variable_slack.append(slack_temp)
+
+        fcas_variable_slack = pd.concat(fcas_variable_slack)
+        fcas_variable_slack['service_slack'] = fcas_variable_slack['slack'] / fcas_variable_slack['coefficient'].abs()
+        fcas_variable_slack = \
+            fcas_variable_slack.groupby(['unit', 'service'], as_index=False).aggregate({'service_slack': 'min'})
+        fcas_variable_slack = fcas_variable_slack[fcas_variable_slack['service'] != 'energy']
+
+        dispatch_levels = self.get_unit_dispatch()
+
+        fcas_availability = pd.merge(fcas_variable_slack, dispatch_levels, on=['unit', 'service'])
+
+        fcas_availability['availability'] = fcas_availability['dispatch'] + fcas_availability['service_slack']
+        return fcas_availability.loc[:, ['unit', 'service', 'availability']]
+
+
+

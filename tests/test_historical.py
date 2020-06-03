@@ -191,7 +191,9 @@ def test_determine_unit_limits():
 def test_fcas_trapezium_scaled_availability():
     con = sqlite3.connect('test_files/historical_inputs.db')
     inputs_manager = hi.DBManager(connection=con)
-
+    fails = 0
+    passes = 0
+    total = 0
     for interval in get_test_intervals():
         DUDETAILSUMMARY = inputs_manager.DUDETAILSUMMARY.get_data(interval)
         unit_info = hi.format_unit_info(DUDETAILSUMMARY)
@@ -210,270 +212,152 @@ def test_fcas_trapezium_scaled_availability():
         BIDPEROFFER_D = hi.scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
         BIDPEROFFER_D, BIDDAYOFFER_D = hi.enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, unit_limits.loc[:, ['unit', 'capacity']])
-
         BIDPEROFFER_D, BIDDAYOFFER_D = hi.use_historical_actual_availability_to_filter_fcas_bids(
             BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD)
 
         print('##########  {}'.format(interval))
         for unit in list(DISPATCHLOAD['DUID']):
-            for BIDTYPE in ['LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                            'LOWERREG', 'RAISEREG']:
 
-                if not BIDTYPE == 'LOWERREG':
-                    continue
+            if not '{} {}'.format(interval, unit) == '2019/01/30 21:15:00 TORRB1':
+                continue
 
-                service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
-                                        'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
-                                        'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
+            service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
+                                    'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
+                                    'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
 
-                service = service_name_mapping[BIDTYPE]
+            BIDPEROFFER_D_unit = BIDPEROFFER_D[BIDPEROFFER_D['DUID'] == unit]
+            unit_limits_one = unit_limits[unit_limits['unit'] == unit]
+            unit_info_one = unit_info[unit_info['unit'] == unit]
+            BIDDAYOFFER_D_unit = BIDDAYOFFER_D[BIDDAYOFFER_D['DUID'] == unit]
+            DISPATCHLOAD_unit = DISPATCHLOAD[DISPATCHLOAD['DUID'] == unit]
 
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/30 04:30:00 ER01 lower_reg':
-                #     # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
-                #     continue
-                #
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/30 04:30:00 ER01 lower_5min':
-                #     # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
-                #     continue
-                #
-                if '{} {}'.format(interval, unit) == '2019/01/08 17:00:00 GSTONE6':
-                    # Infeasible because of joint ramping constraints maybe due a lack of surplus and deficiet terms
-                    continue
+            # Extract just bidding info
+            volume_bids = hi.format_volume_bids(BIDPEROFFER_D_unit)
+            price_bids = hi.format_price_bids(BIDDAYOFFER_D_unit)
+            fcas_trapeziums = hi.format_fcas_trapezium_constraints(BIDPEROFFER_D_unit)
 
-                if not '{} {} {}'.format(interval, unit, service) == '2019/01/13 22:40:00 TORRB2 lower_reg':
-                    # Looks like the joint capacity constraint was incorrect historically.
-                    continue
+            market = markets.Spot()
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/16 12:20:00 HPRL1 lower_reg':
-                    # Looks like the joint capacity constraint was incorrect historically.
-                    continue
+            # Add generators to the market.
+            market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 DARTM1 lower_reg':
-                    # Enablement min may be adjusted before dispatch.
-                    continue
+            # Set volume of each bids.
+            volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info_one['unit']))]
+            if volume_bids.empty:
+                continue
+            market.set_unit_volume_bids(volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
+                                                            '6', '7', '8', '9', '10']])
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/08 17:00:00 DARTM1 lower_reg':
-                    # Enablement min may be adjusted before dispatch.
-                    continue
+            # Set prices of each bid.
+            price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
+            market.set_unit_price_bids(price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
+                                                          '6', '7', '8', '9', '10']])
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/23 14:20:00 DARTM1 lower_reg':
-                    # not checked yet
-                    continue
+            # Set unit operating limits.
+            if not unit_limits_one.empty:
+                market.set_unit_capacity_constraints(unit_limits_one.loc[:, ['unit', 'capacity']])
+                market.set_unit_ramp_up_constraints(unit_limits_one.loc[:, ['unit', 'initial_output',
+                                                                            'ramp_up_rate']])
+                market.set_unit_ramp_down_constraints(unit_limits_one.loc[:, ['unit', 'initial_output',
+                                                                              'ramp_down_rate']])
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/13 22:40:00 DARTM1 lower_reg':
-                    # not checked yet
-                    continue
+            # Create constraints that enforce the top of the FCAS trapezium.
+            if not fcas_trapeziums.empty:
+                fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
+                market.set_fcas_max_availability(fcas_availability)
+            else:
+                continue
 
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 BW01 lower_reg':
-                #     # Joint ramping constraint was not applied historically.
-                #     continue
-                #
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 MP1 lower_reg':
-                #     # Joint ramping constraint was not applied historically.
-                #     continue
-                #
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 MP2 lower_reg':
-                #     # Joint ramping constraint was not applied historically.
-                #     continue
-                #
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 STAN-4 lower_reg':
-                #     # Joint ramping constraint was not applied historically.
-                #     continue
-                #
-                # if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 VP6 lower_reg':
-                #     # Joint ramping constraint was not applied historically.
-                #     continue
+            print(unit)
+            # Create constraints the enforce the lower and upper slope of the FCAS regulation
+            # service trapeziums.
+            regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
+            if not regulation_trapeziums.empty:
+                market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+                market.set_joint_ramping_constraints(regulation_trapeziums.loc[:, ['unit', 'service']],
+                                                     unit_limits.loc[:, ['unit', 'initial_output',
+                                                                         'ramp_down_rate', 'ramp_up_rate']])
 
-                if '{} {} {}'.format(interval, unit, service) == '2019/01/09 15:30:00 LOYYB2 lower_reg':
-                    # Small difference in initial out put used causes small difference in availability = -0.15
-                    continue
+            # Create constraints that enforce the lower and upper slope of the FCAS contingency
+            # trapezium. These constrains also scale slopes of the trapezium to ensure the
+            # co-dispatch of contingency and regulation services is technically feasible.
+            contingency_trapeziums = fcas_trapeziums[~fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
+            if not contingency_trapeziums.empty:
+                market.set_joint_capacity_constraints(contingency_trapeziums)
 
-                # if '{} {} {}'.format(interval, unit, service) != '2019/01/05 14:10:00 HPRL1 lower_5min':
-                #     continue
+            vars = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
+                    'LOWERREG', 'RAISEREG']
 
-                if '{} {}'.format(interval, unit) == '2019/01/05 14:10:00 GSTONE1':
-                    # Looks like a difference in rounding is causing infeasibility.
-                    continue
+            bounds = DISPATCHLOAD_unit.loc[:, ['DUID'] + vars]
+            bounds.columns = ['unit'] + vars
+
+            bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=vars, type_name='service',
+                                      value_name='dispatched')
+
+            bounds['service'] = bounds['service'].apply(lambda x: service_name_mapping[x])
+
+            decision_variables = market.decision_variables['bids'].copy()
+
+            decision_variables = pd.merge(decision_variables, bounds, on=['unit', 'service'])
+
+            decision_variables_first_bid = decision_variables.groupby(['unit', 'service'], as_index=False).first()
+
+            def last_bids(df):
+                return df.iloc[1:]
+
+            decision_variables_remaining_bids = \
+                decision_variables.groupby(['unit', 'service'], as_index=False).apply(last_bids)
+
+            decision_variables_first_bid['lower_bound'] = decision_variables_first_bid['dispatched']
+            decision_variables_first_bid['upper_bound'] = decision_variables_first_bid['dispatched']
+            decision_variables_remaining_bids['lower_bound'] = 0.0
+            decision_variables_remaining_bids['upper_bound'] = 0.0
+
+            decision_variables = pd.concat([decision_variables_first_bid, decision_variables_remaining_bids])
+
+            market.decision_variables['bids'] = decision_variables
+
+            market.dispatch()
+
+            availabilities = ['RAISE6SECACTUALAVAILABILITY', 'RAISE60SECACTUALAVAILABILITY',
+                              'RAISE5MINACTUALAVAILABILITY', 'RAISEREGACTUALAVAILABILITY',
+                              'LOWER6SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
+                              'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY']
+
+            availabilities_mapping = {'RAISEREGACTUALAVAILABILITY': 'raise_reg',
+                                      'LOWERREGACTUALAVAILABILITY': 'lower_reg',
+                                      'RAISE6SECACTUALAVAILABILITY': 'raise_6s',
+                                      'RAISE60SECACTUALAVAILABILITY': 'raise_60s',
+                                      'RAISE5MINACTUALAVAILABILITY': 'raise_5min',
+                                      'LOWER6SECACTUALAVAILABILITY': 'lower_6s',
+                                      'LOWER60SECACTUALAVAILABILITY': 'lower_60s',
+                                      'LOWER5MINACTUALAVAILABILITY': 'lower_5min'}
+
+            bounds = DISPATCHLOAD_unit.loc[:, ['DUID'] + availabilities]
+            bounds.columns = ['unit'] + availabilities
+
+            availabilities = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=availabilities,
+                                              type_name='service', value_name='availability')
+
+            availabilities['service'] = availabilities['service'].apply(lambda x: availabilities_mapping[x])
+
+            output = market.get_fcas_availability()
+            output.columns = ['unit', 'service', 'availability_measured']
+
+            availabilities = pd.merge(availabilities, output, 'left', on=['unit', 'service'])
+
+            availabilities['availability_measured'] = availabilities['availability_measured'].fillna(0)
+
+            availabilities['error'] = availabilities['availability_measured'] - availabilities['availability']
+
+            availabilities['match'] = availabilities['error'].abs() < 0.1
 
 
-                BIDPEROFFER_D_unit = BIDPEROFFER_D[BIDPEROFFER_D['DUID'] == unit]
-                unit_limits_one = unit_limits[unit_limits['unit'] == unit]
-                unit_info_one = unit_info[unit_info['unit'] == unit]
-                BIDDAYOFFER_D_unit = BIDDAYOFFER_D[BIDDAYOFFER_D['DUID'] == unit]
-                DISPATCHLOAD_unit = DISPATCHLOAD[DISPATCHLOAD['DUID'] == unit]
+            fails += len(availabilities['match']) - availabilities['match'].sum()
+            passes += availabilities['match'].sum()
+            total += len(availabilities['match'])
 
-                if DISPATCHLOAD_unit[BIDTYPE].iloc[0] > DISPATCHLOAD_unit[BIDTYPE + 'ACTUALAVAILABILITY'].iloc[0]:
-                    continue
-
-                # Extract just bidding info
-                volume_bids = hi.format_volume_bids(BIDPEROFFER_D_unit)
-                price_bids = hi.format_price_bids(BIDDAYOFFER_D_unit)
-                fcas_trapeziums = hi.format_fcas_trapezium_constraints(BIDPEROFFER_D_unit)
-
-                if service not in list(fcas_trapeziums['service']):
-                    continue
-
-                print('{} {}'.format(unit, service))
-
-                market = markets.Spot()
-
-                # Add generators to the market.
-                market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])
-
-                # Set volume of each bids.
-                volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info_one['unit']))]
-                market.set_unit_volume_bids(volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                                '6', '7', '8', '9', '10']])
-
-                # Set prices of each bid.
-                price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
-                market.set_unit_price_bids(price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                              '6', '7', '8', '9', '10']])
-
-                # Set unit operating limits.
-                if not unit_limits_one.empty:
-                    market.set_unit_capacity_constraints(unit_limits_one.loc[:, ['unit', 'capacity']])
-                    market.set_unit_ramp_up_constraints(unit_limits_one.loc[:, ['unit', 'initial_output',
-                                                                                'ramp_up_rate']])
-                    market.set_unit_ramp_down_constraints(unit_limits_one.loc[:, ['unit', 'initial_output',
-                                                                                  'ramp_down_rate']])
-
-                # Create constraints that enforce the top of the FCAS trapezium.
-                if not fcas_trapeziums.empty:
-                    fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
-                    market.set_fcas_max_availability(fcas_availability)
-
-                # Create constraints the enforce the lower and upper slope of the FCAS regulation
-                # service trapeziums.
-                regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
-                if not regulation_trapeziums.empty:
-                    market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
-                    market.set_joint_ramping_constraints(regulation_trapeziums.loc[:, ['unit', 'service']],
-                                                         unit_limits.loc[:, ['unit', 'initial_output',
-                                                                             'ramp_down_rate', 'ramp_up_rate']])
-
-                # Create constraints that enforce the lower and upper slope of the FCAS contingency
-                # trapezium. These constrains also scale slopes of the trapezium to ensure the
-                # co-dispatch of contingency and regulation services is technically feasible.
-                contingency_trapeziums = fcas_trapeziums[~fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
-                if not contingency_trapeziums.empty:
-                    market.set_joint_capacity_constraints(contingency_trapeziums)
-
-                # Set cost of bid variables to zero except for fcas being tested
-                market.objective_function_components['bids']['cost'] = np.where(
-                    market.objective_function_components['bids']['service'] == service, -1.0, 0.0)
-
-                vars = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                        'LOWERREG', 'RAISEREG']
-
-                bounds = DISPATCHLOAD_unit.loc[:, ['DUID'] + vars]
-                bounds.columns = ['unit'] + vars
-
-                bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=vars, type_name='service',
-                                          value_name='dispatched')
-
-                bounds['service'] = bounds['service'].apply(lambda x: service_name_mapping[x])
-
-                decision_variables = market.decision_variables['bids'].copy()
-
-                decision_variables = pd.merge(decision_variables, bounds, on=['unit', 'service'])
-
-                decision_variables_test_service = decision_variables[decision_variables['service'] == service]
-                decision_variables_not_test_service = decision_variables[~(decision_variables['service'] == service)]
-
-                decision_variables_first_bid = decision_variables_not_test_service.groupby(['unit', 'service'],
-                                                                                            as_index=False).first()
-
-                def last_bids(df):
-                    return df.iloc[1:]
-
-                decision_variables_remaining_bids = \
-                    decision_variables_not_test_service.groupby(['unit', 'service'],
-                                                                as_index=False).apply(last_bids)
-
-                decision_variables_first_bid['lower_bound'] = decision_variables_first_bid['dispatched'] - 0.0001
-                decision_variables_first_bid['upper_bound'] = decision_variables_first_bid['dispatched'] + 0.0001
-                decision_variables_remaining_bids['lower_bound'] = 0.0
-                decision_variables_remaining_bids['upper_bound'] = 0.0
-
-                decision_variables = pd.concat([decision_variables_test_service, decision_variables_first_bid,
-                                                decision_variables_remaining_bids])
-
-                market.decision_variables['bids'] = decision_variables
-
-                if 'joint_ramping' in market.constraints_rhs_and_type:
-                    reg_vars = bounds[bounds['service'].isin(['raise_reg', 'lower_reg'])]
-                    energy_vars = bounds[bounds['service'].isin(['energy'])]
-                    energy_vars = energy_vars.loc[:, ['unit', 'dispatched']]
-                    energy_vars.columns = ['unit', 'energy']
-                    check_ramping_feasibility = pd.merge(reg_vars, energy_vars, on='unit')
-                    check_ramping_feasibility = pd.merge(check_ramping_feasibility,
-                                                         market.constraints_rhs_and_type['joint_ramping'].loc[:, ['unit', 'service', 'rhs']],
-                                                         on=['unit', 'service'])
-                    check_ramping_feasibility['not_infeasible'] = np.where(
-                        check_ramping_feasibility['service'] == 'raise_reg',
-                        check_ramping_feasibility['energy'] + check_ramping_feasibility['dispatched'] <= check_ramping_feasibility['rhs'],
-                        check_ramping_feasibility['energy'] - check_ramping_feasibility['dispatched'] >= check_ramping_feasibility['rhs'])
-
-                    if not check_ramping_feasibility['not_infeasible'].all():
-                        print('Test aborted for {} {}, historical joint ramping cons infeasible'.format(unit, service))
-                        continue
-
-                market.dispatch()
-
-                availabilities = ['RAISE6SECACTUALAVAILABILITY', 'RAISE60SECACTUALAVAILABILITY',
-                                  'RAISE5MINACTUALAVAILABILITY', 'RAISEREGACTUALAVAILABILITY',
-                                  'LOWER6SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
-                                  'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY']
-
-                availabilities_mapping = {'RAISEREGACTUALAVAILABILITY': 'raise_reg',
-                                          'LOWERREGACTUALAVAILABILITY': 'lower_reg',
-                                          'RAISE6SECACTUALAVAILABILITY': 'raise_6s',
-                                          'RAISE60SECACTUALAVAILABILITY': 'raise_60s',
-                                          'RAISE5MINACTUALAVAILABILITY': 'raise_5min',
-                                          'LOWER6SECACTUALAVAILABILITY': 'lower_6s',
-                                          'LOWER60SECACTUALAVAILABILITY': 'lower_60s',
-                                          'LOWER5MINACTUALAVAILABILITY': 'lower_5min'}
-
-                bounds = DISPATCHLOAD_unit.loc[:, ['DUID'] + availabilities]
-                bounds.columns = ['unit'] + availabilities
-
-                availabilities = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=availabilities,
-                                                  type_name='service', value_name='availability')
-
-                availabilities['service'] = availabilities['service'].apply(lambda x: availabilities_mapping[x])
-
-                availabilities = availabilities[availabilities['service'] == service]
-
-                output = market.get_unit_dispatch()
-
-                availabilities = pd.merge(availabilities, output, 'left', on=['unit', 'service'])
-
-                availabilities['error'] = availabilities['dispatch'] - availabilities['availability']
-
-                availabilities['match'] = availabilities['error'].abs() < 0.1
-
-                if not availabilities['match'].all() and service == 'lower_reg':
-                    dispatch = availabilities['dispatch'].iloc[0]
-                    availability = availabilities['availability'].iloc[0]
-                    joint_ramping_bound = DISPATCHLOAD_unit['TOTALCLEARED'].iloc[0] - \
-                                          (DISPATCHLOAD_unit['INITIALMW'].iloc[0] -
-                                           DISPATCHLOAD_unit['RAMPDOWNRATE'].iloc[0]/12)
-                    diff = abs(dispatch - joint_ramping_bound)
-                    if dispatch < availability and diff < 0.001:
-                        print('Test aborted for {} {}, historical calc did not apply joint ramping cons'.format(unit, service))
-                        continue
-
-                if not availabilities['match'].all() and service == 'raise_reg':
-                    dispatch = availabilities['dispatch'].iloc[0]
-                    availability = availabilities['availability'].iloc[0]
-                    joint_ramping_bound = -1 * DISPATCHLOAD_unit['TOTALCLEARED'].iloc[0] + \
-                                          (DISPATCHLOAD_unit['INITIALMW'].iloc[0] +
-                                           DISPATCHLOAD_unit['RAMPUPRATE'].iloc[0]/12)
-                    diff = abs(dispatch - joint_ramping_bound)
-                    if dispatch < availability and diff < 0.001:
-                        print('Test aborted for {} {}, historical calc did not apply joint ramping cons'.format(unit, service))
-                        continue
-
-                assert (availabilities['match'].all())
+        print('fails {}'.format(fails))
+        print('passes {}'.format(passes))
+        print('total {}'.format(passes))
 

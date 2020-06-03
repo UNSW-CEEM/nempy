@@ -169,10 +169,9 @@ def fcas(fcas_requirements, next_constraint_id):
     """
 
     # Create an index for each constraint.
-    type_and_rhs = fcas_requirements.loc[:, ['set', 'volume']]
+    type_and_rhs = fcas_requirements.loc[:, ['set', 'volume', 'type']]
     type_and_rhs = type_and_rhs.drop_duplicates('set')
     type_and_rhs = hf.save_index(type_and_rhs, 'constraint_id', next_constraint_id)
-    type_and_rhs['type'] = '='  # Supply and interconnector flow must exactly equal demand.
     type_and_rhs['rhs'] = type_and_rhs['volume']
     type_and_rhs = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
 
