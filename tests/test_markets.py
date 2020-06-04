@@ -306,7 +306,8 @@ def test_one_region_energy_and_raise_regulation_markets():
     assert_frame_equal(simple_market.get_energy_prices(), expected_energy_prices)
 
     expected_fcas_prices = pd.DataFrame({
-        'set': ['nsw_regulation_requirement'],
+        'region': ['NSW'],
+        'service': ['raise_reg'],
         'price': [30.0]
     })
 
@@ -405,11 +406,91 @@ def test_raise_6s_and_raise_reg():
     assert_frame_equal(simple_market.get_energy_prices(), expected_energy_prices)
 
     expected_fcas_prices = pd.DataFrame({
-        'set': ['nsw_regulation_requirement', 'nsw_raise_6s_requirement'],
-        'price': [45.0, 35.0]
+        'region': ['NSW', 'NSW'],
+        'service': ['raise_6s', 'raise_reg'],
+        'price': [35.0, 45.0]
     })
 
     assert_frame_equal(simple_market.get_fcas_prices(), expected_fcas_prices)
+
+
+def test_two_region_energy_market_with_generic_constraints():
+    # Volume of each bid, number of bid bands must equal number of bands in price_bids.
+    volume_bids = pd.DataFrame({
+        'unit': ['A', 'B'],
+        '1': [100.0, 100.0]
+    })
+
+    # Price of each bid, bids must be monotonically increasing.
+    price_bids = pd.DataFrame({
+        'unit': ['A', 'B'],
+        '1': [50.0, 20.0]
+    })
+
+    # Factors limiting unit output
+    unit_limits = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'capacity': [100.0, 120.0],  # MW
+    })
+
+    # Other unit properties
+    unit_info = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'region': ['NSW', 'VIC']
+    })
+
+    demand = pd.DataFrame({
+        'region': ['NSW', 'VIC'],
+        'demand': [60.0, 80.0]  # MW
+    })
+
+    # Generic constraints
+    generic_cons = pd.DataFrame({
+        'set': ['X'],
+        'type': ['>='],
+        'rhs': [65.0],
+    })
+
+    unit_coefficients = pd.DataFrame({
+        'set': ['X'],
+        'unit': ['A'],
+        'service': ['energy'],
+        'coefficient': [1.0]
+    })
+
+    # There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
+    interconnectors = pd.DataFrame({
+        'interconnector': ['little_link'],
+        'to_region': ['VIC'],
+        'from_region': ['NSW'],
+        'max': [100.0],
+        'min': [-120.0]
+    })
+
+    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market.set_interconnectors(interconnectors)
+    simple_market.set_unit_info(unit_info)
+    simple_market.set_unit_volume_bids(volume_bids)
+    simple_market.set_unit_capacity_constraints(unit_limits)
+    simple_market.set_unit_price_bids(price_bids)
+    simple_market.set_demand_constraints(demand)
+    simple_market.set_generic_constraints(generic_cons)
+    simple_market.link_units_to_generic_constraints(unit_coefficients)
+    simple_market.dispatch()
+
+    expected_prices = pd.DataFrame({
+        'region': ['NSW', 'VIC'],
+        'price': [20.0, 20.0]
+    })
+
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
+        'dispatch': [65.0, 75.0]
+    })
+
+    assert_frame_equal(simple_market.get_energy_prices(), expected_prices)
+    assert_frame_equal(simple_market.get_unit_dispatch(), expected_dispatch)
 
 
 

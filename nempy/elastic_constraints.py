@@ -10,21 +10,27 @@ def create_deficit_variables(constraint_rhs, next_variable_id):
     --------
 
     >>> constraint_rhs = pd.DataFrame({
-    ...   'constraint_id': [1, 2],
-    ...   'type': ['>=', '<='],
-    ...   'violation_cost': [14000.0, 14000.0]})
+    ...   'constraint_id': [1, 2, 3],
+    ...   'type': ['>=', '<=', '='],
+    ...   'cost': [14000.0, 14000.0, 14000.]})
 
     >>> deficit_variables, lhs = create_deficit_variables(constraint_rhs, 1)
+
+    Note two variables are needed for equality constraints, one to allow violation up and one to allow violation down.
 
     >>> print(deficit_variables)
        variable_id     cost  lower_bound  upper_bound        type
     0            1  14000.0          0.0          inf  continuous
     1            2  14000.0          0.0          inf  continuous
+    0            3  14000.0          0.0          inf  continuous
+    0            4  14000.0          0.0          inf  continuous
 
     >>> print(lhs)
        variable_id  constraint_id  coefficient
     0            1              1          1.0
     1            2              2         -1.0
+    0            3              3         -1.0
+    0            4              3          1.0
 
     Parameters
     ----------
@@ -33,7 +39,7 @@ def create_deficit_variables(constraint_rhs, next_variable_id):
         Columns:        Description:
         constraint_id   the id of the constraint (as `int`)
         type            the type of the constraint, e.g. ">=" or "<=" (as `str`)
-        violation_cost  the cost of using the deficit variable to violate the constraint (as `np.float64`)
+        cost            the cost of using the deficit variable to violate the constraint (as `np.float64`)
         ==============  ====================================================================
 
     Returns
@@ -56,19 +62,47 @@ def create_deficit_variables(constraint_rhs, next_variable_id):
         coefficient    the variable lhs coefficient (as `np.float64`)
         =============  ====================================================================
     """
-    if '=' in list(constraint_rhs['type']):
-        raise check.ColumnValues("Elastic constraints only supported for types >= and <= not type =.")
 
-    constraint_rhs = hf.save_index(constraint_rhs.reset_index(drop=True), 'variable_id', next_variable_id)
+    inequalities = constraint_rhs[constraint_rhs['type'].isin(['>=', '<='])]
+    equalities = constraint_rhs[constraint_rhs['type'] == '=']
 
-    deficit_variables = constraint_rhs.loc[:, ['variable_id', 'violation_cost']]
-    deficit_variables.columns = ['variable_id', 'cost']
-    deficit_variables['lower_bound'] = 0.0
-    deficit_variables['upper_bound'] = np.inf
-    deficit_variables['type'] = 'continuous'
+    inequalities = hf.save_index(inequalities.reset_index(drop=True), 'variable_id', next_variable_id)
 
-    lhs = constraint_rhs.loc[:, ['variable_id', 'constraint_id', 'type']]
-    lhs['coefficient'] = np.where(lhs['type'] == '>=', 1.0, -1.0)
-    lhs = lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
+    inequalities_deficit_variables = inequalities.loc[:, ['variable_id', 'cost']]
+    inequalities_deficit_variables['lower_bound'] = 0.0
+    inequalities_deficit_variables['upper_bound'] = np.inf
+    inequalities_deficit_variables['type'] = 'continuous'
+
+    inequalities_lhs = inequalities.loc[:, ['variable_id', 'constraint_id', 'type']]
+    inequalities_lhs['coefficient'] = np.where(inequalities_lhs['type'] == '>=', 1.0, -1.0)
+    inequalities_lhs = inequalities_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
+
+    next_variable_id = inequalities['variable_id'].max() + 1
+    equalities_up = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
+    next_variable_id = equalities_up['variable_id'].max() + 1
+    equalities_down = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
+
+    equalities_up_deficit_variables = equalities_up.loc[:, ['variable_id', 'cost']]
+    equalities_up_deficit_variables['lower_bound'] = 0.0
+    equalities_up_deficit_variables['upper_bound'] = np.inf
+    equalities_up_deficit_variables['type'] = 'continuous'
+
+    equalities_down_deficit_variables = equalities_down.loc[:, ['variable_id', 'cost']]
+    equalities_down_deficit_variables['lower_bound'] = 0.0
+    equalities_down_deficit_variables['upper_bound'] = np.inf
+    equalities_down_deficit_variables['type'] = 'continuous'
+
+    equalities_up_lhs = equalities_up.loc[:, ['variable_id', 'constraint_id', 'type']]
+    equalities_up_lhs['coefficient'] = -1.0
+    equalities_up_lhs = equalities_up_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
+
+    equalities_down_lhs = equalities_down.loc[:, ['variable_id', 'constraint_id', 'type']]
+    equalities_down_lhs['coefficient'] = 1.0
+    equalities_down_lhs = equalities_down_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
+
+    deficit_variables = pd.concat([inequalities_deficit_variables, equalities_up_deficit_variables,
+                                   equalities_down_deficit_variables])
+
+    lhs = pd.concat([inequalities_lhs, equalities_up_lhs, equalities_down_lhs])
 
     return deficit_variables, lhs

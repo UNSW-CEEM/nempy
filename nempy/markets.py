@@ -1,19 +1,23 @@
 import numpy as np
 import pandas as pd
 from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
-    create_lhs, interconnectors as inter, fcas_constraints, elastic_constraints
+    create_lhs, interconnectors as inter, fcas_constraints, elastic_constraints, helper_functions as hf
+from nempy import spot_markert_backend
 
 
 class Spot:
     """Class for constructing and dispatch the spot market on an interval basis."""
 
-    def __init__(self, dispatch_interval=5):
+    def __init__(self, dispatch_interval=5, market_ceiling_price=14000.0, market_floor_price=-1000.0):
         self.dispatch_interval = dispatch_interval
+        self.market_ceiling_price = market_ceiling_price
+        self.market_floor_price = market_floor_price
         self.unit_info = None
         self.decision_variables = {}
         self.variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
         self.constraint_to_variable_map = {'regional': {}, 'unit_level': {}}
-        self.lhs_coefficients = pd.DataFrame()
+        self.lhs_coefficients = {}
+        self.generic_constraint_lhs = {}
         self.constraints_rhs_and_type = {}
         self.constraints_dynamic_rhs_and_type = {}
         self.market_constraints_rhs_and_type = {}
@@ -751,7 +755,7 @@ class Spot:
         # 3. Update the constraint id
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume', 'type'])
+    @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
     @check.allowed_columns('fcas_requirements', ['set', 'service', 'region', 'volume', 'type'])
     @check.repeated_rows('fcas_requirements', ['set', 'service', 'region'])
     @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'type':str,
@@ -812,6 +816,8 @@ class Spot:
             service   the service or services the requirement set applies to (as `str`)
             region    unique identifier of a region (as `str`)
             volume    the amount of service required, in MW (as `np.float64`)
+            type      the direction of the constrain '=', '>=' or '<=', optional, a \n
+                      value of '=' is assumed if the column is missing (as `str`)
             ========  ===================================================================
 
         Returns
@@ -821,13 +827,13 @@ class Spot:
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any unit.
+                If there is more than one row for any set and region combination.
             ColumnDataTypeError
                 If columns are not of the required type.
             MissingColumnError
-                If the column 'set', 'service', 'region', or 'demand' is missing.
+                If the column 'set', 'service', 'region', or 'volume' is missing.
             UnexpectedColumn
-                There is a column that is not 'set', 'service', 'region', or 'demand'.
+                There is a column that is not 'set', 'service', 'region', 'volume' or 'type'.
             ColumnValues
                 If there are inf, null or negative values in the volume column.
         """
@@ -1039,15 +1045,6 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['joint_ramping'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-        rhs_and_type['violation_cost'] = 14000.0
-        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
-
-        self.decision_variables['joint_ramping_deficit'] = deficit_variables.loc[:, ['variable_id', 'lower_bound',
-                                                                                     'upper_bound', 'type']]
-        self.objective_function_components['joint_ramping_deficit'] = deficit_variables.loc[:, ['variable_id', 'cost']]
-        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
-        self.next_variable_id = max(deficit_variables['variable_id']) + 1
-
 
 
     @check.required_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
@@ -1158,15 +1155,6 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-        rhs_and_type['violation_cost'] = 14000.0
-        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
-
-        self.decision_variables['joint_capacity_deficit'] = deficit_variables.loc[:, ['variable_id', 'lower_bound',
-                                                                                     'upper_bound', 'type']]
-        self.objective_function_components['joint_capacity_deficit'] = deficit_variables.loc[:, ['variable_id', 'cost']]
-        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
-        self.next_variable_id = max(deficit_variables['variable_id']) + 1
-
 
 
     @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
@@ -1239,8 +1227,8 @@ class Spot:
             unit               unique identifier of a dispatch unit (as `str`)
             service            the regulation service being offered (as `str`)
             max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
-            enablement_min     the energy dispatch level at which the unit can begin to provide the
-                               contingency service, in MW (as `np.float64`)
+            enablement_min     the energy dispatch level at which the unit can begin to provide
+                               the contingency service, in MW (as `np.float64`)
             low_break_point    the energy dispatch level at which the unit can provide the full
                                contingency service offered, in MW (as `np.float64`)
             high_break_point   the energy dispatch level at which the unit can no longer provide the
@@ -1274,16 +1262,6 @@ class Spot:
         self.constraints_rhs_and_type['energy_and_regulation_capacity'] = rhs_and_type
         self.constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
-
-        rhs_and_type['violation_cost'] = 14000.0
-        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
-
-        self.decision_variables['energy_and_regulation_capacity_deficit'] = \
-            deficit_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']]
-        self.objective_function_components['energy_and_regulation_capacity_deficit'] = \
-            deficit_variables.loc[:, ['variable_id', 'cost']]
-        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])
-        self.next_variable_id = max(deficit_variables['variable_id']) + 1
 
     @check.required_columns('interconnector_directions_and_limits',
                             ['interconnector', 'to_region', 'from_region', 'max', 'min'])
@@ -1508,7 +1486,7 @@ class Spot:
         0    little_link              1    =                0
         0    little_link              2    =                1
 
-        >>> print(simple_market.lhs_coefficients)
+        >>> print(simple_market.lhs_coefficients['interconnector_losses'])
            variable_id  constraint_id  coefficient
         0            2              0          1.0
         1            3              0          1.0
@@ -1604,11 +1582,451 @@ class Spot:
         self.decision_variables['interconnector_losses'] = loss_variables
         self.variable_to_constraint_map['regional']['interconnector_losses'] = loss_variables_constraint_map
         self.decision_variables['interpolation_weights'] = weight_variables
-        self.lhs_coefficients = pd.concat([self.lhs_coefficients, lhs])  # TODO pontential bug if losses adde twice.
+        self.lhs_coefficients['interconnector_losses'] = lhs
         self.constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
         self.constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
         self.next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
         self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
+
+    @check.required_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
+    @check.allowed_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
+    @check.repeated_rows('generic_constraint_parameters', ['set'])
+    @check.column_data_types('generic_constraint_parameters', {'set': str,  'type': str, 'rhs': np.float64})
+    @check.column_values_must_be_real('generic_constraint_parameters', ['rhs'])
+    def set_generic_constraints(self, generic_constraint_parameters):
+        """Creates a set of generic constraints, adding the constraint type, rhs.
+
+        This sets a set of arbitrary constraints, but only the type and rhs values. The lhs terms can be added to these
+        constraints using the methods link_units_to_generic_constraints, link_interconnectors_to_generic_constraints
+        and link_regions_to_generic_constraints.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Create a market instance.
+
+        >>> market = markets.Spot()
+
+        Define a set of generic constraints and add them to the market.
+
+        >>> generic_constraint_parameters = pd.DataFrame({
+        ...   'set': ['A', 'B'],
+        ...   'type': ['>=', '<='],
+        ...   'rhs': [10.0, -100.0]})
+
+        >>> market.set_generic_constraints(generic_constraint_parameters)
+
+        Now the market should have a set of generic constraints.
+
+        >>> print(market.constraints_rhs_and_type['generic'])
+          set  constraint_id type    rhs
+        0   A              0   >=   10.0
+        1   B              1   <= -100.0
+
+        Parameters
+        ----------
+        generic_constraint_parameters : pd.DataFrame
+
+            =============  ==============================================================
+            Columns:       Description:
+            set            the unique identifier of the constraint set (as `str`)
+            type           the direction of the constraint >=, <= or = (as `str`)
+            rhs            the right hand side value of the constraint (as `np.float64`)
+            =============  ==============================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the required type.
+            MissingColumnError
+                If the column 'set', 'type' or 'rhs' is missing.
+            UnexpectedColumn
+                There is a column that is not 'set', 'type' or 'rhs' .
+            ColumnValues
+                If there are inf or null values in the rhs column.
+        """
+        type_and_rhs = hf.save_index(generic_constraint_parameters, 'constraint_id', self.next_constraint_id)
+        self.constraint_to_variable_map['unit_level']['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id']]
+        self.constraint_to_variable_map['unit_level']['generic']['coefficient'] = 1.0
+        self.constraints_rhs_and_type['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
+        self.next_constraint_id = type_and_rhs['constraint_id'].max() + 1
+
+    @check.required_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
+    @check.allowed_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
+    @check.repeated_rows('unit_coefficients', ['set', 'unit', 'service'])
+    @check.column_data_types('unit_coefficients', {'set': str,  'unit': str, 'service': str, 'coefficient': np.float64})
+    @check.column_values_must_be_real('unit_coefficients', ['coefficient'])
+    def link_units_to_generic_constraints(self, unit_coefficients):
+        """Set the lhs coefficients of generic constraints on unit basis.
+
+        Notes
+        -----
+        These sets also maps to the sets in the fcas market constraints. One potential use of this is prevent specific
+        units from helping to meet fcas constraints by giving them a negative one (-1.0) coefficient using this method
+        for particular fcas markey constraints.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Create a market instance.
+
+        >>> market = markets.Spot()
+
+        Define unit lhs coefficients for generic constraints.
+
+        >>> unit_coefficients = pd.DataFrame({
+        ...   'set': ['A', 'A', 'B'],
+        ...   'unit': ['X', 'Y', 'X'],
+        ...   'service': ['energy', 'energy', 'raise_reg'],
+        ...   'coefficient': [1.0, 1.0, -1.0]})
+
+        >>> market.link_units_to_generic_constraints(unit_coefficients)
+
+        Note all this does is save this information to the market object, linking to specific variable ids and
+        constraint id occurs when the dispatch method is called.
+
+        >>> print(market.generic_constraint_lhs['units'])
+          set unit    service  coefficient
+        0   A    X     energy          1.0
+        1   A    Y     energy          1.0
+        2   B    X  raise_reg         -1.0
+
+        Parameters
+        ----------
+        unit_coefficients : pd.DataFrame
+
+            =============  ==============================================================
+            Columns:       Description:
+            set            the unique identifier of the constraint set to map the
+                           lhs coefficients to (as `str`)
+            unit           the unit whose variables will be mapped to the lhs (as `str`)
+            service        the service whose variables will be mapped to the lhs (as `str`)
+            coefficient    the lhs coefficient (as `np.float64`)
+            =============  ==============================================================
+
+        Raises
+        ------
+        RepeatedRowError
+            If there is more than one row for any set, unit and service combination.
+        ColumnDataTypeError
+            If columns are not of the required type.
+        MissingColumnError
+            If the column 'set', 'unit', 'serice' or 'coefficient' is missing.
+        UnexpectedColumn
+            There is a column that is not 'set', 'unit', 'serice' or 'coefficient'.
+        ColumnValues
+            If there are inf or null values in the rhs coefficient.
+        """
+        self.generic_constraint_lhs['unit'] = unit_coefficients
+
+    @check.required_columns('region_coefficients', ['set', 'region', 'service', 'coefficient'])
+    @check.allowed_columns('region_coefficients', ['set', 'region', 'service', 'coefficient'])
+    @check.repeated_rows('region_coefficients', ['set', 'region', 'service'])
+    @check.column_data_types('region_coefficients', {'set': str, 'region': str, 'service': str,
+                                                     'coefficient': np.float64})
+    @check.column_values_must_be_real('region_coefficients', ['coefficient'])
+    def link_regions_to_generic_constraints(self, region_coefficients):
+        """Set the lhs coefficients of generic constraints on region basis.
+
+        This effectively acts as short cut for mapping unit variables to a generic constraint. If a particular
+        service in a particular region is included here then all units in this region will have their variables
+        of this service included on the lhs of this constraint set.
+
+        Notes
+        -----
+        These sets also map to the set in the fcas market constraints.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Create a market instance.
+
+        >>> market = markets.Spot()
+
+        Define region lhs coefficients for generic constraints.
+
+        >>> region_coefficients = pd.DataFrame({
+        ...   'set': ['A', 'A', 'B'],
+        ...   'region': ['X', 'Y', 'X'],
+        ...   'service': ['energy', 'energy', 'raise_reg'],
+        ...   'coefficient': [1.0, 1.0, -1.0]})
+
+        >>> market.link_regions_to_generic_constraints(region_coefficients)
+
+        Note all this does is save this information to the market object, linking to specific variable ids and
+        constraint id occurs when the dispatch method is called.
+
+        >>> print(market.generic_constraint_lhs['region'])
+          set region    service  coefficient
+        0   A      X     energy          1.0
+        1   A      Y     energy          1.0
+        2   B      X  raise_reg         -1.0
+
+        Parameters
+        ----------
+        unit_coefficients : pd.DataFrame
+
+            =============  ==============================================================
+            Columns:       Description:
+            set            the unique identifier of the constraint set to map the
+                           lhs coefficients to (as `str`)
+            region         the region whose variables will be mapped to the lhs (as `str`)
+            service        the service whose variables will be mapped to the lhs (as `str`)
+            coefficient    the lhs coefficient (as `np.float64`)
+            =============  ==============================================================
+
+        Raises
+        ------
+        RepeatedRowError
+            If there is more than one row for any set, region and service combination.
+        ColumnDataTypeError
+            If columns are not of the required type.
+        MissingColumnError
+            If the column 'set', 'region', 'service' or 'coefficient' is missing.
+        UnexpectedColumn
+            There is a column that is not 'set', 'region', 'service' or 'coefficient'.
+        ColumnValues
+            If there are inf or null values in the rhs coefficient.
+        """
+        self.generic_constraint_lhs['region'] = region_coefficients
+
+    @check.required_columns('interconnetor_coefficients', ['set', 'interconnetor', 'service', 'coefficient'])
+    @check.allowed_columns('interconnetor_coefficients', ['set', 'interconnetor', 'service', 'coefficient'])
+    @check.repeated_rows('interconnetor_coefficients', ['set', 'interconnetor', 'service'])
+    @check.column_data_types('interconnetor_coefficients', {'set': str, 'interconnetor': str, 'service': str,
+                                                               'coefficient': np.float64})
+    @check.column_values_must_be_real('interconnetor_coefficients', ['coefficient'])
+    def link_interconnetors_to_generic_constraints(self, interconnetor_coefficients):
+        """Set the lhs coefficients of generic constraints on interconnetor basis.
+
+        Notes
+        -----
+        These sets also map to the set in the fcas market constraints.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Create a market instance.
+
+        >>> market = markets.Spot()
+
+        Define region lhs coefficients for generic constraints. All interconnector variables are for the energy service
+        so no 'service' can be specified.
+
+        >>> interconnetor_coefficients = pd.DataFrame({
+        ...   'set': ['A', 'A', 'B'],
+        ...   'interconnetor': ['X', 'Y', 'X'],
+        ...   'coefficient': [1.0, 1.0, -1.0]})
+
+        >>> market.link_interconnetors_to_generic_constraints(interconnetor_coefficients)
+
+        Note all this does is save this information to the market object, linking to specific variable ids and
+        constraint id occurs when the dispatch method is called.
+
+        >>> print(market.generic_constraint_lhs['interconnetor'])
+          set interconnetor    service  coefficient
+        0   A             X     energy          1.0
+        1   A             Y     energy          1.0
+        2   B             X  raise_reg         -1.0
+
+        Parameters
+        ----------
+        unit_coefficients : pd.DataFrame
+
+            =============  ==============================================================
+            Columns:       Description:
+            set            the unique identifier of the constraint set to map the
+                           lhs coefficients to (as `str`)
+            interconnetor  the interconnetor whose variables will be mapped to the lhs (as `str`)
+            coefficient    the lhs coefficient (as `np.float64`)
+            =============  ==============================================================
+
+        Raises
+        ------
+        RepeatedRowError
+            If there is more than one row for any set, interconnetor and service combination.
+        ColumnDataTypeError
+            If columns are not of the required type.
+        MissingColumnError
+            If the column 'set', 'interconnetor' or 'coefficient' is missing.
+        UnexpectedColumn
+            There is a column that is not 'set', 'interconnetor' or 'coefficient'.
+        ColumnValues
+            If there are inf or null values in the rhs coefficient.
+        """
+        self.generic_constraint_lhs['interconnetor'] = interconnetor_coefficients
+
+    def make_constraints_elastic(self, constraints_key, violation_cost='market_ceiling_price'):
+        """Make a set of constraints elastic, so they can be violated at a predefined cost.
+
+        If the string 'market_ceiling_price' is provided then the market_ceiling_price is used to set the
+        violation cost. If an int or float is provided then this directly set the cost. If a pd.DataFrame
+        is provided then it must contain the columns 'set' and 'cost', 'set' is used to match the cost to
+        the constraints, sets in the constraints that do not appear in the pd.DataFrame will not be made
+        elastic.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Create a market instance.
+
+        >>> market = markets.Spot()
+
+        Define a set of generic constraints and add them to the market.
+
+        >>> generic_constraint_parameters = pd.DataFrame({
+        ...   'set': ['A', 'B'],
+        ...   'type': ['>=', '<='],
+        ...   'rhs': [10.0, -100.0]})
+
+        >>> market.set_generic_constraints(generic_constraint_parameters)
+
+        Now the market should have a set of generic constraints.
+
+        >>> print(market.constraints_rhs_and_type['generic'])
+          set  constraint_id type    rhs
+        0   A              0   >=   10.0
+        1   B              1   <= -100.0
+
+        Now these constraints can be made elastic. Leaving the key word argument at its default value means
+        the market_ceiling_price will be used to set the violation cost.
+
+        >>> market.make_constraints_elastic('generic')
+
+        Now the market will contain extra decision variables to capture the cost of violating the constraint.
+
+        >>> print(market.decision_variables['generic_deficit'])
+           variable_id  lower_bound  upper_bound        type
+        0            0          0.0          inf  continuous
+        1            1          0.0          inf  continuous
+
+        >>> print(market.objective_function_components['generic_deficit'])
+           variable_id     cost
+        0            0  14000.0
+        1            1  14000.0
+
+        These will be mapped to the constraints
+
+        >>> print(market.lhs_coefficients['generic_deficit'])
+           variable_id  constraint_id  coefficient
+        0            0              0          1.0
+        1            1              1         -1.0
+
+        If we provided a specific violation cost then this is used instead of the market_ceiling_price.
+
+        >>> market.make_constraints_elastic('generic', violation_cost=1000.0)
+
+        >>> print(market.objective_function_components['generic_deficit'])
+           variable_id    cost
+        0            2  1000.0
+        1            3  1000.0
+
+        If a pd.DataFrame is provided then we can set cost on a constraint basis.
+
+        >>> violation_cost = pd.DataFrame({
+        ...   'set': ['A', 'B'],
+        ...   'cost': [1000.0, 2000.0]})
+
+        >>> market.make_constraints_elastic('generic', violation_cost=violation_cost)
+
+        >>> print(market.objective_function_components['generic_deficit'])
+           variable_id    cost
+        0            4  1000.0
+        1            5  2000.0
+
+        Note will the variable id get incremented with every use of the method only the latest set of variables are
+        used.
+
+        Parameters
+        ----------
+        constraints_key : str
+            The key used to reference the constraint set in the dict self.market_constraints_rhs_and_type or
+            self.constraints_rhs_and_type. See the documentation for creating the constraint set to get this key.
+
+        violation_cost : str or float or int or pd.DataFrame
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If violation_cost is not str, numeric or pd.DataFrame.
+        ModelBuildError
+            If the constraint_key provided does not match any existing constraints.
+        MissingColumnError
+            If violation_cost is a pd.DataFrame and does not contain the columns set and cost.
+            Or if the constraints to be made elastic do not have the set idenetifier.
+        RepeatedRowError
+            If violation_cost is a pd.DataFrame and has more than one row per set.
+        ColumnDataTypeError
+            If violation_cost is a pd.DataFrame and the column set is not str and the column
+            cost is not numeric.
+        """
+
+        if constraints_key in self.market_constraints_rhs_and_type.keys():
+            rhs_and_type = self.market_constraints_rhs_and_type[constraints_key].copy()
+        elif constraints_key in self.constraints_rhs_and_type.keys():
+            rhs_and_type = self.constraints_rhs_and_type[constraints_key].copy()
+        else:
+            check.ModelBuildError('constraints_key does not exist.')
+
+        # Add the column cost to the constraints definitions.
+        if isinstance(violation_cost, str) and violation_cost == 'market_ceiling_price':
+            rhs_and_type['cost'] = self.market_ceiling_price
+        elif isinstance(violation_cost, (int, float)) and not isinstance(violation_cost, bool):
+            rhs_and_type['cost'] = violation_cost
+        elif isinstance(violation_cost, pd.DataFrame):
+            # Check pd.DataFrame columns needed exist and are of the right type.
+            if 'set' in violation_cost.columns and 'cost' in violation_cost.columns:
+                if not all(violation_cost.apply(lambda x: type(x['set']) == str, axis=1)):
+                    raise check.ColumnDataTypeError("Column 'set' in violation should have type str")
+                if np.float64 != violation_cost['cost'].dtype:
+                    raise check.ColumnDataTypeError("Column 'cost' in violation_cost should have type np.float64")
+            else:
+                check.MissingColumnError("Column 'set' or 'cost' missing from violation_cost")
+            # Check only one row per set.
+            if len(violation_cost.index) != len(violation_cost.drop_duplicates('set')):
+                raise check.RepeatedRowError("violation_cost should only have one row for each set")
+            # Check the constraints being made elastic have column set.
+            if 'set' not in violation_cost.columns:
+                check.MissingColumnError("Column 'set' not in constraints to make elastic")
+            rhs_and_type = pd.merge(rhs_and_type, violation_cost.loc[:, ['set', 'cost']], on='set')
+        else:
+            ValueError("Input for violation cost can only be 'market_ceiling_price', numeric or a pd.Dataframe")
+
+        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
+        self.decision_variables[constraints_key + '_deficit'] = \
+            deficit_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']]
+        self.objective_function_components[constraints_key + '_deficit'] = \
+            deficit_variables.loc[:, ['variable_id', 'cost']]
+        self.lhs_coefficients[constraints_key + '_deficit'] = lhs
+        self.next_variable_id = max(deficit_variables['variable_id']) + 1
 
     @check.pre_dispatch
     def dispatch(self):
@@ -1699,7 +2117,44 @@ class Spot:
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
 
-        constraints_lhs = self.lhs_coefficients
+        if len(self.lhs_coefficients.values()) > 0:
+            constraints_lhs = pd.concat(list(self.lhs_coefficients.values()))
+        else:
+            constraints_lhs = pd.DataFrame()
+
+        generic_rhs = []
+        if 'generic' in self.constraints_rhs_and_type:
+            generic_rhs.append(self.constraints_rhs_and_type['generic'].loc[:, ['constraint_id', 'set']])
+        if 'fcas' in self.market_constraints_rhs_and_type:
+            generic_rhs.append(self.market_constraints_rhs_and_type['fcas'].loc[:, ['constraint_id', 'set']])
+
+        if len(generic_rhs) > 0:
+            generic_lhs = []
+            generic_rhs = pd.concat(generic_rhs)
+            if 'unit' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['unit_level']:
+                unit_lhs = pd.merge(
+                    self.generic_constraint_lhs['unit'],
+                    self.variable_to_constraint_map['unit_level']['bids'].loc[:, ['unit', 'service', 'variable_id']],
+                    on=['unit', 'service'])
+                unit_lhs = pd.merge(unit_lhs, generic_rhs.loc[:, ['constraint_id', 'set']], on='set')
+                generic_lhs.append(unit_lhs)
+            if 'region' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['regional']:
+                region_lhs = pd.merge(
+                    self.generic_constraint_lhs['region'],
+                    self.variable_to_constraint_map['regional']['bids'].loc[:, ['region', 'service', 'variable_id']],
+                    on=['region', 'service'])
+                unit_lhs = pd.merge(region_lhs, generic_rhs.loc[:, ['constraint_id', 'set']], on='set')
+                generic_lhs.append(unit_lhs)
+            if 'interconnectors' in self.generic_constraint_lhs and \
+                    'interconnectors' in self.decision_variables:
+                interconnector_lhs = pd.merge(
+                    self.generic_constraint_lhs['interconnectors'],
+                    self.decision_variables['interconnectors'].loc[:, ['interconnector', 'variable_id']],
+                    on=['interconnector'])
+                unit_lhs = pd.merge(interconnector_lhs, generic_rhs.loc[:, ['constraint_id', 'set']], on='set')
+                generic_lhs.append(unit_lhs)
+
+            constraints_lhs = pd.concat([constraints_lhs] + generic_lhs)
 
         if len(self.constraint_to_variable_map['regional']) > 0:
             regional_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['regional'],
