@@ -104,7 +104,8 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     else:
         rhs_and_type = pd.concat([constraints_rhs_and_type] + list(market_rhs_and_type.values()))
 
-    constraint_matrix = constraints_lhs.pivot('constraint_id', 'variable_id', 'coefficient')
+    #constraint_matrix = constraints_lhs.pivot('constraint_id', 'variable_id', 'coefficient')
+    constraint_matrix = pd.pivot_table(constraints_lhs, 'coefficient', 'constraint_id', 'variable_id', aggfunc='sum')
     constraint_matrix = constraint_matrix.sort_index(axis=1)
     constraint_matrix = constraint_matrix.sort_index()
     column_ids = np.asarray(constraint_matrix.columns)

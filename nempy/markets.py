@@ -758,7 +758,7 @@ class Spot:
     @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
     @check.allowed_columns('fcas_requirements', ['set', 'service', 'region', 'volume', 'type'])
     @check.repeated_rows('fcas_requirements', ['set', 'service', 'region'])
-    @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'type':str,
+    @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'type': str,
                                                    'else': np.float64})
     @check.column_values_must_be_real('fcas_requirements', ['volume'])
     @check.column_values_not_negative('fcas_requirements', ['volume'])
@@ -1045,8 +1045,6 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['joint_ramping'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-
-
     @check.required_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                        'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
     @check.allowed_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
@@ -1154,8 +1152,6 @@ class Spot:
         self.constraints_rhs_and_type['joint_capacity'] = rhs_and_type
         self.constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
-
-
 
     @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
@@ -1591,7 +1587,7 @@ class Spot:
     @check.required_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
     @check.allowed_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
     @check.repeated_rows('generic_constraint_parameters', ['set'])
-    @check.column_data_types('generic_constraint_parameters', {'set': str,  'type': str, 'rhs': np.float64})
+    @check.column_data_types('generic_constraint_parameters', {'set': str, 'type': str, 'rhs': np.float64})
     @check.column_values_must_be_real('generic_constraint_parameters', ['rhs'])
     def set_generic_constraints(self, generic_constraint_parameters):
         """Creates a set of generic constraints, adding the constraint type, rhs.
@@ -1656,15 +1652,15 @@ class Spot:
                 If there are inf or null values in the rhs column.
         """
         type_and_rhs = hf.save_index(generic_constraint_parameters, 'constraint_id', self.next_constraint_id)
-        self.constraint_to_variable_map['unit_level']['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id']]
-        self.constraint_to_variable_map['unit_level']['generic']['coefficient'] = 1.0
+        # self.constraint_to_variable_map['unit_level']['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id']]
+        # self.constraint_to_variable_map['unit_level']['generic']['coefficient'] = 1.0
         self.constraints_rhs_and_type['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
         self.next_constraint_id = type_and_rhs['constraint_id'].max() + 1
 
     @check.required_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
     @check.allowed_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
     @check.repeated_rows('unit_coefficients', ['set', 'unit', 'service'])
-    @check.column_data_types('unit_coefficients', {'set': str,  'unit': str, 'service': str, 'coefficient': np.float64})
+    @check.column_data_types('unit_coefficients', {'set': str, 'unit': str, 'service': str, 'coefficient': np.float64})
     @check.column_values_must_be_real('unit_coefficients', ['coefficient'])
     def link_units_to_generic_constraints(self, unit_coefficients):
         """Set the lhs coefficients of generic constraints on unit basis.
@@ -1808,14 +1804,14 @@ class Spot:
         """
         self.generic_constraint_lhs['region'] = region_coefficients
 
-    @check.required_columns('interconnetor_coefficients', ['set', 'interconnetor', 'service', 'coefficient'])
-    @check.allowed_columns('interconnetor_coefficients', ['set', 'interconnetor', 'service', 'coefficient'])
-    @check.repeated_rows('interconnetor_coefficients', ['set', 'interconnetor', 'service'])
-    @check.column_data_types('interconnetor_coefficients', {'set': str, 'interconnetor': str, 'service': str,
-                                                               'coefficient': np.float64})
-    @check.column_values_must_be_real('interconnetor_coefficients', ['coefficient'])
-    def link_interconnetors_to_generic_constraints(self, interconnetor_coefficients):
-        """Set the lhs coefficients of generic constraints on interconnetor basis.
+    @check.required_columns('interconnector_coefficients', ['set', 'interconnector', 'coefficient'])
+    @check.allowed_columns('interconnector_coefficients', ['set', 'interconnector', 'coefficient'])
+    @check.repeated_rows('interconnector_coefficients', ['set', 'interconnector'])
+    @check.column_data_types('interconnector_coefficients', {'set': str, 'interconnector': str,
+                                                             'coefficient': np.float64})
+    @check.column_values_must_be_real('interconnector_coefficients', ['coefficient'])
+    def link_interconnectors_to_generic_constraints(self, interconnector_coefficients):
+        """Set the lhs coefficients of generic constraints on interconnector basis.
 
         Notes
         -----
@@ -1835,21 +1831,21 @@ class Spot:
         Define region lhs coefficients for generic constraints. All interconnector variables are for the energy service
         so no 'service' can be specified.
 
-        >>> interconnetor_coefficients = pd.DataFrame({
+        >>> interconnector_coefficients = pd.DataFrame({
         ...   'set': ['A', 'A', 'B'],
-        ...   'interconnetor': ['X', 'Y', 'X'],
+        ...   'interconnector': ['X', 'Y', 'X'],
         ...   'coefficient': [1.0, 1.0, -1.0]})
 
-        >>> market.link_interconnetors_to_generic_constraints(interconnetor_coefficients)
+        >>> market.link_interconnectors_to_generic_constraints(interconnector_coefficients)
 
         Note all this does is save this information to the market object, linking to specific variable ids and
         constraint id occurs when the dispatch method is called.
 
-        >>> print(market.generic_constraint_lhs['interconnetor'])
-          set interconnetor    service  coefficient
-        0   A             X     energy          1.0
-        1   A             Y     energy          1.0
-        2   B             X  raise_reg         -1.0
+        >>> print(market.generic_constraint_lhs['interconnectors'])
+          set interconnector  coefficient
+        0   A              X          1.0
+        1   A              Y          1.0
+        2   B              X         -1.0
 
         Parameters
         ----------
@@ -1876,7 +1872,7 @@ class Spot:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
-        self.generic_constraint_lhs['interconnetor'] = interconnetor_coefficients
+        self.generic_constraint_lhs['interconnectors'] = interconnector_coefficients
 
     def make_constraints_elastic(self, constraints_key, violation_cost='market_ceiling_price'):
         """Make a set of constraints elastic, so they can be violated at a predefined cost.
@@ -2581,7 +2577,7 @@ class Spot:
                                 'energy_and_regulation_capacity']:
             if constraint_type in self.constraints_rhs_and_type.keys():
                 service_coefficients = self.constraint_to_variable_map['unit_level'][constraint_type]
-                service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit','service', 'coefficient']]
+                service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit', 'service', 'coefficient']]
                 constraint_slack = self.constraints_rhs_and_type[constraint_type].loc[:, ['constraint_id', 'slack']]
                 slack_temp = pd.merge(service_coefficients, constraint_slack, on='constraint_id')
                 fcas_variable_slack.append(slack_temp)
@@ -2598,6 +2594,3 @@ class Spot:
 
         fcas_availability['availability'] = fcas_availability['dispatch'] + fcas_availability['service_slack']
         return fcas_availability.loc[:, ['unit', 'service', 'availability']]
-
-
-
