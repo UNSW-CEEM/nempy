@@ -2,7 +2,7 @@ import pandas as pd
 from nempy import helper_functions as hf
 
 
-def bids(variable_ids, price_bids, unit_info=None):
+def bids(variable_ids, price_bids):
     """Create the cost coefficients of energy in bids in the objective function.
 
     This function defines the cost associated with each decision variable that represents a unit's energy bid. Costs are

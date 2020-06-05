@@ -21,6 +21,15 @@ def energy_bid_ids_exist(func):
     return wrapper
 
 
+def all_units_have_info(func):
+    @keep_details(func)
+    def wrapper(*args):
+        if not set(args[1]['unit'].unique()) <= set(args[0].unit_info['unit']):
+            raise ModelBuildError('Not all unit with bids are present in the unit_info input.')
+        func(*args)
+    return wrapper
+
+
 def interconnectors_exist(func):
     @keep_details(func)
     def wrapper(*args):
@@ -192,6 +201,23 @@ def column_values_outside_range(name, column_ranges, arg=1):
     return decorator
 
 
+def table_exists(arg=1):
+    def decorator(func):
+        @keep_details(func)
+        def wrapper(*args):
+            with args[0].con:
+                cur = args[0].con.cursor()
+                check_query = ''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{}' '''
+                cur.execute(check_query.format(args[1]))
+                if cur.fetchone()[0] != 1:
+                    raise MissingTable("The table {} does not exist.".format(args[1]))
+            func(*args)
+
+        return wrapper
+
+    return decorator
+
+
 class ModelBuildError(Exception):
     """Raise for building model components in wrong order."""
 
@@ -218,3 +244,9 @@ class ColumnValues(Exception):
 
 class BidsNotMonotonicIncreasing(Exception):
     """Raise for non monotonic increasing bids."""
+
+
+class MissingTable(Exception):
+    """Raise for trying to access missing table."""
+
+

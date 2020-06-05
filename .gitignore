@@ -130,3 +130,5 @@ dmypy.json
 
 .idea/*
 *.db
+nempy/the_database.db
+tests/sos_bug.py

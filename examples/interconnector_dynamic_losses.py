@@ -1,5 +1,5 @@
 import pandas as pd
-from nempy import markets, input_preprocessing
+from nempy import markets, historical_spot_market_inputs
 
 
 # Create a market instance.
@@ -19,7 +19,7 @@ volume_bids = pd.DataFrame({
     '1': [1000.0]  # MW
 })
 
-simple_market.set_unit_energy_volume_bids(volume_bids)
+simple_market.set_unit_volume_bids(volume_bids)
 
 # Price of each bid.
 price_bids = pd.DataFrame({
@@ -27,15 +27,16 @@ price_bids = pd.DataFrame({
     '1': [50.0]  # $/MW
 })
 
-simple_market.set_unit_energy_bids(price_bids)
+simple_market.set_unit_price_bids(price_bids)
 
 # NSW has no demand but VIC has 800 MW.
 demand = pd.DataFrame({
     'region': ['NSW', 'VIC'],
-    'demand': [0.0, 800.0]  # MW
+    'demand': [0.0, 800.0],  # MW
+    'loss_function_demand': [0.0, 800.0]  # MW
 })
 
-simple_market.set_demand_constraints(demand)
+simple_market.set_demand_constraints(demand.loc[:, ['region', 'demand']])
 
 # There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
 interconnectors = pd.DataFrame({
@@ -59,18 +60,19 @@ demand_coefficients = pd.DataFrame({
 interconnector_coefficients = pd.DataFrame({
     'interconnector': ['VIC1-NSW1'],
     'loss_constant': [1.0657],
-    'flow_coefficient': [0.00017027]})
+    'flow_coefficient': [0.00017027],
+    'from_region_loss_share': [0.5]})
 
 # Create loss functions on per interconnector basis.
-loss_functions = input_preprocessing.create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
-
-# Specify that losses are shared equally between connected regions.
-loss_functions['from_region_loss_share'] = 0.5
+loss_functions = historical_spot_market_inputs.create_loss_functions(
+    interconnector_coefficients, demand_coefficients, demand.loc[:, ['region', 'loss_function_demand']])
 
 # The points to linearly interpolate the loss function between.
 interpolation_break_points = pd.DataFrame({
     'interconnector': 'VIC1-NSW1',
-    'break_point': [-1200.0, -1000.0, -800.0, -600.0, -400.0, -200.0, 0.0, 200.0, 400.0, 600.0, 800.0, 1000]
+    'loss_segment': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    'break_point': [-1200.0, -1000.0, -800.0, -600.0, -400.0, -200.0,
+                    0.0, 200.0, 400.0, 600.0, 800.0, 1000]
 })
 
 simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
@@ -79,9 +81,9 @@ simple_market.set_interconnector_losses(loss_functions, interpolation_break_poin
 simple_market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_energy_dispatch())
-#   unit    dispatch
-# 0    A  920.205473
+print(simple_market.get_unit_dispatch())
+#   unit service    dispatch
+# 0    A  energy  920.205473
 
 # Return interconnector flow and losses.
 print(simple_market.get_interconnector_flows())

@@ -44,7 +44,17 @@ Implements a market for energy, regulation raise and contingency 6 sec raise, wi
 co-optimisation constraints as described in section 6.2 and 6.3 of
 :download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
-.. literalinclude:: ../../examples/simple FCAS Markets.py
+.. literalinclude:: ../../examples/simple_FCAS_markets.py
+    :linenos:
+    :language: python
+
+
+Recreating historical dispatch with energy generators and interconnectors
+-------------------------------------------------------------------------
+Demonstrates using the historical_spot_market_inputs module to access historical dispatch inputs on a 5 min interval
+basis, and using the Spot market class to calculate dispatch.
+
+.. literalinclude:: ../../examples/recreating_historical_dispatch.py
     :linenos:
     :language: python
 

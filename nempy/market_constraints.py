@@ -138,6 +138,8 @@ def fcas(fcas_requirements, next_constraint_id):
         service   the service or services the requirement set applies to (as `str`)
         region    unique identifier of a region (as `str`)
         volume    the amount of service required, in MW (as `np.float64`)
+        type      the direction of the constrain '=', '>=' or '<=', optional, a \n
+                  value of '=' is assumed if the column is missing (as `str`)
         ========  ===================================================================
 
     next_constraint_id : int
@@ -167,12 +169,14 @@ def fcas(fcas_requirements, next_constraint_id):
         coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
         =============  ==========================================================================
     """
+    # Set default value if optional column is missing.
+    if 'type' not in fcas_requirements.columns:
+        fcas_requirements['type'] = '='
 
     # Create an index for each constraint.
-    type_and_rhs = fcas_requirements.loc[:, ['set', 'volume']]
+    type_and_rhs = fcas_requirements.loc[:, ['set', 'volume', 'type']]
     type_and_rhs = type_and_rhs.drop_duplicates('set')
     type_and_rhs = hf.save_index(type_and_rhs, 'constraint_id', next_constraint_id)
-    type_and_rhs['type'] = '='  # Supply and interconnector flow must exactly equal demand.
     type_and_rhs['rhs'] = type_and_rhs['volume']
     type_and_rhs = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
 

@@ -431,17 +431,18 @@ def create_weights(break_points, next_variable_id):
 
     >>> break_points = pd.DataFrame({
     ...   'interconnector': ['I', 'I', 'I'],
-    ...   'break_point': [-100.0, 0, 100.0]})
+    ...   'loss_segment': [1, 2, 3],
+    ...   'break_point': [-100.0, 0.0, 100.0]})
 
     >>> next_variable_id = 0
 
     >>> weight_variables = create_weights(break_points, next_variable_id)
 
-    >>> print(weight_variables.loc[:, ['interconnector', 'break_point', 'variable_id']])
-      interconnector  break_point  variable_id
-    0              I       -100.0            0
-    1              I          0.0            1
-    2              I        100.0            2
+    >>> print(weight_variables.loc[:, ['interconnector', 'loss_segment', 'break_point', 'variable_id']])
+      interconnector  loss_segment  break_point  variable_id
+    0              I             1       -100.0            0
+    1              I             2          0.0            1
+    2              I             3        100.0            2
 
     >>> print(weight_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']])
        variable_id  lower_bound  upper_bound        type
@@ -452,11 +453,12 @@ def create_weights(break_points, next_variable_id):
     Parameters
     ----------
     break_points : pd.DataFrame
-        ==============  ==============================================================================
+        ==============  ================================================================================
         Columns:        Description:
         interconnector  unique identifier of a interconnector (as `str`)
-        break_points    the interconnector flow values to interpolate losses between (as `np.int64`)
-        ==============  ==============================================================================
+        loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
+        break_points    the interconnector flow values to interpolate losses between (as `np.float64`)
+        ==============  ================================================================================
 
     next_variable_id : int
 
@@ -467,6 +469,7 @@ def create_weights(break_points, next_variable_id):
         ==============  ==============================================================================
         Columns:        Description:
         interconnector  unique identifier of a interconnector (as `str`)
+        loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
         break_points    the interconnector flow values to interpolate losses between (as `np.int64`)
         variable_id     the id of the variable (as `np.int64`)
         lower_bound    the lower bound of the variable, is zero for weight variables (as `np.float64`)

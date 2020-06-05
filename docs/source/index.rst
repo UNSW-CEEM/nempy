@@ -12,8 +12,8 @@ Welcome to nempy's documentation!
 
    intro
    examples
-   Spot
-   input_preprocessing
+   markets
+   historical_spot_market_inputs
 
 Indices and tables
 ==================
