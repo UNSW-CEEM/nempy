@@ -207,3 +207,124 @@ def find_problem_constraint(base_prob):
         if status == OptimizationStatus.OPTIMAL:
             return cons
     return []
+
+
+class InterfaceToSolver:
+    def __init__(self):
+        self.variable_definitions = None
+        self.variables = None
+        self.constraints_type_and_rhs = None
+        self.prob = Model("market")
+        self.prob.verbose = 0
+
+    def add_variables(self, decision_variables):
+        self.variable_definitions = decision_variables
+        variable_types = {'continuous': CONTINUOUS, 'binary': BINARY}
+        for variable_id, lower_bound, upper_bound, variable_type in zip(
+                list(decision_variables['variable_id']), list(decision_variables['lower_bound']),
+                list(decision_variables['upper_bound']), list(decision_variables['type'])):
+            self.variables[variable_id] = self.prob.add_var(lb=lower_bound, ub=upper_bound,
+                                                            var_type=variable_types[variable_type],
+                                                            name=str(variable_id))
+
+    def add_sos_type_2(self, sos_variables):
+
+        def add_sos_vars(sos_group):
+            self.prob.add_sos(list(zip(sos_group['vars'], sos_group['loss_segment'])), 2)
+
+        if sos_variables is not None:
+            sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: self.variables[x])
+            sos_variables.groupby('interconnector').apply(add_sos_vars)
+
+    def add_objective_function(self, objective_function):
+        objective_function = pd.concat(list(objective_function.values()))
+        objective_function = objective_function.sort_values('variable_id')
+        objective_function = objective_function.set_index('variable_id')
+        self.prob.objective = minimize(xsum(objective_function['cost'][i] * self.variables[i] for i in
+                                       list(objective_function.index)))
+
+    def add_constraints(self, constraints_lhs, constraints_type_and_rhs):
+        self.constraints_type_and_rhs = constraints_type_and_rhs
+        constraint_matrix = pd.pivot_table(constraints_lhs, 'coefficient', 'constraint_id', 'variable_id',
+                                           aggfunc='sum')
+        constraint_matrix = constraint_matrix.sort_index(axis=1)
+        constraint_matrix = constraint_matrix.sort_index()
+        column_ids = np.asarray(constraint_matrix.columns)
+        row_ids = np.asarray(constraint_matrix.index)
+        constraint_matrix_np = np.asarray(constraint_matrix)
+
+        rhs = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['rhs']))
+        enq_type = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['type']))
+        for row, id in zip(constraint_matrix_np, row_ids):
+            new_constraint = make_constraint(self.variables, row, rhs[id], column_ids, enq_type[id])
+            self.prob.add_constr(new_constraint, name=str(id))
+
+    def optimize(self):
+        status = self.prob.optimize()
+        if status != OptimizationStatus.OPTIMAL:
+            # Attempt find constraint causing infeasibility.
+            con_index = find_problem_constraint(self.prob)
+            print('Couldn\'t find an optimal solution, but removing con {} fixed INFEASIBLITY'.format(con_index))
+            raise ValueError('Linear program infeasible')
+
+    def get_optimal_values_of_decision_variables(self):
+        self.variable_definitions['variables'] = [self.variables[i] for i in self.variable_definitions['variable_id']]
+        self.variable_definitions['value'] = self.variable_definitions['variables'].apply(lambda x: x.x)
+        self.variable_definitions = self.variable_definitions.drop('variables', axis=1)
+        return self.variable_definitions
+
+    def get_slack_in_constraints(self):
+        self.constraints_type_and_rhs['slack'] = \
+            self.constraints_type_and_rhs['constraint_id'].apply(lambda x: self.prob.constr_by_name(str(x)).slack,
+                                                                 self.prob)
+
+    def price_constraints(self, constraint_ids_to_price):
+        start_obj = self.prob.objective.x
+        costs = {}
+        for id in constraint_ids_to_price:
+            constraint = self.prob.constr_by_name(str(id))
+            constraint.rhs += 1.0
+            self.prob.optimize()
+            marginal_cost = self.prob.objective.x - start_obj
+            constraint.rhs -= 1.0
+            costs[id] = marginal_cost
+        return costs
+
+
+def create_mapping_of_generic_constraint_sets_to_constraint_ids(constraints, market_constraints):
+    generic_rhs = []
+    if 'generic' in constraints:
+        generic_rhs.append(constraints['generic'].loc[:, ['constraint_id', 'set']])
+    if 'fcas' in market_constraints:
+        generic_rhs.append(market_constraints['fcas'].loc[:, ['constraint_id', 'set']])
+    if len(generic_rhs) > 0:
+        return pd.concat(generic_rhs)
+    else:
+        return None
+
+
+def create_unit_level_generic_constraint_lhs(generic_constraint_units, generic_constraint_ids,
+                                             unit_bids_to_constraint_map):
+    unit_lhs = pd.merge(generic_constraint_units,
+                        unit_bids_to_constraint_map.loc[:, ['unit', 'service', 'variable_id']],
+                        on=['unit', 'service'])
+    unit_lhs = pd.merge(unit_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
+    return unit_lhs
+
+
+def create_region_level_generic_constraint_lhs(generic_constraint_regions, generic_constraint_ids,
+                                               regional_bids_to_constraint_map):
+    region_lhs = pd.merge(generic_constraint_regions,
+                          regional_bids_to_constraint_map.loc[:, ['region', 'service', 'variable_id']],
+                          on=['region', 'service'])
+    region_lhs = pd.merge(region_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
+    return region_lhs
+
+
+def create_interconnector_generic_constraint_lhs(generic_constraint_interconnectors, generic_constraint_ids,
+                                                 interconnector_variables):
+    interconnector_lhs = pd.merge(generic_constraint_interconnectors,
+                                  interconnector_variables.loc[:, ['interconnector', 'variable_id']],
+                                  on=['interconnector'])
+    interconnector_lhs = pd.merge(interconnector_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
+    return interconnector_lhs

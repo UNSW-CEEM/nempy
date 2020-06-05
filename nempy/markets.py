@@ -2113,6 +2113,188 @@ class Spot:
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
 
+        # Create a data frame containing all fully defined components of the constraint matrix lhs. If there are none
+        # then just create a place holder empty pd.DataFrame.
+        if len(self.lhs_coefficients.values()) > 0:
+            constraints_lhs = pd.concat(list(self.lhs_coefficients.values()))
+        else:
+            constraints_lhs = pd.DataFrame()
+
+        # Get a pd.DataFrame mapping the generic constraint sets to their constraint ids.
+        generic_constraint_ids = solver_interface.create_mapping_of_generic_constraint_sets_to_constraint_ids(
+            self.constraints_rhs_and_type, self.market_constraints_rhs_and_type)
+
+        # If there are any generic constraints create their lhs definitions.
+        if generic_constraint_ids is not None:
+            generic_lhs = []
+            # If units have been added to the generic lhs then find the relevant variable ids and map them to the
+            # constraint.
+            if 'unit' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['unit_level']:
+                generic_constraint_units = self.generic_constraint_lhs['unit']
+                unit_bids_to_constraint_map = self.variable_to_constraint_map['unit_level']['bids']
+                unit_lhs = solver_interface.create_unit_level_generic_constraint_lhs(generic_constraint_units,
+                                                                                     generic_constraint_ids,
+                                                                                     unit_bids_to_constraint_map)
+                generic_lhs.append(unit_lhs)
+            # If regions have been added to the generic lhs then find the relevant variable ids and map them to the
+            # constraint.
+            if 'region' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['regional']:
+                generic_constraint_region = self.generic_constraint_lhs['region']
+                unit_bids_to_constraint_map = self.variable_to_constraint_map['regional']['bids']
+                regional_lhs = solver_interface.create_region_level_generic_constraint_lhs(generic_constraint_region,
+                                                                                           generic_constraint_ids,
+                                                                                           unit_bids_to_constraint_map)
+                generic_lhs.append(regional_lhs)
+            # If interconnectors have been added to the generic lhs then find the relevant variable ids and map them
+            # to the constraint.
+            if 'interconnectors' in self.generic_constraint_lhs and 'interconnectors' in self.decision_variables:
+                generic_constraint_interconnectors = self.generic_constraint_lhs['interconnectors']
+                interconnector_bids_to_constraint_map = self.decision_variables['interconnectors']
+                interconnector_lhs = solver_interface.create_interconnector_generic_constraint_lhs(
+                    generic_constraint_interconnectors, generic_constraint_ids, interconnector_bids_to_constraint_map)
+                generic_lhs.append(interconnector_lhs)
+            # Add the generic lhs definitions the cumulative lhs pd.DataFrame.
+            constraints_lhs = pd.concat([constraints_lhs] + generic_lhs)
+
+        # If there are constraints that have been defined on a regional basis then create the constraints lhs
+        # definition by mapping to all the variables that have been defined for the corresponding region and service.
+        if len(self.constraint_to_variable_map['regional']) > 0:
+            regional_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['regional'],
+                                                         self.variable_to_constraint_map['regional'],
+                                                         ['region', 'service'])
+            # Add the lhs definitions the cumulative lhs pd.DataFrame.
+            constraints_lhs = pd.concat([constraints_lhs, regional_constraints_lhs])
+
+        # If there are constraints that have been defined on a unit basis then create the constraints lhs
+        # definition by mapping to all the variables that have been defined for the corresponding unit and service.
+        if len(self.constraint_to_variable_map['unit_level']) > 0:
+            unit_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['unit_level'],
+                                                     self.variable_to_constraint_map['unit_level'],
+                                                     ['unit', 'service'])
+            # Add the lhs definitions the cumulative lhs pd.DataFrame.
+            constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
+
+        # Create the interface to the solver.
+        si = solver_interface.InterfaceToSolver()
+
+        if self.decision_variables:
+            # Combine dictionary of pd.DataFrames into a single pd.DataFrame for processing by the interface.
+            variable_definitions = pd.concat(self.decision_variables)
+            si.add_variables(variable_definitions)
+        else:
+            raise check.ModelBuildError('The market could not be dispatch because no variables have been created')
+
+        # If interconnectors with losses are being used, create special ordered sets for modelling losses.
+        if 'interpolation_weights' in self.decision_variables.keys():
+            si.add_sos_type_2(self.decision_variables['interpolation_weights'])
+
+        # If Costs have been defined for bids or constraints then add an objective function.
+        if self.objective_function_components:
+            # Combine components of objective function into a single pd.DataFrame
+            objective_function_definition = pd.concat(self.objective_function_components)
+            si.add_objective_function(objective_function_definition)
+
+
+        if self.market_constraints_rhs_and_type or self.constraints_rhs_and_type:
+
+
+        decision_variables, market_constraints_rhs_and_type, rhs_and_type = solver_interface.dispatch(
+            self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
+            self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
+            self.objective_function_components)
+        self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
+        self.decision_variables = decision_variables
+        self.constraints_rhs_and_type = rhs_and_type
+
+    @check.pre_dispatch
+    def _dispatch(self):
+        """Combines the elements of the linear program and solves to find optimal dispatch.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [50.0, 100.0],
+        ...     '2': [100.0, 130.0],
+        ...     '3': [100.0, 150.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_price_bids(price_bids)
+
+        Define a demand level in each region.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW'],
+        ...     'demand': [100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the market dispatch can be retrieved.
+
+        >>> print(simple_market.get_unit_dispatch())
+          unit  dispatch
+        0    A      45.0
+        1    B      55.0
+
+        And the market prices can be retrieved.
+
+        >>> print(simple_market.get_energy_prices())
+          region  price
+        0    NSW  130.0
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
+        """
+
         if len(self.lhs_coefficients.values()) > 0:
             constraints_lhs = pd.concat(list(self.lhs_coefficients.values()))
         else:
