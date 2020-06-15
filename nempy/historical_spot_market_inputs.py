@@ -159,7 +159,10 @@ class _MMSTable:
             'RAISE6SECACTUALAVAILABILITY': 'REAL', 'RAISE60SECACTUALAVAILABILITY': 'REAL',
             'RAISE5MINACTUALAVAILABILITY': 'REAL', 'RAISEREGACTUALAVAILABILITY': 'REAL',
             'LOWER6SECACTUALAVAILABILITY': 'REAL', 'LOWER60SECACTUALAVAILABILITY': 'REAL',
-            'LOWER5MINACTUALAVAILABILITY': 'REAL', 'LOWERREGACTUALAVAILABILITY': 'REAL'
+            'LOWER5MINACTUALAVAILABILITY': 'REAL', 'LOWERREGACTUALAVAILABILITY': 'REAL', 'LHS': 'REAL',
+            'VIOLATIONDEGREE': 'REAL', 'MARGINALVALUE': 'REAL', 'RAISE6SECRRP': 'REAL',
+            'RAISE60SECRRP': 'REAL', 'RAISE5MINRRP': 'REAL', 'RAISEREGRRP': 'REAL', 'LOWER6SECRRP': 'REAL',
+            'LOWER60SECRRP': 'REAL', 'LOWER5MINRRP': 'REAL', 'LOWERREGRRP': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -424,18 +427,27 @@ class _AllHistDataSource(_MMSTable):
         ------
         None
         """
-        for y in range(2009, year):
-            for m in range(1, 13):
+        for y in range(year, 2009, -1):
+            for m in range(12, 0, -1):
                 if y == year and m > month:
                     continue
                 try:
                     data = _download_to_df(self.url, self.table_name, y, m)
+                    if not set(self.table_columns) < set(data.columns):
+                        continue
                     data = data.loc[:, self.table_columns]
                     with self.con:
-                        if y == 2009 and m == 1:
+                        if y == year and m == month:
                             data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)
+                            cumulative_data = data.loc[:, self.table_primary_keys]
                         else:
+                            # Filter data to only include rows unique to the new data and not in data
+                            # previously downloaded.
+                            data = pd.merge(data, cumulative_data, 'outer', on=self.table_primary_keys, indicator=True)
+                            data = data[data['_merge'] == 'left_only'].drop('_merge', axis=1)
+                            # Insert data.
                             data.to_sql(self.table_name, con=self.con, if_exists='append', index=False)
+                            cumulative_data = pd.concat([cumulative_data, data.loc[:, self.table_primary_keys]])
                         self.con.commit()
                 except _MissingData:
                     pass
@@ -1142,14 +1154,14 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical_inputs.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
-           DUID  ... DISTRIBUTIONLOSSFACTOR
-    0    AGLHAL  ...                 1.0000
-    1   AGLNOW1  ...                 1.0000
-    2  AGLSITA1  ...                 1.0000
-    3    AGLSOM  ...                 0.9891
-    4   ANGAST1  ...                 0.9890
+           DUID           START_DATE  ... DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
+    0    AGLHAL  2019/07/01 00:00:00  ...                 1.0000      SCHEDULED
+    1   AGLNOW1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
+    2  AGLSITA1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
+    3    AGLSOM  2019/07/01 00:00:00  ...                 0.9891      SCHEDULED
+    4   ANGAST1  2019/07/01 00:00:00  ...                 0.9890      SCHEDULED
     <BLANKLINE>
-    [5 rows x 8 columns]
+    [5 rows x 9 columns]
 
     Parameters
     ----------
@@ -1229,7 +1241,10 @@ class DBManager:
                                                       'LOWERREGACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
-            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'RRP'],
+            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'RRP', 'RAISE6SECRRP',
+                                                       'RAISE60SECRRP', 'RAISE5MINRRP', 'RAISEREGRRP',
+                                                       'LOWER6SECRRP', 'LOWER60SECRRP', 'LOWER5MINRRP',
+                                                       'LOWERREGRRP'],
             table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
@@ -1241,7 +1256,8 @@ class DBManager:
             table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHCONSTRAINT = InputsBySettlementDate(
             table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
-                                                            'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO'],
+                                                            'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO',
+                                                            'LHS', 'VIOLATIONDEGREE', 'MARGINALVALUE'],
             table_primary_keys=['SETTLEMENTDATE', 'CONSTRAINTID'], con=self.con)
         self.GENCONDATA = InputsByMatchDispatchConstraints(
             table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE',
@@ -1257,7 +1273,7 @@ class DBManager:
             table_primary_keys=['CONNECTIONPOINTID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
         self.SPDINTERCONNECTORCONSTRAINT = InputsByMatchDispatchConstraints(
             table_name='SPDINTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                                     'GENCONID', 'BIDTYPE', 'FACTOR'],
+                                                                     'GENCONID', 'FACTOR'],
             table_primary_keys=['INTERCONNECTORID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.INTERCONNECTOR = InputsNoFilter(
             table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
@@ -1809,7 +1825,7 @@ def format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT):
             ==============  =====================================================================================
     """
     interconnector_directions = INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
-    interconnector_directions.columns = ['interconnector', 'to_region', 'from_region']
+    interconnector_directions.columns = ['interconnector', 'from_region', 'to_region']
     interconnector_paramaters = INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'IMPORTLIMIT', 'EXPORTLIMIT']]
     interconnector_paramaters.columns = ['interconnector', 'min', 'max']
     interconnector_paramaters['min'] = -1 * interconnector_paramaters['min']
@@ -2061,6 +2077,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
 
     >>> BIDPEROFFER_D = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C', 'D'],
+    ...   'BIDTYPE': ['ENERGY', 'ENERGY', 'ENERGY', 'ENERGY'],
     ...   'MAXAVAIL': [100.0, 100.0, 100.0, 100.0]})
 
     >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
@@ -2087,6 +2104,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
 
     >>> BIDPEROFFER_D = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C', 'D'],
+    ...   'BIDTYPE': ['ENERGY', 'ENERGY', 'ENERGY', 'ENERGY'],
     ...   'MAXAVAIL': [80.0, 80.0, 100.0, 80.0]})
 
     >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
@@ -2112,6 +2130,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
 
     >>> BIDPEROFFER_D = pd.DataFrame({
     ...   'DUID': ['A'],
+    ...   'BIDTYPE': ['ENERGY'],
     ...   'MAXAVAIL': [30.0]})
 
     >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
@@ -2227,7 +2246,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     >>> DISPATCHLOAD = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
     ...   'INITIALMW': [50.0, 60.0, 60.0],
-    ...   'AGCSTATUS': ['0.0', '1.0', '1.0']})
+    ...   'AGCSTATUS': [0.0, 1.0, 1.0]})
 
     >>> capacity_limits = pd.DataFrame({
     ...   'unit': ['A', 'B', 'C'],
@@ -2381,7 +2400,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
     >>> DISPATCHLOAD_mod = DISPATCHLOAD.copy()
 
-    >>> DISPATCHLOAD_mod['AGCSTATUS'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', '0.0', DISPATCHLOAD_mod['AGCSTATUS'])
+    >>> DISPATCHLOAD_mod['AGCSTATUS'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 0.0, DISPATCHLOAD_mod['AGCSTATUS'])
 
     >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
@@ -2493,7 +2512,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
                           (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'])]
 
     # Filter out fcas_bids where the AGC status is not set to 1.0
-    fcas_bids = fcas_bids[fcas_bids['AGCSTATUS'] == '1.0']
+    fcas_bids = fcas_bids[fcas_bids['AGCSTATUS'] == 1.0]
     fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW'], axis=1)
 
     # Filter the fcas price bids use the remaining volume bids.
@@ -2664,7 +2683,9 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     >>> DISPATCHLOAD = pd.DataFrame({
     ...   'DUID': ['B'],
     ...   'RAMPUPRATE': [120.0],
-    ...   'RAMPDOWNRATE': [120.0]})
+    ...   'RAMPDOWNRATE': [120.0],
+    ...   'LOWERREGACTUALAVAILABILITY': [10.0],
+    ...   'RAISEREGACTUALAVAILABILITY': [10.0]})
 
     >>> BIDPEROFFER_D_out = scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
 
@@ -2681,7 +2702,9 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     ...   'DUID': ['B'],
     ...   'INITIALMW': [50.0],
     ...   'RAMPUPRATE': [360.0],
-    ...   'RAMPDOWNRATE': [360.0]})
+    ...   'RAMPDOWNRATE': [360.0],
+    ...   'LOWERREGACTUALAVAILABILITY': [30.0],
+    ...   'RAISEREGACTUALAVAILABILITY': [30.0]})
 
     >>> BIDPEROFFER_D_out = scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
 
@@ -2738,7 +2761,7 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     lower_reg['RAMPMAX'] = lower_reg['RAMPDOWNRATE'] * (5 / 60)
     raise_reg['RAMPMAX'] = raise_reg['RAMPUPRATE'] * (5 / 60)
 
-    # Check these ramp maxs are consistent with other AEMO outputs, otherwise increase unitl consistency is achieved.
+    # Check these ramp maxs are consistent with other AEMO outputs, otherwise increase untill consistency is achieved.
     lower_reg['RAMPMAX'] = np.where(lower_reg['RAMPMAX'] < lower_reg['LOWERREGACTUALAVAILABILITY'],
                                     lower_reg['LOWERREGACTUALAVAILABILITY'], lower_reg['RAMPMAX'])
     raise_reg['RAMPMAX'] = np.where(raise_reg['RAMPMAX'] < raise_reg['RAISEREGACTUALAVAILABILITY'],
@@ -3024,3 +3047,229 @@ def format_fcas_market_requirements(SPDREGIONCONSTRAINT, DISPATCHCONSTRAINT, GEN
     fcas_market_requirements.columns = ['set', 'service', 'region', 'volume', 'type']
     fcas_market_requirements['service'] = fcas_market_requirements['service'].apply(lambda x: service_name_mapping[x])
     return fcas_market_requirements
+
+
+def format_generic_constraints_rhs_and_type(DISPATCHCONSTRAINT, GENCONDATA):
+    """Re-format AEMO MSS tables DISPATCHCONSTRAINT and GENCONDATA to provide inputs compatible to Spot market class.
+
+    Examples
+    --------
+
+    >>> DISPATCHCONSTRAINT = pd.DataFrame({
+    ...   'CONSTRAINTID': ['A', 'B'],
+    ...   'RHS': [10.0, -20.0]})
+
+    >>> GENCONDATA = pd.DataFrame({
+    ...   'GENCONID': ['A', 'B'],
+    ...   'CONSTRAINTTYPE': ['<=', '>=']})
+
+    >>> generic_type_and_rhs = format_generic_constraints_rhs_and_type(DISPATCHCONSTRAINT, GENCONDATA)
+
+    >>> print(generic_type_and_rhs)
+      set type   rhs
+    0   A   <=  10.0
+    1   B   >= -20.0
+
+    Parameters
+    ----------
+    DISPATCHCONSTRAINT : pd.DataFrame
+
+        ============  ====================================================
+        Columns:      Description:
+        CONSTRAINTID  unique identifier of a constraint (as `str`)
+        RHS           the rhs value of the constraint used in dispatch (as `np.float64`)
+        ============  ====================================================
+
+    GENCONDATA : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        GENCONID        unique identifier of a constraint (as `str`)
+        CONSTRAINTTYPE  the constraint type '>=', '<=' or '=' (as `str`)
+        ==============  ====================================================
+
+    Returns
+    -------
+    pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        set             unique identifier of a constraint (as `str`)
+        type            the constraint type '>=', '<=' or '=' (as `str`)
+        rhs             the rhs value of the constraint (as `np.float64`)
+        ==============  ====================================================
+    """
+    generic_rhs = DISPATCHCONSTRAINT.loc[:, ['CONSTRAINTID', 'RHS']]
+    generic_rhs.columns = ['set', 'rhs']
+    generic_type = GENCONDATA.loc[:, ['GENCONID', 'CONSTRAINTTYPE']]
+    generic_type.columns = ['set', 'type']
+    generic_constraints_type_and_rhs = pd.merge(generic_type, generic_rhs, 'inner', on='set')
+    return generic_constraints_type_and_rhs
+
+
+def format_generic_unit_lhs(SPDCONNECTIONPOINTCONSTRAINT, DUDETAILSUMMARY):
+    """Re-format AEMO MSS tables SPDCONNECTIONPOINTCONSTRAINT and DUDETAILSUMMARY to provide inputs to Spot market class.
+
+    Examples
+    --------
+
+    >>> SPDCONNECTIONPOINTCONSTRAINT = pd.DataFrame({
+    ...   'GENCONID': ['A', 'B'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
+    ...   'CONNECTIONPOINTID': ['XA1', 'Y2'],
+    ...   'FACTOR': [1.0, 0.9]})
+
+    >>> DUDETAILSUMMARY = pd.DataFrame({
+    ...   'DUID': ['X', 'Y'],
+    ...   'CONNECTIONPOINTID': ['XA1', 'Y2']})
+
+    >>> generic_unit_lhs = format_generic_unit_lhs(SPDCONNECTIONPOINTCONSTRAINT, DUDETAILSUMMARY)
+
+    >>> print(generic_unit_lhs)
+      set unit    service  coefficient
+    0   A    X     energy          1.0
+    1   B    Y  raise_reg          0.9
+
+    Parameters
+    ----------
+    SPDCONNECTIONPOINTCONSTRAINT : pd.DataFrame
+
+        =================  ==================================================================
+        Columns:           Description:
+        GENCONID           unique identifier of a generic constraint (as `str`)
+        BIDTYPE            the serivce type of the variables being constrained (as `str`)
+        CONNECTIONPOINTID  the location in the grid of the variables being constrainted (as `str`)
+        FACTOR             the coefficient of the variables being constrained, note if multiple
+                           coefficients are provided for a generic constraint then the final
+                           coeffficient used is the sum (as `np.float64`)
+        =================  ==================================================================
+
+    DUDETAILSUMMARY : pd.DataFrame
+
+        =================  ==================================================================
+        Columns:           Description:
+        DUID               unique identifier of a unit (as `str`)
+        CONNECTIONPOINTID  the location in the grid of the unit (as `str`)
+        =================  ==================================================================
+
+    Returns
+    -------
+    pd.DataFrame
+
+        ==============  =====================================================================
+        Columns:        Description:
+        set             unique identifier of a generic constraint (as `str`)
+        unit            the unit whoes variables are being constrained (as `str`)
+        service         the serivce type of the variables being constrained (as `str`)
+        coefficient     the coefficient of the variables being constrained (as `np.float64`)
+        ==============  =====================================================================
+    """
+    unit_generic_lhs = SPDCONNECTIONPOINTCONSTRAINT.loc[:, ['GENCONID', 'BIDTYPE', 'CONNECTIONPOINTID', 'FACTOR']]
+    unit_generic_lhs = pd.merge(unit_generic_lhs, DUDETAILSUMMARY.loc[:, ['DUID', 'CONNECTIONPOINTID']],
+                                on='CONNECTIONPOINTID')
+    unit_generic_lhs = unit_generic_lhs.loc[:, ['GENCONID', 'DUID', 'BIDTYPE', 'FACTOR']]
+    unit_generic_lhs.columns = ['set', 'unit', 'service', 'coefficient']
+    unit_generic_lhs['service'] = unit_generic_lhs['service'].apply(lambda x: service_name_mapping[x])
+    return unit_generic_lhs
+
+
+def format_generic_region_lhs(SPDREGIONCONSTRAINT):
+    """Re-format AEMO MSS table SPDREGIONCONSTRAINT to provide inputs to Spot market class.
+
+    Examples
+    --------
+
+    >>> SPDREGIONCONSTRAINT = pd.DataFrame({
+    ...   'GENCONID': ['A', 'B'],
+    ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
+    ...   'REGIONID': ['NSW', 'VIC'],
+    ...   'FACTOR': [1.0, 0.9]})
+
+    >>> generic_region_lhs = format_generic_region_lhs(SPDREGIONCONSTRAINT)
+
+    >>> print(generic_region_lhs)
+      set region    service  coefficient
+    0   A    NSW     energy          1.0
+    1   B    VIC  raise_reg          0.9
+
+    Parameters
+    ----------
+    SPDREGIONCONSTRAINT : pd.DataFrame
+
+        =================  ==================================================================
+        Columns:           Description:
+        GENCONID           unique identifier of a generic constraint (as `str`)
+        BIDTYPE            the serivce type of the variables being constrained (as `str`)
+        REGIONID           the region whoes variables are being constrained, acting as shorthand
+                           for all the units in this region (as `str`)
+        FACTOR             the coefficient of the variables being constrained, note if multiple
+                           coefficients are provided for a generic constraint then the final
+                           coeffficient used is the sum (as `np.float64`)
+        =================  ==================================================================
+
+    Returns
+    -------
+    pd.DataFrame
+
+        ==============  =====================================================================
+        Columns:        Description:
+        set             unique identifier of a generic constraint (as `str`)
+        region          the region whoes variables are being constrained, acting as shorthand
+                        for all the units in this region (as `str`)
+        service         the serivce type of the variables being constrained (as `str`)
+        coefficient     the coefficient of the variables being constrained (as `np.float64`)
+        ==============  =====================================================================
+    """
+    region_generic_lhs = SPDREGIONCONSTRAINT.loc[:, ['GENCONID', 'BIDTYPE', 'REGIONID', 'FACTOR']]
+    region_generic_lhs = region_generic_lhs.loc[:, ['GENCONID', 'REGIONID', 'BIDTYPE', 'FACTOR']]
+    region_generic_lhs.columns = ['set', 'region', 'service', 'coefficient']
+    region_generic_lhs['service'] = region_generic_lhs['service'].apply(lambda x: service_name_mapping[x])
+    return region_generic_lhs
+
+
+def format_generic_interconnector_lhs(SPDINTERCONNECTORCONSTRAINT):
+    """Re-format AEMO MSS table SPDINTERCONNECTORCONSTRAINT to provide inputs to Spot market class.
+
+    Examples
+    --------
+
+    >>> SPDINTERCONNECTORCONSTRAINT = pd.DataFrame({
+    ...   'GENCONID': ['A', 'B'],
+    ...   'INTERCONNECTORID': ['L1', 'L2'],
+    ...   'FACTOR': [1.0, 0.9]})
+
+    >>> generic_region_lhs = format_generic_interconnector_lhs(SPDINTERCONNECTORCONSTRAINT)
+
+    >>> print(generic_region_lhs)
+      set interconnector  coefficient
+    0   A             L1          1.0
+    1   B             L2          0.9
+
+    Parameters
+    ----------
+    SPDINTERCONNECTORCONSTRAINT : pd.DataFrame
+
+        =================  ==================================================================
+        Columns:           Description:
+        GENCONID           unique identifier of a generic constraint (as `str`)
+        INTERCONNECTORID   the interconnector whoes variables are being constrained (as `str`)
+        FACTOR             the coefficient of the variables being constrained, note if multiple
+                           coefficients are provided for a generic constraint then the final
+                           coeffficient used is the sum (as `np.float64`)
+        =================  ==================================================================
+
+    Returns
+    -------
+    pd.DataFrame
+
+        ==============  =====================================================================
+        Columns:        Description:
+        set             unique identifier of a generic constraint (as `str`)
+        interconnector  the interconnector whoes variables are being constrained (as `str`)
+        coefficient     the coefficient of the variables being constrained (as `np.float64`)
+        ==============  =====================================================================
+    """
+    interconnector_generic_lhs = SPDINTERCONNECTORCONSTRAINT.loc[:, ['GENCONID', 'INTERCONNECTORID', 'FACTOR']]
+    interconnector_generic_lhs = interconnector_generic_lhs.loc[:, ['GENCONID', 'INTERCONNECTORID', 'FACTOR']]
+    interconnector_generic_lhs.columns = ['set', 'interconnector', 'coefficient']
+    return interconnector_generic_lhs

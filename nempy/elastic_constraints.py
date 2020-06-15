@@ -77,32 +77,38 @@ def create_deficit_variables(constraint_rhs, next_variable_id):
     inequalities_lhs['coefficient'] = np.where(inequalities_lhs['type'] == '>=', 1.0, -1.0)
     inequalities_lhs = inequalities_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
-    next_variable_id = inequalities['variable_id'].max() + 1
-    equalities_up = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
-    next_variable_id = equalities_up['variable_id'].max() + 1
-    equalities_down = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
+    if not equalities.empty:
+        next_variable_id = inequalities['variable_id'].max() + 1
+        equalities_up = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
+        next_variable_id = equalities_up['variable_id'].max() + 1
+        equalities_down = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
 
-    equalities_up_deficit_variables = equalities_up.loc[:, ['variable_id', 'cost']]
-    equalities_up_deficit_variables['lower_bound'] = 0.0
-    equalities_up_deficit_variables['upper_bound'] = np.inf
-    equalities_up_deficit_variables['type'] = 'continuous'
+        equalities_up_deficit_variables = equalities_up.loc[:, ['variable_id', 'cost']]
+        equalities_up_deficit_variables['lower_bound'] = 0.0
+        equalities_up_deficit_variables['upper_bound'] = np.inf
+        equalities_up_deficit_variables['type'] = 'continuous'
 
-    equalities_down_deficit_variables = equalities_down.loc[:, ['variable_id', 'cost']]
-    equalities_down_deficit_variables['lower_bound'] = 0.0
-    equalities_down_deficit_variables['upper_bound'] = np.inf
-    equalities_down_deficit_variables['type'] = 'continuous'
+        equalities_down_deficit_variables = equalities_down.loc[:, ['variable_id', 'cost']]
+        equalities_down_deficit_variables['lower_bound'] = 0.0
+        equalities_down_deficit_variables['upper_bound'] = np.inf
+        equalities_down_deficit_variables['type'] = 'continuous'
 
-    equalities_up_lhs = equalities_up.loc[:, ['variable_id', 'constraint_id', 'type']]
-    equalities_up_lhs['coefficient'] = -1.0
-    equalities_up_lhs = equalities_up_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
+        equalities_up_lhs = equalities_up.loc[:, ['variable_id', 'constraint_id', 'type']]
+        equalities_up_lhs['coefficient'] = -1.0
+        equalities_up_lhs = equalities_up_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
-    equalities_down_lhs = equalities_down.loc[:, ['variable_id', 'constraint_id', 'type']]
-    equalities_down_lhs['coefficient'] = 1.0
-    equalities_down_lhs = equalities_down_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
+        equalities_down_lhs = equalities_down.loc[:, ['variable_id', 'constraint_id', 'type']]
+        equalities_down_lhs['coefficient'] = 1.0
+        equalities_down_lhs = equalities_down_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
-    deficit_variables = pd.concat([inequalities_deficit_variables, equalities_up_deficit_variables,
-                                   equalities_down_deficit_variables])
 
-    lhs = pd.concat([inequalities_lhs, equalities_up_lhs, equalities_down_lhs])
+        deficit_variables = pd.concat([inequalities_deficit_variables, equalities_up_deficit_variables,
+                                       equalities_down_deficit_variables])
+
+        lhs = pd.concat([inequalities_lhs, equalities_up_lhs, equalities_down_lhs])
+
+    else:
+        deficit_variables = inequalities_deficit_variables
+        lhs = inequalities_lhs
 
     return deficit_variables, lhs

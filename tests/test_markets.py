@@ -720,6 +720,81 @@ def test_use_unit_generic_constraints_to_exclude_unit_from_providing_raise_reg()
     assert_frame_equal(simple_market.get_unit_dispatch(), expected_dispatch)
 
 
+def test_one_region_energy_market_with_elastic_unit_generic_constraints():
+    # Volume of each bid, number of bid bands must equal number of bands in price_bids.
+    volume_bids = pd.DataFrame({
+        'unit': ['A', 'B'],
+        '1': [100.0, 100.0]
+    })
+
+    # Price of each bid, bids must be monotonically increasing.
+    price_bids = pd.DataFrame({
+        'unit': ['A', 'B'],
+        '1': [50.0, 20.0]
+    })
+
+    # Factors limiting unit output
+    unit_limits = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'capacity': [100.0, 120.0],  # MW
+    })
+
+    # Other unit properties
+    unit_info = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'region': ['NSW', 'NSW']
+    })
+
+    demand = pd.DataFrame({
+        'region': ['NSW'],
+        'demand': [80.0]  # MW
+    })
+
+    # Generic constraints
+    generic_cons = pd.DataFrame({
+        'set': ['X'],
+        'type': ['>='],
+        'rhs': [65.0],
+    })
+
+    violation_costs = pd.DataFrame({
+        'set': ['X'],
+        'cost': [1000.0]
+    })
+
+    unit_coefficients = pd.DataFrame({
+        'set': ['X'],
+        'unit': ['A'],
+        'service': ['energy'],
+        'coefficient': [1.0]
+    })
+
+    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market.set_unit_info(unit_info)
+    simple_market.set_unit_volume_bids(volume_bids)
+    simple_market.set_unit_capacity_constraints(unit_limits)
+    simple_market.set_unit_price_bids(price_bids)
+    simple_market.set_demand_constraints(demand)
+    simple_market.set_generic_constraints(generic_cons)
+    simple_market.make_constraints_elastic('generic', violation_costs)
+    simple_market.link_units_to_generic_constraints(unit_coefficients)
+    simple_market.dispatch()
+
+    expected_prices = pd.DataFrame({
+        'region': ['NSW'],
+        'price': [20.0]
+    })
+
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
+        'dispatch': [65.0, 15.0]
+    })
+
+    assert_frame_equal(simple_market.get_energy_prices(), expected_prices)
+    assert_frame_equal(simple_market.get_unit_dispatch(), expected_dispatch)
+
+
 
 
 

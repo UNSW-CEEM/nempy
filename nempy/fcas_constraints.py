@@ -44,10 +44,10 @@ def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch
     ...                                                            dispatch_interval, next_constraint_id)
 
     >>> print(type_and_rhs)
-      unit  constraint_id type    rhs
-    0    A              1   <=  120.0
-    1    B              2   >=   55.0
-    2    B              3   <=   90.0
+      unit    service  constraint_id type    rhs
+    0    A  raise_reg              1   <=  120.0
+    1    B  lower_reg              2   >=   55.0
+    2    B  raise_reg              3   <=   90.0
 
     >>> print(variable_mapping)
        constraint_id unit    service  coefficient

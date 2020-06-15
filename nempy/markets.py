@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
-    create_lhs, interconnectors as inter, fcas_constraints, elastic_constraints, helper_functions as hf
-from nempy import spot_markert_backend
+    interconnectors as inter, fcas_constraints, elastic_constraints, helper_functions as hf
+from nempy import spot_markert_backend as smb
 
 
 class Spot:
@@ -22,6 +22,8 @@ class Spot:
         self.constraints_dynamic_rhs_and_type = {}
         self.market_constraints_rhs_and_type = {}
         self.objective_function_components = {}
+        self.interconnector_directions = None
+        self.interconnector_loss_shares = None
         self.next_variable_id = 0
         self.next_constraint_id = 0
         self.check = True
@@ -1262,12 +1264,13 @@ class Spot:
     @check.required_columns('interconnector_directions_and_limits',
                             ['interconnector', 'to_region', 'from_region', 'max', 'min'])
     @check.allowed_columns('interconnector_directions_and_limits',
-                           ['interconnector', 'to_region', 'from_region', 'max', 'min'])
+                           ['interconnector', 'to_region', 'from_region', 'max', 'min', 'from_region_loss_factor',
+                            'to_region_loss_factor'])
     @check.repeated_rows('interconnector_directions_and_limits', ['interconnector'])
     @check.column_data_types('interconnector_directions_and_limits',
-                             {'interconnector': str, 'to_region': str, 'from_region': str, 'max': np.float64,
-                              'min': np.float64})
-    @check.column_values_must_be_real('interconnector_directions_and_limits', ['min', 'max'])
+                             {'interconnector': str, 'to_region': str, 'from_region': str, 'else': np.float64})
+    @check.column_values_must_be_real('interconnector_directions_and_limits', ['min', 'max', 'from_region_loss_factor',
+                                                                               'to_region_loss_factor'])
     def set_interconnectors(self, interconnector_directions_and_limits):
         """Create lossless links between specified regions.
 
@@ -1315,14 +1318,23 @@ class Spot:
         interconnector_directions_and_limits : pd.DataFrame
             Interconnector definition.
 
-            ==============  =====================================================================================
-            Columns:        Description:
-            interconnector  unique identifier of a interconnector (as `str`)
-            to_region       the region that receives power when flow is in the positive direction (as `str`)
-            from_region     the region that power is drawn from when flow is in the positive direction (as `str`)
-            max             the maximum power flow in the positive direction, in MW (as `np.float64`)
-            min             the maximum power flow in the negative direction, in MW (as `np.float64`)
-            ==============  =====================================================================================
+            ========================  ==================================================================================
+            Columns:                  Description:
+            interconnector            unique identifier of a interconnector (as `str`)
+            to_region                 the region that receives power when flow is in the positive direction (as `str`)
+            from_region               the region that power is drawn from when flow is in the positive direction
+                                      (as `str`)
+            max                       the maximum power flow in the positive direction, in MW (as `np.float64`)
+            min                       the maximum power flow in the negative direction, in MW (as `np.float64`)
+            from_region_loss_factor   the loss factor at the from region end of the interconnector, refers the the from
+                                      region end to the regional reference node, optional, assumed to equal 1.0, i.e. that
+                                      the from end is at the regional reference node if the column is not provided
+                                      (as `np.float`)
+            to_region_loss_factor     the loss factor at the to region end of the interconnector, refers the the to
+                                      region end to the regional reference node, optional, assumed equal to 1.0, i.e. that
+                                      the to end is at the regional reference node if the column is not provided
+                                      (as `np.float`)
+            ========================  ==================================================================================
 
         Returns
         -------
@@ -1341,7 +1353,14 @@ class Spot:
             ColumnValues
                 If there are inf, null values in the max and min columns.
         """
+        if 'from_region_loss_factor' not in interconnector_directions_and_limits.columns:
+            interconnector_directions_and_limits['from_region_loss_factor'] = 1.0
+        if 'to_region_loss_factor' not in interconnector_directions_and_limits.columns:
+            interconnector_directions_and_limits['to_region_loss_factor'] = 1.0
 
+        self.interconnector_directions = \
+            interconnector_directions_and_limits.loc[:, ['interconnector', 'to_region', 'from_region',
+                                                         'from_region_loss_factor', 'to_region_loss_factor']]
         # Create unit variable ids and map variables to regional constraints
         self.decision_variables['interconnectors'], self.variable_to_constraint_map['regional']['interconnectors'] \
             = inter.create(interconnector_directions_and_limits, self.next_variable_id)
@@ -1538,6 +1557,7 @@ class Spot:
                 If there are inf or null values in the numeric columns of either input DataFrames. Or if
                 from_region_loss_share are outside the range of 0.0 to 1.0
         """
+        self.interconnector_loss_shares = loss_functions.loc[:, ['interconnector', 'from_region_loss_share']]
 
         # Create loss variables.
         loss_variables, loss_variables_constraint_map = \
@@ -2093,9 +2113,9 @@ class Spot:
         Now the market dispatch can be retrieved.
 
         >>> print(simple_market.get_unit_dispatch())
-          unit  dispatch
-        0    A      45.0
-        1    B      55.0
+          unit service  dispatch
+        0    A  energy      45.0
+        1    B  energy      55.0
 
         And the market prices can be retrieved.
 
@@ -2159,18 +2179,19 @@ class Spot:
         # If there are constraints that have been defined on a regional basis then create the constraints lhs
         # definition by mapping to all the variables that have been defined for the corresponding region and service.
         if len(self.constraint_to_variable_map['regional']) > 0:
-            regional_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['regional'],
-                                                         self.variable_to_constraint_map['regional'],
-                                                         ['region', 'service'])
+            constraints = pd.concat(list(self.constraint_to_variable_map['regional'].values()))
+            decision_variables = pd.concat(list(self.variable_to_constraint_map['regional'].values()))
+            regional_constraints_lhs = solver_interface.create_lhs(constraints, decision_variables,
+                                                                   ['region', 'service'])
             # Add the lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs, regional_constraints_lhs])
 
         # If there are constraints that have been defined on a unit basis then create the constraints lhs
         # definition by mapping to all the variables that have been defined for the corresponding unit and service.
         if len(self.constraint_to_variable_map['unit_level']) > 0:
-            unit_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['unit_level'],
-                                                     self.variable_to_constraint_map['unit_level'],
-                                                     ['unit', 'service'])
+            constraints = pd.concat(list(self.constraint_to_variable_map['unit_level'].values()))
+            decision_variables = pd.concat(list(self.variable_to_constraint_map['unit_level'].values()))
+            unit_constraints_lhs = solver_interface.create_lhs(constraints, decision_variables, ['unit', 'service'])
             # Add the lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
 
@@ -2186,7 +2207,10 @@ class Spot:
 
         # If interconnectors with losses are being used, create special ordered sets for modelling losses.
         if 'interpolation_weights' in self.decision_variables.keys():
-            si.add_sos_type_2(self.decision_variables['interpolation_weights'])
+            special_ordered_sets = self.decision_variables['interpolation_weights']
+            special_ordered_sets = \
+                special_ordered_sets.rename(columns={'interconnector': 'sos_id', 'loss_segment': 'position'})
+            si.add_sos_type_2(special_ordered_sets)
 
         # If Costs have been defined for bids or constraints then add an objective function.
         if self.objective_function_components:
@@ -2194,166 +2218,50 @@ class Spot:
             objective_function_definition = pd.concat(self.objective_function_components)
             si.add_objective_function(objective_function_definition)
 
+        # Collect all constraint rhs and type definitions into a single pd.DataFrame.
+        constraints_rhs_and_type = []
+        if self.constraints_rhs_and_type:
+            constraints_rhs_and_type.append(pd.concat(self.constraints_rhs_and_type))
+        if self.market_constraints_rhs_and_type:
+            constraints_rhs_and_type.append(pd.concat(self.market_constraints_rhs_and_type))
+        if self.constraints_dynamic_rhs_and_type:
+            constraints_dynamic_rhs_and_type = pd.concat(self.constraints_dynamic_rhs_and_type)
+            # Create the rhs for the dynamic constraints.
+            constraints_dynamic_rhs_and_type['rhs'] = constraints_dynamic_rhs_and_type. \
+                apply(lambda x: si.variables[x['rhs_variable_id']], axis=1)
+            constraints_rhs_and_type.append(constraints_dynamic_rhs_and_type)
+        if len(constraints_rhs_and_type) > 0:
+            constraints_rhs_and_type = pd.concat(constraints_rhs_and_type)
+            si.add_constraints(constraints_lhs, constraints_rhs_and_type)
 
-        if self.market_constraints_rhs_and_type or self.constraints_rhs_and_type:
+        si.optimize()
 
+        # Find the slack in constraints.
+        if self.constraints_rhs_and_type:
+            for constraint_group in self.constraints_rhs_and_type:
+                self.constraints_rhs_and_type[constraint_group]['slack'] = \
+                    si.get_slack_in_constraints(self.constraints_rhs_and_type[constraint_group])
+        if self.market_constraints_rhs_and_type:
+            for constraint_group in self.market_constraints_rhs_and_type:
+                self.market_constraints_rhs_and_type[constraint_group]['slack'] = \
+                    si.get_slack_in_constraints(self.market_constraints_rhs_and_type[constraint_group])
+        if self.constraints_dynamic_rhs_and_type:
+            for constraint_group in self.constraints_dynamic_rhs_and_type:
+                self.constraints_dynamic_rhs_and_type[constraint_group]['slack'] = \
+                    si.get_slack_in_constraints(self.constraints_dynamic_rhs_and_type[constraint_group])
 
-        decision_variables, market_constraints_rhs_and_type, rhs_and_type = solver_interface.dispatch(
-            self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
-            self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
-            self.objective_function_components)
-        self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
-        self.decision_variables = decision_variables
-        self.constraints_rhs_and_type = rhs_and_type
+        # Get decision variable optimal values
+        for var_group in self.decision_variables:
+            self.decision_variables[var_group]['value'] = \
+                si.get_optimal_values_of_decision_variables(self.decision_variables[var_group])
 
-    @check.pre_dispatch
-    def _dispatch(self):
-        """Combines the elements of the linear program and solves to find optimal dispatch.
-
-        Examples
-        --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
-
-        Initialise the market instance.
-
-        >>> simple_market = markets.Spot()
-
-        Define the unit information data set needed to initialise the market, in this example all units are in the same
-        region.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW']})
-
-        Add unit information
-
-        >>> simple_market.set_unit_info(unit_info)
-
-        Define a set of bids, in this example we have two units called A and B, with three bid bands.
-
-        >>> volume_bids = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     '1': [20.0, 50.0],
-        ...     '2': [20.0, 30.0],
-        ...     '3': [5.0, 10.0]})
-
-        Create energy unit bid decision variables.
-
-        >>> simple_market.set_unit_volume_bids(volume_bids)
-
-        Define a set of prices for the bids.
-
-        >>> price_bids = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     '1': [50.0, 100.0],
-        ...     '2': [100.0, 130.0],
-        ...     '3': [100.0, 150.0]})
-
-        Create the objective function components corresponding to the the energy bids.
-
-        >>> simple_market.set_unit_price_bids(price_bids)
-
-        Define a demand level in each region.
-
-        >>> demand = pd.DataFrame({
-        ...     'region': ['NSW'],
-        ...     'demand': [100.0]})
-
-        Create unit capacity based constraints.
-
-        >>> simple_market.set_demand_constraints(demand)
-
-        Call the dispatch method.
-
-        >>> simple_market.dispatch()
-
-        Now the market dispatch can be retrieved.
-
-        >>> print(simple_market.get_unit_dispatch())
-          unit  dispatch
-        0    A      45.0
-        1    B      55.0
-
-        And the market prices can be retrieved.
-
-        >>> print(simple_market.get_energy_prices())
-          region  price
-        0    NSW  130.0
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-            ModelBuildError
-                If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
-        """
-
-        if len(self.lhs_coefficients.values()) > 0:
-            constraints_lhs = pd.concat(list(self.lhs_coefficients.values()))
-        else:
-            constraints_lhs = pd.DataFrame()
-
-        generic_rhs = []
-        if 'generic' in self.constraints_rhs_and_type:
-            generic_rhs.append(self.constraints_rhs_and_type['generic'].loc[:, ['constraint_id', 'set']])
-        if 'fcas' in self.market_constraints_rhs_and_type:
-            generic_rhs.append(self.market_constraints_rhs_and_type['fcas'].loc[:, ['constraint_id', 'set']])
-
-        if len(generic_rhs) > 0:
-            generic_lhs = []
-            generic_rhs = pd.concat(generic_rhs)
-            if 'unit' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['unit_level']:
-                unit_lhs = pd.merge(
-                    self.generic_constraint_lhs['unit'],
-                    self.variable_to_constraint_map['unit_level']['bids'].loc[:, ['unit', 'service', 'variable_id']],
-                    on=['unit', 'service'])
-                unit_lhs = pd.merge(unit_lhs, generic_rhs.loc[:, ['constraint_id', 'set']], on='set')
-                generic_lhs.append(unit_lhs)
-            if 'region' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['regional']:
-                region_lhs = pd.merge(
-                    self.generic_constraint_lhs['region'],
-                    self.variable_to_constraint_map['regional']['bids'].loc[:, ['region', 'service', 'variable_id']],
-                    on=['region', 'service'])
-                unit_lhs = pd.merge(region_lhs, generic_rhs.loc[:, ['constraint_id', 'set']], on='set')
-                generic_lhs.append(unit_lhs)
-            if 'interconnectors' in self.generic_constraint_lhs and \
-                    'interconnectors' in self.decision_variables:
-                interconnector_lhs = pd.merge(
-                    self.generic_constraint_lhs['interconnectors'],
-                    self.decision_variables['interconnectors'].loc[:, ['interconnector', 'variable_id']],
-                    on=['interconnector'])
-                unit_lhs = pd.merge(interconnector_lhs, generic_rhs.loc[:, ['constraint_id', 'set']], on='set')
-                generic_lhs.append(unit_lhs)
-
-            constraints_lhs = pd.concat([constraints_lhs] + generic_lhs)
-
-        if len(self.constraint_to_variable_map['regional']) > 0:
-            regional_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['regional'],
-                                                         self.variable_to_constraint_map['regional'],
-                                                         ['region', 'service'])
-
-            constraints_lhs = pd.concat([constraints_lhs, regional_constraints_lhs])
-
-        if len(self.constraint_to_variable_map['unit_level']) > 0:
-            unit_constraints_lhs = create_lhs.create(self.constraint_to_variable_map['unit_level'],
-                                                     self.variable_to_constraint_map['unit_level'],
-                                                     ['unit', 'service'])
-            constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
-
-        decision_variables, market_constraints_rhs_and_type, rhs_and_type = solver_interface.dispatch(
-            self.decision_variables, constraints_lhs, self.constraints_rhs_and_type,
-            self.market_constraints_rhs_and_type, self.constraints_dynamic_rhs_and_type,
-            self.objective_function_components)
-        self.market_constraints_rhs_and_type = market_constraints_rhs_and_type
-        self.decision_variables = decision_variables
-        self.constraints_rhs_and_type = rhs_and_type
+        # If there are market constraints then calculate their associated prices.
+        if self.market_constraints_rhs_and_type:
+            for constraint_group in self.market_constraints_rhs_and_type:
+                constraints_to_price = list(self.market_constraints_rhs_and_type[constraint_group]['constraint_id'])
+                prices = si.price_constraints(constraints_to_price)
+                self.market_constraints_rhs_and_type[constraint_group]['price'] = \
+                    self.market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.
@@ -2641,6 +2549,251 @@ class Spot:
             flow = pd.merge(flow, losses, 'left', on='interconnector')
 
         return flow.reset_index(drop=True)
+
+    def get_region_dispatch_summary(self):
+        """Calculates a dispatch summary at the regional level.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Define a set of bids, in this example we have just one unit that can provide 100 MW in NSW.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     '1': [100.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_volume_bids(volume_bids)
+
+        Define a set of prices for the bids.
+
+        >>> price_bids = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     '1': [80.0]})
+
+        Create the objective function components corresponding to the the energy bids.
+
+        >>> simple_market.set_unit_price_bids(price_bids)
+
+        Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
+
+        >>> demand = pd.DataFrame({
+        ...     'region': ['NSW', 'VIC'],
+        ...     'demand': [0.0, 90.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_demand_constraints(demand)
+
+        Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
+
+        >>> interconnector = pd.DataFrame({
+        ...     'interconnector': ['inter_one'],
+        ...     'to_region': ['VIC'],
+        ...     'from_region': ['NSW'],
+        ...     'max': [100.0],
+        ...     'min': [-100.0]})
+
+        Create the interconnector.
+
+        >>> simple_market.set_interconnectors(interconnector)
+
+        Define the interconnector loss function. In this case losses are always 5 % of line flow.
+
+        >>> def constant_losses(flow=None):
+        ...     return abs(flow) * 0.05
+
+        Define the function on a per interconnector basis. Also details how the losses should be proportioned to the
+        connected regions.
+
+        >>> loss_functions = pd.DataFrame({
+        ...    'interconnector': ['inter_one'],
+        ...    'from_region_loss_share': [0.5],  # losses are shared equally.
+        ...    'loss_function': [constant_losses]})
+
+        Define The points to linearly interpolate the loss function between. In this example the loss function is
+        linear so only three points are needed, but if a non linear loss function was used then more points would
+        result in a better approximation.
+
+        >>> interpolation_break_points = pd.DataFrame({
+        ...    'interconnector': ['inter_one', 'inter_one', 'inter_one'],
+        ...    'loss_segment': [1, 2, 3],
+        ...    'break_point': [-120.0, 0.0, 100]})
+
+        >>> simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
+
+        Call the dispatch method.
+
+        >>> simple_market.dispatch()
+
+        Now the region dispatch summary can be retreived.
+
+        >>> print(simple_market.get_region_dispatch_summary())
+          region   dispatch     inflow  interconnector_losses
+        0    NSW  94.615385 -92.307692               2.307692
+
+        Returns
+        -------
+        pd.DataFrame
+
+            =====================    =================================================================
+            Columns:                 Description:
+            region                   unique identifier of a market region, required (as `str`)
+            dispatch                 the net dispatch of units inside a region i.e. generators dispatch
+                                     - load dispatch, in MW. (as `np.float64`)
+            inflow                   the net inflow from interconnectors, not including losses, in MW
+                                     (as `np.float64`)
+            interconnector_losses    interconnector losses attributed to region, in MW, (as `np.float64`)
+            =====================    =================================================================
+        """
+        dispatch_summary = self._get_net_unit_dispatch_by_region()
+        if self._interconnectors_in_market():
+            interconnector_inflow = self._get_interconnector_inflow_by_region()
+            dispatch_summary = pd.merge(dispatch_summary, interconnector_inflow, on='region')
+            transmission_losses = self._get_transmission_losses()
+            dispatch_summary = pd.merge(dispatch_summary, transmission_losses, on='region')
+        if self._interconnectors_have_losses():
+            interconnector_losses = self._get_interconnector_losses_by_region()
+            dispatch_summary = pd.merge(dispatch_summary, interconnector_losses, on='region')
+        return dispatch_summary
+
+    def _get_net_unit_dispatch_by_region(self):
+
+        unit_dispatch = self.get_unit_dispatch()
+        unit_dispatch = unit_dispatch[unit_dispatch['service'] == 'energy']
+        unit_dispatch_types = self.unit_info.loc[:, ['unit', 'region', 'dispatch_type']]
+        unit_dispatch = pd.merge(unit_dispatch, unit_dispatch_types, on='unit')
+
+        def make_load_dispatch_negative(dispatch_type, dispatch):
+            if dispatch_type == 'load':
+                dispatch = -1 * dispatch
+            return dispatch
+
+        unit_dispatch['dispatch'] = \
+            unit_dispatch.apply(lambda x: make_load_dispatch_negative(x['dispatch_type'], x['dispatch']), axis=1)
+
+        unit_dispatch = unit_dispatch.groupby('region', as_index=False).aggregate({'dispatch': 'sum'})
+        return unit_dispatch
+
+    def _interconnectors_in_market(self):
+        return self.interconnector_directions is not None
+
+    def _get_interconnector_inflow_by_region(self):
+
+        def calc_inflow_by_interconnector(interconnector_direction_coefficients, interconnector_flows):
+            inflow = pd.merge(interconnector_direction_coefficients, interconnector_flows, on='interconnector')
+            inflow['inflow'] = inflow['flow'] * inflow['direction_coefficient']
+            return inflow
+
+        def calc_inflow_by_region(inflow):
+            inflow = inflow.groupby('region', as_index=False).aggregate({'inflow': 'sum'})
+            return inflow
+
+        interconnector_flows = self.get_interconnector_flows()
+        interconnector_direction_coefficients = self._get_interconnector_inflow_coefficients()
+        inflow = calc_inflow_by_interconnector(interconnector_direction_coefficients, interconnector_flows)
+        inflow = calc_inflow_by_region(inflow)
+
+        return inflow
+
+    def _get_interconnector_inflow_coefficients(self):
+
+        def define_positive_inflows():
+            inflow_direction = self.interconnector_directions.loc[:, ['interconnector', 'to_region']]
+            inflow_direction['direction_coefficient'] = 1.0
+            inflow_direction.columns = ['interconnector', 'region', 'direction_coefficient']
+            return inflow_direction
+
+        def define_negative_inflows():
+            outflow_direction = self.interconnector_directions.loc[:, ['interconnector', 'from_region']]
+            outflow_direction['direction_coefficient'] = -1.0
+            outflow_direction.columns = ['interconnector', 'region', 'direction_coefficient']
+            return outflow_direction
+
+        positive_inflow = define_positive_inflows()
+        negative_inflow = define_negative_inflows()
+        inflow_coefficients = pd.concat([positive_inflow, negative_inflow])
+
+        return inflow_coefficients
+
+    def _interconnectors_have_losses(self):
+        return self.interconnector_loss_shares is not None
+
+    def _get_interconnector_losses_by_region(self):
+        from_region_loss_shares = self._get_from_region_loss_shares()
+        to_region_loss_shares = self._get_to_region_loss_shares()
+        loss_shares = pd.concat([from_region_loss_shares, to_region_loss_shares])
+        losses = self.get_interconnector_flows().loc[:, ['interconnector', 'losses']]
+        losses = pd.merge(losses, loss_shares, on='interconnector')
+        losses['interconnector_losses'] = losses['losses'] * losses['loss_share']
+        self._get_transmission_losses()
+        losses = losses.groupby('region', as_index=False).aggregate({'interconnector_losses': 'sum'})
+        return losses
+
+    def _get_from_region_loss_shares(self):
+        from_region_loss_share = self._get_loss_shares('from_region')
+        from_region_loss_share = from_region_loss_share.rename(columns={'from_region_loss_share': 'loss_share'})
+        return from_region_loss_share
+
+    def _get_to_region_loss_shares(self):
+        to_region_loss_share = self._get_loss_shares('to_region')
+        to_region_loss_share['loss_share'] = 1 - to_region_loss_share['from_region_loss_share']
+        to_region_loss_share = to_region_loss_share.drop('from_region_loss_share', axis=1)
+        return to_region_loss_share
+
+    def _get_loss_shares(self, region_type):
+        from_region_loss_share = self.interconnector_loss_shares
+        regions = self.interconnector_directions.loc[:, ['interconnector', region_type]]
+        regions = regions.rename(columns={region_type: 'region'})
+        from_region_loss_share = pd.merge(from_region_loss_share, regions, on='interconnector')
+        from_region_loss_share = from_region_loss_share.loc[:, ['interconnector', 'region', 'from_region_loss_share']]
+        return from_region_loss_share
+
+    def _get_transmission_losses(self):
+        interconnector_directions = self.interconnector_directions
+        loss_factors = hf.stack_columns(interconnector_directions, ['interconnector'],
+                                        ['from_region_loss_factor', 'to_region_loss_factor'], 'direction',
+                                        'loss_factor')
+        interconnector_directions = hf.stack_columns(interconnector_directions, ['interconnector'],
+                                                     ['to_region', 'from_region'], 'direction', 'region')
+        loss_factors['direction'] = loss_factors['direction'].apply(lambda x: x.replace('_loss_factor', ''))
+        loss_factors = pd.merge(loss_factors, interconnector_directions, on=['interconnector', 'direction'])
+        flows_and_losses = self.get_interconnector_flows()
+        flows_and_losses = pd.merge(flows_and_losses, loss_factors, on='interconnector')
+
+        def calc_losses(direction, flow, loss_factor):
+            if (direction == 'to_region' and flow >= 0.0) or (direction == 'from_region' and flow <= 0.0):
+                losses = flow * (1 - loss_factor)
+            elif (direction == 'to_region' and flow < 0.0) or (direction == 'from_region' and flow > 0.0):
+                losses = abs(flow) - (abs(flow) / loss_factor)
+            return losses
+
+        flows_and_losses['transmission_losses'] = \
+            flows_and_losses.apply(lambda x: calc_losses(x['direction'], x['flow'], x['loss_factor']), axis=1)
+        flows_and_losses = flows_and_losses.groupby('region', as_index=False).aggregate({'transmission_losses': 'sum'})
+        return flows_and_losses
 
     def get_fcas_availability(self):
         """Get the availability of fcas service on a unit level, after constraints.

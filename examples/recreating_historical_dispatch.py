@@ -36,7 +36,7 @@ if not os.path.isfile('historical_inputs.db'):
 con = sqlite3.connect('historical_inputs.db')
 inputs_manager = hi.DBManager(connection=con)
 
-# List for saving inputs to.
+# List for saving outputs to.
 outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.

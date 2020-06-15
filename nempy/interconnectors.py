@@ -17,12 +17,14 @@ def create(definitions, next_variable_id):
     ...   'from_region': ['X', 'Y'],
     ...   'to_region': ['Y', 'Z'],
     ...   'max': [100.0, 400.0],
-    ...   'min': [-100.0, 50.0]})
+    ...   'min': [-100.0, 50.0],
+    ...   'from_region_loss_factor': [0.9, 1.0],
+    ...   'to_region_loss_factor': [1.0, 1.1]})
 
     >>> print(inter_definitions)
-      interconnector from_region to_region    max    min
-    0              A           X         Y  100.0 -100.0
-    1              B           Y         Z  400.0   50.0
+      interconnector from_region  ... from_region_loss_factor  to_region_loss_factor
+    0              A           X  ...                     1.0                    1.0
+    1              B           Y  ...                     1.0                    1.0
 
     Start creating new variable ids from 0.
 
@@ -40,8 +42,8 @@ def create(definitions, next_variable_id):
     >>> print(constraint_map)
        variable_id region service  coefficient
     0            0      Y  energy          1.0
-    1            1      Z  energy          1.0
-    2            0      X  energy         -1.0
+    1            1      Z  energy          1.1
+    2            0      X  energy         -0.9
     3            1      Y  energy         -1.0
 
     Parameters
@@ -92,6 +94,11 @@ def create(definitions, next_variable_id):
     # demand constraint of both connected regions.
     constraint_map = hf.stack_columns(decision_variables, ['variable_id', 'interconnector', 'max', 'min'],
                                       ['to_region', 'from_region'], 'direction', 'region')
+    loss_factors = hf.stack_columns(decision_variables, ['variable_id'],
+                                      ['from_region_loss_factor', 'to_region_loss_factor'], 'direction', 'loss_factor')
+    loss_factors['direction'] = loss_factors['direction'].apply(lambda x: x.replace('_loss_factor', ''))
+    constraint_map = pd.merge(constraint_map, loss_factors, on=['variable_id', 'direction'])
+
 
     # Define decision variable attributes.
     decision_variables['type'] = 'continuous'
@@ -100,7 +107,9 @@ def create(definitions, next_variable_id):
 
     # Set positive coefficient for the to_region so the interconnector flowing in the nominal direction helps meet the
     # to_region demand constraint. Negative for the from_region, same logic.
-    constraint_map['coefficient'] = np.where(constraint_map['direction'] == 'to_region', 1.0, -1.0)
+    constraint_map['coefficient'] = np.where(constraint_map['direction'] == 'to_region',
+                                             1.0 * constraint_map['loss_factor'],
+                                             -1.0 * constraint_map['loss_factor'])
     constraint_map['service'] = 'energy'
     constraint_map = constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
 
