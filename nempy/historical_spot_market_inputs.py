@@ -162,7 +162,8 @@ class _MMSTable:
             'LOWER5MINACTUALAVAILABILITY': 'REAL', 'LOWERREGACTUALAVAILABILITY': 'REAL', 'LHS': 'REAL',
             'VIOLATIONDEGREE': 'REAL', 'MARGINALVALUE': 'REAL', 'RAISE6SECRRP': 'REAL',
             'RAISE60SECRRP': 'REAL', 'RAISE5MINRRP': 'REAL', 'RAISEREGRRP': 'REAL', 'LOWER6SECRRP': 'REAL',
-            'LOWER60SECRRP': 'REAL', 'LOWER5MINRRP': 'REAL', 'LOWERREGRRP': 'REAL'
+            'LOWER60SECRRP': 'REAL', 'LOWER5MINRRP': 'REAL', 'LOWERREGRRP': 'REAL', 'FROM_REGION_TLF': 'REAL',
+            'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1280,7 +1281,7 @@ class DBManager:
             table_primary_keys=['INTERCONNECTORID'], con=self.con)
         self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                                  'FROMREGIONLOSSSHARE', 'LOSSCONSTANT',
+                                                                  'FROMREGIONLOSSSHARE', 'LOSSCONSTANT', 'ICTYPE',
                                                                   'LOSSFLOWCOEFFICIENT', 'IMPORTLIMIT', 'EXPORTLIMIT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.LOSSMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
@@ -1295,6 +1296,11 @@ class DBManager:
             table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE', 'MWFLOW',
                                                                    'MWLOSSES'],
             table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
+        self.MNSP_INTERCONNECTOR = InputsByEffectiveDateVersionNo(
+            table_name='MNSP_INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                             'FROMREGION', 'TOREGION', 'FROM_REGION_TLF',
+                                                             'TO_REGION_TLF'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
 
     def create_tables(self):
         """Drops any existing default tables and creates new ones, this method is generally called a new database.
@@ -1845,9 +1851,9 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
     ... 'LOSSFLOWCOEFFICIENT': [0.001, 0.003, 0.005],
     ... 'FROMREGIONLOSSSHARE': [0.5, 0.3, 0.7,]})
 
-    >>> interconnector_paramaters = format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT)
+    >>> interconnector_parameters = format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT)
 
-    >>> print(interconnector_paramaters)
+    >>> print(interconnector_parameters)
       interconnector  loss_constant  flow_coefficient  from_region_loss_share
     0              X            1.0             0.001                     0.5
     1              Y            1.1             0.003                     0.3
@@ -1868,7 +1874,7 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
 
     Returns
     ----------
-    interconnector_paramaters : pd.DataFrame
+    interconnector_parameters : pd.DataFrame
 
         ======================  ========================================================================================
         Columns:                Description:
@@ -1879,11 +1885,11 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
         ======================  ========================================================================================
     """
 
-    interconnector_paramaters = INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'LOSSCONSTANT',
+    interconnector_parameters = INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'LOSSCONSTANT',
                                                                  'LOSSFLOWCOEFFICIENT', 'FROMREGIONLOSSSHARE']]
-    interconnector_paramaters.columns = ['interconnector', 'loss_constant', 'flow_coefficient',
+    interconnector_parameters.columns = ['interconnector', 'loss_constant', 'flow_coefficient',
                                          'from_region_loss_share']
-    return interconnector_paramaters
+    return interconnector_parameters
 
 
 def format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL):
@@ -3273,3 +3279,328 @@ def format_generic_interconnector_lhs(SPDINTERCONNECTORCONSTRAINT):
     interconnector_generic_lhs = interconnector_generic_lhs.loc[:, ['GENCONID', 'INTERCONNECTORID', 'FACTOR']]
     interconnector_generic_lhs.columns = ['set', 'interconnector', 'coefficient']
     return interconnector_generic_lhs
+
+
+def split_interconnectors_definitions_into_two_one_directional_links(interconnectors):
+    """
+
+    Examples
+    --------
+
+    >>> interconnectors = pd.DataFrame({
+    ...   'interconnector': ['inter_one', 'inter_two', 'another_inter'],
+    ...   'to_region': ['A', 'B', 'C'],
+    ...   'from_region': ['X', 'Y', 'Z'],
+    ...    'max': [100.0, -50.0, 80.0],
+    ...    'min': [-100.0, -100.0, 80.0]})
+
+    >>> split_parameters = split_interconnectors_definitions_into_two_one_directional_links(interconnectors)
+
+    >>> print(split_parameters)
+              interconnector to_region from_region    max    min
+    0      inter_one_forward         A           X  100.0    0.0
+    1      inter_two_forward         B           Y    0.0    0.0
+    2  another_inter_forward         C           Z   80.0   80.0
+    0      inter_one_reverse         A           X    0.0 -100.0
+    1      inter_two_reverse         B           Y  -50.0 -100.0
+    2  another_inter_reverse         C           Z    0.0    0.0
+
+    Parameters
+    ----------
+    interconnectors
+
+    Returns
+    -------
+
+    """
+    interconnector_forward_direction = create_forward_flow_interconnectors(interconnectors)
+    interconnector_reverse_direction = create_reverse_flow_interconnectors(interconnectors)
+
+    interconnector_forward_direction['max'] = \
+        np.where(interconnector_forward_direction['max'] > 0, interconnector_forward_direction['max'], 0.0)
+    interconnector_forward_direction['min'] = \
+        np.where(interconnector_forward_direction['min'] > 0, interconnector_forward_direction['min'], 0.0)
+
+    interconnector_reverse_direction['max'] = \
+        np.where(interconnector_reverse_direction['max'] > 0, 0, interconnector_reverse_direction['max'])
+    interconnector_reverse_direction['min'] = \
+        np.where(interconnector_reverse_direction['min'] < 0, interconnector_reverse_direction['min'], 0.0)
+
+    interconnectors = pd.concat([interconnector_forward_direction, interconnector_reverse_direction])
+    return interconnectors
+
+
+def split_interconnector_flow_into_two_directional_links(interconnector_flow):
+    """
+
+    Examples
+    --------
+
+    >>> interconnector_flow = pd.DataFrame({
+    ...   'interconnector': ['inter_one', 'another_inter'],
+    ...   'flow': [10.0, -10.0]})
+
+    >>> interconnector_flow = split_interconnector_loss_functions_into_two_directional_links(interconnector_flow)
+
+    >>> print(interconnector_flow)
+              interconnector
+    0      inter_one_nominal
+    1  another_inter_nominal
+    0      inter_one_reverse
+    1  another_inter_reverse
+
+    Parameters
+    ----------
+    interconnector_parameters
+
+    Returns
+    -------
+
+    """
+    interconnector_flow_forward_direction = \
+        create_forward_flow_interconnectors(interconnector_flow)
+    interconnector_flow_reverse_direction = \
+        create_reverse_flow_interconnectors(interconnector_flow)
+
+    interconnector_flow_forward_direction['flow'] = \
+        np.where(interconnector_flow_forward_direction['flow'] > 0.0,
+                 interconnector_flow_forward_direction['flow'], 0.0)
+    interconnector_flow_reverse_direction['flow'] = \
+        np.where(interconnector_flow_reverse_direction['flow'] < 0.0,
+                 interconnector_flow_reverse_direction['flow'], 0.0)
+
+    interconnector_parameters = pd.concat([interconnector_flow_forward_direction,
+                                           interconnector_flow_reverse_direction])
+    return interconnector_parameters
+
+
+def split_interconnector_loss_functions_into_two_directional_links(interconnector_loss_functions):
+    """
+
+    Examples
+    --------
+
+    >>> interconnector_loss_functions = pd.DataFrame({
+    ...   'interconnector': ['inter_one', 'another_inter'],
+    ...   'from_region_loss_share': [0.0, 0.75]})
+
+    >>> interconnector_loss_functions = split_interconnector_loss_functions_into_two_directional_links(
+    ...   interconnector_loss_functions)
+
+    >>> print(interconnector_loss_functions)
+              interconnector  from_region_loss_share
+    0      inter_one_forward                    0.00
+    1  another_inter_forward                    0.75
+    0      inter_one_reverse                    1.00
+    1  another_inter_reverse                    0.25
+
+    Parameters
+    ----------
+    interconnector_loss_functions
+
+    Returns
+    -------
+
+    """
+    interconnector_loss_functions_forward_direction = \
+        create_forward_flow_interconnectors(interconnector_loss_functions)
+    interconnector_loss_functions_reverse_direction = \
+        create_reverse_flow_interconnectors(interconnector_loss_functions)
+
+    interconnector_loss_functions_forward_direction['from_region_loss_share'] = \
+        1 - interconnector_loss_functions_forward_direction['from_region_loss_share']
+
+    interconnectors = pd.concat([interconnector_loss_functions_forward_direction,
+                                 interconnector_loss_functions_reverse_direction])
+    return interconnectors
+
+
+def split_interconnector_interpolation_break_points_into_two_directional_links(interpolation_break_points):
+    """
+
+    Examples
+    --------
+
+    >>> interpolation_break_points = pd.DataFrame({
+    ...   'interconnector': ['inter_one', 'inter_one', 'inter_one',
+    ...                      'another_inter', 'another_inter', 'another_inter'],
+    ...   'loss_segement': [1, 2, 3, 1, 2, 3],
+    ...   'break_point': [-10.0, 0.0, 15.0, -18.0, 0.0, 18.0]})
+
+    >>> interpolation_break_points = split_interconnector_interpolation_break_points_into_two_directional_links(
+    ...   interpolation_break_points)
+
+    >>> print(interpolation_break_points)
+              interconnector  loss_segement  break_point
+    1      inter_one_forward              2          0.0
+    2      inter_one_forward              3         15.0
+    4  another_inter_forward              2          0.0
+    5  another_inter_forward              3         18.0
+    0      inter_one_reverse              1        -10.0
+    1      inter_one_reverse              2          0.0
+    3  another_inter_reverse              1        -18.0
+    4  another_inter_reverse              2          0.0
+
+    Parameters
+    ----------
+    interpolation_break_points
+
+    Returns
+    -------
+
+    """
+    interpolation_break_points_forward_direction = \
+        create_forward_flow_interconnectors(interpolation_break_points)
+    interpolation_break_points_reverse_direction = \
+        create_reverse_flow_interconnectors(interpolation_break_points)
+
+    interpolation_break_points_forward_direction = \
+        interpolation_break_points_forward_direction[
+            interpolation_break_points_forward_direction['break_point'] >= -0.001]
+
+    interpolation_break_points_reverse_direction = \
+        interpolation_break_points_reverse_direction[
+            interpolation_break_points_reverse_direction['break_point'] <= 0.001]
+
+    interconnectors = pd.concat([interpolation_break_points_forward_direction,
+                                 interpolation_break_points_reverse_direction])
+    return interconnectors
+
+
+def create_forward_flow_interconnectors(interconnectors):
+    """
+    Examples
+    --------
+
+    >>> interconnectors = pd.DataFrame({
+    ...   'interconnector': ['inter_one', 'another_inter']})
+
+    >>> interconnectors = create_forward_flow_interconnectors(interconnectors)
+
+    >>> print(interconnectors)
+              interconnector
+    0      inter_one_forward
+    1  another_inter_forward
+
+    Returns
+    -------
+
+    """
+    interconnectors = interconnectors.copy()
+    interconnectors['interconnector'] = interconnectors['interconnector'] + '_forward'
+    return interconnectors
+
+
+def create_reverse_flow_interconnectors(interconnectors):
+    """
+    Examples
+    --------
+
+    >>> interconnectors = pd.DataFrame({
+    ...   'interconnector': ['inter_one', 'another_inter']})
+
+    >>> interconnectors = create_reverse_flow_interconnectors(interconnectors)
+
+    >>> print(interconnectors)
+              interconnector
+    0      inter_one_reverse
+    1  another_inter_reverse
+
+    Returns
+    -------
+
+    """
+    interconnectors = interconnectors.copy()
+    interconnectors['interconnector'] = interconnectors['interconnector'] + '_reverse'
+    return interconnectors
+
+
+def add_inerconnector_transmission_loss_factors(interconnectors, mnsp_transmission_loss_factors):
+    """
+    Examples
+    --------
+
+    >>> interconnectors = pd.DataFrame({
+    ...   'interconnector': ['A', 'B']})
+
+    >>> mnsp_transmission_loss_factors = pd.DataFrame({
+    ...   'interconnector': ['A'],
+    ...   'from_region_loss_factor': [0.0],
+    ...   'to_region_loss_factor': [0.9]})
+
+    >>> interconnectors = add_inerconnector_transmission_loss_factors(interconnectors, mnsp_transmission_loss_factors)
+
+    >>> print(interconnectors)
+      interconnector  from_region_loss_factor  to_region_loss_factor
+    0              A                      0.0                    0.9
+    1              B                      0.0                    0.0
+
+
+    Parameters
+    ----------
+    interconnectors
+
+    Returns
+    -------
+
+    """
+    mnsp_transmission_loss_factors = \
+        mnsp_transmission_loss_factors.loc[:, ['interconnector', 'from_region_loss_factor',  'to_region_loss_factor']]
+    interconnectors = pd.merge(interconnectors, mnsp_transmission_loss_factors, 'left', on='interconnector')
+    interconnectors = interconnectors.fillna(1.0)
+    return interconnectors
+
+
+def format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR, INTERCONNECTORCONSTRAINT, INTERCONNECTOR):
+    """
+
+    Examples
+    --------
+
+    >>> MNSP_INTERCONNECTOR = pd.DataFrame({
+    ...   'INTERCONNECTORID': ['A', 'B'],
+    ...   'FROMREGION': ['C', 'D'],
+    ...   'TOREGION': ['X', 'Y'],
+    ...   'FROM_REGION_TLF': [0.0, 1.0],
+    ...   'TO_REGION_TLF': [0.75, 1.0]})
+
+    >>> INTERCONNECTORCONSTRAINT = pd.DataFrame({
+    ...   'INTERCONNECTORID': ['A', 'B'],
+    ...   'ICTYPE': ['MNSP', 'REGULATED']})
+
+    >>> INTERCONNECTOR = pd.DataFrame({
+    ...   'INTERCONNECTORID': ['A', 'B'],
+    ...   'REGIONFROM': ['C', 'D'],
+    ...   'REGIONTO': ['X', 'Y']})
+
+    >>> mnsp_transmission_loss_factors = format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
+    ...   INTERCONNECTORCONSTRAINT, INTERCONNECTOR)
+
+    >>> print(mnsp_transmission_loss_factors)
+      interconnector from_region  ... from_region_loss_factor  to_region_loss_factor
+    0              A           C  ...                     0.0                   0.75
+    <BLANKLINE>
+    [1 rows x 5 columns]
+
+    Parameters
+    ----------
+    mnsp_transmission_loss_factors
+    interconnector_types
+
+    Returns
+    -------
+
+    """
+    INTERCONNECTORCONSTRAINT = INTERCONNECTORCONSTRAINT[INTERCONNECTORCONSTRAINT['ICTYPE']=='MNSP']
+    MNSP_INTERCONNECTOR = pd.merge(MNSP_INTERCONNECTOR, INTERCONNECTORCONSTRAINT, on=['INTERCONNECTORID'])
+    MNSP_INTERCONNECTOR = pd.merge(MNSP_INTERCONNECTOR, INTERCONNECTOR,
+                                   left_on=['INTERCONNECTORID', 'FROMREGION', 'TOREGION'],
+                                   right_on=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'])
+    MNSP_INTERCONNECTOR = MNSP_INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'FROMREGION', 'TOREGION', 'FROM_REGION_TLF',
+                                                     'TO_REGION_TLF']]
+    mnsp_transmission_loss_factors = MNSP_INTERCONNECTOR.rename(columns={
+        'INTERCONNECTORID': 'interconnector', 'FROMREGION': 'from_region', 'TOREGION': 'to_region',
+        'FROM_REGION_TLF': 'from_region_loss_factor', 'TO_REGION_TLF': 'to_region_loss_factor'
+    })
+
+    return mnsp_transmission_loss_factors

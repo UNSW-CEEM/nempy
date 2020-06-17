@@ -28,7 +28,6 @@ def test_setup():
         # Create a database for the require inputs.
         con = sqlite3.connect('test_files/historical_inputs.db')
         inputs_manager = hi.DBManager(connection=con)
-
         # Download data were inputs are needed on a monthly basis.
         finished = False
         for year in range(2019, 2020):
@@ -60,8 +59,9 @@ def test_setup():
         # inputs_manager.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=2020, month=3)
         # inputs_manager.SPDREGIONCONSTRAINT.set_data(year=2020, month=3)
         # inputs_manager.SPDINTERCONNECTORCONSTRAINT.set_data(year=2020, month=3)
-        # inputs_manager.INTERCONNECTORCONSTRAINT.set_data(year=2020, month=1)  # Interconnector data
-        # inputs_manager.INTERCONNECTOR.set_data(year=2020, month=1)  # Interconnector data
+        inputs_manager.INTERCONNECTORCONSTRAINT.set_data(year=2020, month=3)  # Interconnector data
+        inputs_manager.INTERCONNECTOR.set_data(year=2020, month=3)  # Interconnector data
+        inputs_manager.MNSP_INTERCONNECTOR.set_data(year=2020, month=3)
 
         print('DB Build done.')
         con.close()
@@ -1017,35 +1017,64 @@ def test_hist_dispatch_values_feasible_without_generic_constraints():
 
 
 def test_hist_dispatch_values_meet_demand_constraints():
-    con = sqlite3.connect('test_files/historical_inputs.db')
-    inputs_manager = hi.DBManager(connection=con)
+    inputs_database = 'test_files/historical_inputs.db'
     for interval in get_test_intervals():
-        # Transform the historical input data into the format accepted
-        # by the Spot market class.
+        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market.add_unit_bids_to_market()
+        market.add_interconnectors_to_market()
+        market.set_unit_dispatch_to_historical_values()
+        market.set_interconnector_flow_to_historical_values()
+        market.dispatch()
 
+
+        # inter_flows = market.get_interconnector_flows()
+        #
+        # bass_link_flow = inter_flows[inter_flows['interconnector']=='T-V-MNSP1']['flow'].iloc[0]
+        #
+        # if bass_link_flow > 0.0:
+        #     loss_functions['from_region_loss_share'] = np.where(loss_functions['interconnector']=='T-V-MNSP1', 1.0,
+        #                                                         loss_functions['from_region_loss_share'])
+        #     market.set_interconnector_losses(loss_functions, interpolation_break_points)
+        #     market.dispatch()
+
+        test_passed = market.is_regional_demand_meet()
+        market.con.close()
+        assert test_passed
+
+
+class HistoricalSpotMarket:
+    def __init__(self, inputs_database, interval):
+        self.con = sqlite3.connect(inputs_database)
+        self.inputs_manager = hi.DBManager(connection=self.con)
+        self.interval = interval
+        self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
+                        'LOWERREG', 'RAISEREG']
+        self.service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
+                                     'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
+                                     'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
+                                     'ENERGY': 'energy'}
+        self.market = markets.Spot()
+
+    def add_unit_bids_to_market(self):
         # Unit info.
-        DUDETAILSUMMARY = inputs_manager.DUDETAILSUMMARY.get_data(interval)
+        DUDETAILSUMMARY = self.inputs_manager.DUDETAILSUMMARY.get_data(self.interval)
         unit_info = hi.format_unit_info(DUDETAILSUMMARY)
 
         # Unit bids.
-        BIDPEROFFER_D = inputs_manager.BIDPEROFFER_D.get_data(interval)
-        BIDDAYOFFER_D = inputs_manager.BIDDAYOFFER_D.get_data(interval)
+        BIDPEROFFER_D = self.inputs_manager.BIDPEROFFER_D.get_data(self.interval)
+        BIDDAYOFFER_D = self.inputs_manager.BIDDAYOFFER_D.get_data(self.interval)
 
         # The unit operating conditions at the start of the historical interval.
-        DISPATCHLOAD = inputs_manager.DISPATCHLOAD.get_data(interval)
+        DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
         DISPATCHLOAD['AGCSTATUS'] = pd.to_numeric(DISPATCHLOAD['AGCSTATUS'])
         unit_limits = hi.determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
 
         # FCAS bid prepocessing
-        BIDPEROFFER_D = \
-            hi.scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
-        BIDPEROFFER_D = \
-            hi.scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
-        BIDPEROFFER_D = \
-            hi.scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
-        BIDPEROFFER_D, BIDDAYOFFER_D = \
-            hi.enforce_preconditions_for_enabling_fcas(
-                BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, unit_limits.loc[:, ['unit', 'capacity']])
+        BIDPEROFFER_D = hi.scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+        BIDPEROFFER_D = hi.scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
+        BIDPEROFFER_D = hi.scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+        BIDPEROFFER_D, BIDDAYOFFER_D = hi.enforce_preconditions_for_enabling_fcas(
+            BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, unit_limits.loc[:, ['unit', 'capacity']])
         BIDPEROFFER_D, BIDDAYOFFER_D = hi.use_historical_actual_availability_to_filter_fcas_bids(
             BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD)
 
@@ -1053,76 +1082,80 @@ def test_hist_dispatch_values_meet_demand_constraints():
         volume_bids = hi.format_volume_bids(BIDPEROFFER_D)
         price_bids = hi.format_price_bids(BIDDAYOFFER_D)
 
+        # Add generators to the market.
+        self.market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])
+
+        # Set volume of each bids.
+        volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
+        self.market.set_unit_volume_bids(volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
+                                                        '6', '7', '8', '9', '10']])
+
+        # Set prices of each bid.
+        price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
+        self.market.set_unit_price_bids(price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
+                                                      '6', '7', '8', '9', '10']])
+
+    def add_interconnectors_to_market(self):
         # Demand on regional basis.
-        DISPATCHREGIONSUM = inputs_manager.DISPATCHREGIONSUM.get_data(interval)
+        DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
         regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
 
         # Interconnector details.
-        INTERCONNECTOR = inputs_manager.INTERCONNECTOR.get_data()
-        INTERCONNECTORCONSTRAINT = inputs_manager.INTERCONNECTORCONSTRAINT.get_data(interval)
-        interconnectors = hi.format_interconnector_definitions(
-            INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
-        interconnectors['from_region_loss_factor'] = 1.0
-        interconnectors['to_region_loss_factor'] = np.where(interconnectors['interconnector'] == 'T-V-MNSP1',
-                                                            0.9839, 1.0)
+        INTERCONNECTOR = self.inputs_manager.INTERCONNECTOR.get_data()
+        INTERCONNECTORCONSTRAINT = self.inputs_manager.INTERCONNECTORCONSTRAINT.get_data(self.interval)
+        interconnectors = hi.format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
+        MNSP_INTERCONNECTOR = self.inputs_manager.MNSP_INTERCONNECTOR.get_data(self.interval)
+        mnsp_transmission_loss_factors = hi.format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
+                                                                                  INTERCONNECTORCONSTRAINT,
+                                                                                  INTERCONNECTOR)
+        interconnectors = hi.add_inerconnector_transmission_loss_factors(interconnectors,
+                                                                         mnsp_transmission_loss_factors)
+
+        bass_link, interconnectors = self._split_out_bass_link(interconnectors)
+        bass_link = hi.split_interconnectors_definitions_into_two_one_directional_links(bass_link)
+        interconnectors = pd.concat([interconnectors, bass_link])
+
         interconnector_loss_coefficients = hi.format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT)
-        LOSSFACTORMODEL = inputs_manager.LOSSFACTORMODEL.get_data(interval)
+        LOSSFACTORMODEL = self.inputs_manager.LOSSFACTORMODEL.get_data(self.interval)
         interconnector_demand_coefficients = hi.format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL)
-        LOSSMODEL = inputs_manager.LOSSMODEL.get_data(interval)
+        LOSSMODEL = self.inputs_manager.LOSSMODEL.get_data(self.interval)
         interpolation_break_points = hi.format_interpolation_break_points(LOSSMODEL)
         loss_functions = hi.create_loss_functions(interconnector_loss_coefficients,
                                                   interconnector_demand_coefficients,
                                                   regional_demand.loc[:, ['region', 'loss_function_demand']])
 
-        # Historical interconnector dispatch
-        DISPATCHINTERCONNECTORRES = inputs_manager.DISPATCHINTERCONNECTORRES.get_data(interval)
-        interconnector_flow = DISPATCHINTERCONNECTORRES.loc[:, ['INTERCONNECTORID', 'MWFLOW']]
-        interconnector_flow.columns = ['interconnector', 'flow']
+        bass_link, loss_functions = self._split_out_bass_link(loss_functions)
+        bass_link = hi.split_interconnector_loss_functions_into_two_directional_links(bass_link)
+        loss_functions = pd.concat([loss_functions, bass_link])
 
-        # Create a market instance.
-        market = markets.Spot()
-
-        # Add generators to the market.
-        market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])
-
-        # Set volume of each bids.
-        volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
-        market.set_unit_volume_bids(volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                        '6', '7', '8', '9', '10']])
-
-        # Set prices of each bid.
-        price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
-        market.set_unit_price_bids(price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                      '6', '7', '8', '9', '10']])
-
-        # Set unit operating limits.
-        market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
-        market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-        market.set_unit_ramp_down_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+        bass_link, interpolation_break_points = self._split_out_bass_link(interpolation_break_points)
+        bass_link = hi.split_interconnector_interpolation_break_points_into_two_directional_links(bass_link)
+        interpolation_break_points = pd.concat([interpolation_break_points, bass_link])
 
         # Create the interconnectors.
-        market.set_interconnectors(interconnectors)
+        self.market.set_interconnectors(interconnectors)
 
         # Create loss functions on per interconnector basis.
-        market.set_interconnector_losses(loss_functions, interpolation_break_points)
+        self.market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
-        vars = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                'LOWERREG', 'RAISEREG']
+    @staticmethod
+    def _split_out_bass_link(interconnectors):
+        bass_link = interconnectors[interconnectors['interconnector']=='T-V-MNSP1']
+        interconnectors = interconnectors[interconnectors['interconnector'] != 'T-V-MNSP1']
+        return bass_link, interconnectors
 
-        service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
-                                'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
-                                'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
-                                'ENERGY': 'energy'}
+    def set_unit_dispatch_to_historical_values(self):
+        DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
 
-        bounds = DISPATCHLOAD.loc[:, ['DUID'] + vars]
-        bounds.columns = ['unit'] + vars
+        bounds = DISPATCHLOAD.loc[:, ['DUID'] + self.services]
+        bounds.columns = ['unit'] + self.services
 
-        bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=vars, type_name='service',
+        bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=self.services, type_name='service',
                                   value_name='dispatched')
 
-        bounds['service'] = bounds['service'].apply(lambda x: service_name_mapping[x])
+        bounds['service'] = bounds['service'].apply(lambda x: self.service_name_mapping[x])
 
-        decision_variables = market.decision_variables['bids'].copy()
+        decision_variables = self.market.decision_variables['bids'].copy()
 
         decision_variables = pd.merge(decision_variables, bounds, on=['unit', 'service'])
 
@@ -1134,41 +1167,48 @@ def test_hist_dispatch_values_meet_demand_constraints():
         decision_variables_remaining_bids = \
             decision_variables.groupby(['unit', 'service'], as_index=False).apply(last_bids)
 
-        decision_variables_first_bid['lower_bound'] = decision_variables_first_bid['dispatched']
-        decision_variables_first_bid['upper_bound'] = decision_variables_first_bid['dispatched']
+        decision_variables_first_bid['lower_bound'] = decision_variables_first_bid['dispatched'] - 0.001
+        decision_variables_first_bid['upper_bound'] = decision_variables_first_bid['dispatched'] + 0.001
         decision_variables_remaining_bids['lower_bound'] = 0.0
         decision_variables_remaining_bids['upper_bound'] = 0.0
 
         decision_variables = pd.concat([decision_variables_first_bid, decision_variables_remaining_bids])
 
-        market.decision_variables['bids'] = decision_variables
+        self.market.decision_variables['bids'] = decision_variables
 
-        flow_variables = market.decision_variables['interconnectors']
+    def set_interconnector_flow_to_historical_values(self):
+        # Historical interconnector dispatch
+        DISPATCHINTERCONNECTORRES = self.inputs_manager.DISPATCHINTERCONNECTORRES.get_data(self.interval)
+        interconnector_flow = DISPATCHINTERCONNECTORRES.loc[:, ['INTERCONNECTORID', 'MWFLOW']]
+        interconnector_flow.columns = ['interconnector', 'flow']
+
+        bass_link, loss_functions = self._split_out_bass_link(interconnector_flow)
+        bass_link = hi.split_interconnector_flow_into_two_directional_links(bass_link)
+        interconnector_flow = pd.concat([interconnector_flow, bass_link])
+
+        flow_variables = self.market.decision_variables['interconnectors']
         flow_variables = pd.merge(flow_variables, interconnector_flow, 'inner', on='interconnector')
-        flow_variables['lower_bound'] = flow_variables['flow']
-        flow_variables['upper_bound'] = flow_variables['flow']
+        flow_variables['lower_bound'] = flow_variables['flow'] - 0.1
+        flow_variables['upper_bound'] = flow_variables['flow'] + 0.1
         flow_variables = flow_variables.drop(['flow'], axis=1)
-        market.decision_variables['interconnectors'] = flow_variables
 
-        market.dispatch()
+        self.market.decision_variables['interconnectors'] = flow_variables
 
-        inter_flows = market.get_interconnector_flows()
-        bass_link_flow = inter_flows[inter_flows['interconnector']=='T-V-MNSP1']['flow'].iloc[0]
+    def dispatch(self):
+        self.market.dispatch()
 
-        if bass_link_flow > 0.0:
-            loss_functions['from_region_loss_share'] = np.where(loss_functions['interconnector']=='T-V-MNSP1', 1.0,
-                                                                loss_functions['from_region_loss_share'])
-            market.set_interconnector_losses(loss_functions, interpolation_break_points)
-            market.dispatch()
-
-        region_summary = market.get_region_dispatch_summary()
+    def is_regional_demand_meet(self, tolerance=0.5):
+        DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
+        regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
+        region_summary = self.market.get_region_dispatch_summary()
         region_summary = pd.merge(region_summary, regional_demand, on='region')
         region_summary['calc_demand'] = region_summary['dispatch'] + region_summary['inflow'] \
                                         - region_summary['interconnector_losses'] - \
                                         region_summary['transmission_losses']
-        region_summary['error'] = region_summary['calc_demand'] - region_summary['demand']
-        x=1
-    con.close()
+        region_summary['diff'] =region_summary['calc_demand'] - region_summary['demand']
+        region_summary['no_error'] = region_summary['diff'].abs() < tolerance
+        return region_summary['no_error'].all()
+
 
 
 
