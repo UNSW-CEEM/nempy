@@ -6,7 +6,7 @@ from nempy import spot_markert_backend as smb
 
 
 class Spot:
-    """Class for constructing and dispatch the spot market on an interval basis."""
+    """Class for constructing and dispatching the spot market on an interval basis."""
 
     def __init__(self, dispatch_interval=5, market_ceiling_price=14000.0, market_floor_price=-1000.0):
         self.dispatch_interval = dispatch_interval
@@ -2044,8 +2044,8 @@ class Spot:
         self.lhs_coefficients[constraints_key + '_deficit'] = lhs
         self.next_variable_id = max(deficit_variables['variable_id']) + 1
 
-    @check.pre_dispatch
-    def dispatch(self):
+    #@check.pre_dispatch
+    def dispatch(self, price_market_constraints=True):
         """Combines the elements of the linear program and solves to find optimal dispatch.
 
         Examples
@@ -2256,7 +2256,7 @@ class Spot:
                 si.get_optimal_values_of_decision_variables(self.decision_variables[var_group])
 
         # If there are market constraints then calculate their associated prices.
-        if self.market_constraints_rhs_and_type:
+        if self.market_constraints_rhs_and_type and price_market_constraints:
             for constraint_group in self.market_constraints_rhs_and_type:
                 constraints_to_price = list(self.market_constraints_rhs_and_type[constraint_group]['constraint_id'])
                 prices = si.price_constraints(constraints_to_price)

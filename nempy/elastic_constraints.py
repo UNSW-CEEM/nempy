@@ -78,7 +78,8 @@ def create_deficit_variables(constraint_rhs, next_variable_id):
     inequalities_lhs = inequalities_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
     if not equalities.empty:
-        next_variable_id = inequalities['variable_id'].max() + 1
+        if not inequalities.empty:
+            next_variable_id = inequalities['variable_id'].max() + 1
         equalities_up = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)
         next_variable_id = equalities_up['variable_id'].max() + 1
         equalities_down = hf.save_index(equalities.reset_index(drop=True), 'variable_id', next_variable_id)

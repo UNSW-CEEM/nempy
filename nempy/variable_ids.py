@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from nempy import helper_functions as hf
 
 
@@ -107,8 +108,8 @@ def bids(volume_bids, unit_info, next_variable_id):
     # Get a list of all the columns that contain volume bids.
     bid_bands = [col for col in volume_bids.columns if col not in ['unit', 'service']]
     # Reshape the table so each bid band is on it own row.
-    decision_variables = hf.stack_columns(volume_bids, cols_to_keep=['unit', 'service'], cols_to_stack=bid_bands,
-                                          type_name='capacity_band', value_name='upper_bound')
+    decision_variables = hf.stack_columns(volume_bids, cols_to_keep=['unit', 'service'],
+                                          cols_to_stack=bid_bands, type_name='capacity_band', value_name='upper_bound')
     decision_variables = decision_variables[decision_variables['upper_bound'] >= 0.0001]
     # Group units together in the decision variable table.
     decision_variables = decision_variables.sort_values(['unit', 'capacity_band'])
@@ -118,12 +119,10 @@ def bids(volume_bids, unit_info, next_variable_id):
     decision_variables['lower_bound'] = 0.0
     decision_variables['type'] = 'continuous'
 
-    # Map the variables into all constraints with the same unit and service type of energy.
     constraint_map = decision_variables.loc[:, ['variable_id', 'unit', 'service']]
-    # Map variables into all constraints in their region and with service type of energy.
-    constraint_map = pd.merge(constraint_map, unit_info.loc[:, ['unit', 'region']], 'inner', on='unit')
-    # The variable specific contribution to these constraints is always zero.
-    constraint_map['coefficient'] = 1.0
+    constraint_map = pd.merge(constraint_map, unit_info.loc[:, ['unit', 'region', 'dispatch_type']], 'inner', on='unit')
+    constraint_map['coefficient'] = np.where((constraint_map['dispatch_type'] == 'load') &
+                                             (constraint_map['service'] == 'energy'), -1.0, 1.0)
 
     constraint_map = constraint_map.loc[:,  ['variable_id', 'unit', 'region', 'service', 'coefficient']]
     decision_variables = \
