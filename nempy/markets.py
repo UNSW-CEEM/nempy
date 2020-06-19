@@ -212,18 +212,10 @@ class Spot:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-
-        # Create unit variable ids and their mapping into constraints.
-        self.decision_variables['bids'], variable_to_constraint_map = \
+        self.decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map = \
             variable_ids.bids(volume_bids, self.unit_info, self.next_variable_id)
-
-        # Split constraint mapping up on a regional and unit level basis.
-        self.variable_to_constraint_map['regional']['bids'] = \
-            variable_to_constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
-        self.variable_to_constraint_map['unit_level']['bids'] = \
-            variable_to_constraint_map.loc[:, ['variable_id', 'unit', 'service', 'coefficient']]
-
-        # Update the variable id counter:
+        self.variable_to_constraint_map['regional']['bids'] = variable_to_regional_constraint_map
+        self.variable_to_constraint_map['unit_level']['bids'] = variable_to_unit_level_constraint_map
         self.next_variable_id = max(self.decision_variables['bids']['variable_id']) + 1
 
     @check.energy_bid_ids_exist

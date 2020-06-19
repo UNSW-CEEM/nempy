@@ -2165,12 +2165,12 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     fcas_bids = fcas_bids.drop(['band_greater_than_zero'], axis=1)
 
     # Filter out fcas_bids where their maximum energy output is less than the fcas enablement minimum value. If the
-    fcas_bids = pd.merge(fcas_bids, capacity_limits, 'inner', left_on='DUID', right_on='unit')
-    fcas_bids = fcas_bids[fcas_bids['capacity'] >= fcas_bids['ENABLEMENTMIN']]
+    fcas_bids = pd.merge(fcas_bids, capacity_limits, 'left', left_on='DUID', right_on='unit')
+    fcas_bids = fcas_bids[(fcas_bids['capacity'] >= fcas_bids['ENABLEMENTMIN']) | (fcas_bids['capacity'].isna())]
     fcas_bids = fcas_bids.drop(['unit', 'capacity'], axis=1)
 
     # Filter out fcas_bids where the enablement max is not greater than zero.
-    fcas_bids = fcas_bids[fcas_bids['ENABLEMENTMAX'] > 0.0]
+    fcas_bids = fcas_bids[fcas_bids['ENABLEMENTMAX'] >= 0.0]
 
     # Filter out fcas_bids where the unit is not initially operating between the enablement min and max.
     fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'AGCSTATUS']], 'inner', on='DUID')
@@ -2178,7 +2178,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
                           (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'])]
 
     # Filter out fcas_bids where the AGC status is not set to 1.0
-    fcas_bids = fcas_bids[fcas_bids['AGCSTATUS'] == 1.0]
+    fcas_bids = fcas_bids[~((fcas_bids['AGCSTATUS'] == 0.0) & (fcas_bids['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])))]
     fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW'], axis=1)
 
     # Filter the fcas price bids use the remaining volume bids.
@@ -2595,7 +2595,7 @@ def use_historical_actual_availability_to_filter_fcas_bids(BIDPEROFFER_D, BIDDAY
     """Where AEMO determined zero actual availability of an FCAS offer filter it from the set of bids.
 
     Note there is an additional condition that the historical dispatch of the service must be zero, sometimes
-    the MMS table dispatch load records a zero availability when there was a nom-zero dispatch.
+    the MMS table dispatch load records a zero availability when there was a non-zero dispatch.
 
     Also energy bids are excluded from filtering.
 

@@ -27,13 +27,15 @@ def bids(volume_bids, unit_info, next_variable_id):
 
     >>> unit_info = pd.DataFrame({
     ...   'unit': ['A', 'B'],
-    ...   'region': ['NSW', 'X']})
+    ...   'region': ['NSW', 'X'],
+    ...   'dispatch_type': ['generator', 'load']})
 
     >>> next_variable_id = 0
 
     Create the decision variables and their mapping into constraints.
 
-    >>> decision_variables, constraint_map = bids(volume_bids, unit_info, next_variable_id)
+    >>> decision_variables, unit_level_constraint_map, regional_constraint_map = bids(
+    ...   volume_bids, unit_info, next_variable_id)
 
     >>> print(decision_variables)
       unit capacity_band service  variable_id  lower_bound  upper_bound        type
@@ -42,12 +44,19 @@ def bids(volume_bids, unit_info, next_variable_id):
     2    B             1  energy            2          0.0         50.0  continuous
     3    B             2  energy            3          0.0         30.0  continuous
 
-    >>> print(constraint_map)
-       variable_id unit region service  coefficient
-    0            0    A    NSW  energy          1.0
-    1            1    A    NSW  energy          1.0
-    2            2    B      X  energy          1.0
-    3            3    B      X  energy          1.0
+    >>> print(unit_level_constraint_map)
+       variable_id unit service  coefficient
+    0            0    A  energy          1.0
+    1            1    A  energy          1.0
+    2            2    B  energy          1.0
+    3            3    B  energy          1.0
+
+    >>> print(regional_constraint_map)
+       variable_id region service  coefficient
+    0            0    NSW  energy          1.0
+    1            1    NSW  energy          1.0
+    2            2      X  energy         -1.0
+    3            3      X  energy         -1.0
 
     Parameters
     ----------
@@ -90,12 +99,21 @@ def bids(volume_bids, unit_info, next_variable_id):
         type           the type of variable, is continuous for bids  (as `str`)
         =============  ===============================================================
 
-    constraint_map : pd.DataFrame
+    unit_level_constraint_map : pd.DataFrame
 
         =============  =============================================================================
         Columns:       Description:
         variable_id    the id of the variable (as `np.int64`)
         unit           the unit level constraints the variable should map to (as `str`)
+        service        the service type of the constraints the variables should map to (as `str`)
+        coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
+        =============  =============================================================================
+
+    regional_constraint_map : pd.DataFrame
+
+        =============  =============================================================================
+        Columns:       Description:
+        variable_id    the id of the variable (as `np.int64`)
         region         the regional constraints the variable should map to (as `str`)
         service        the service type of the constraints the variables should map to (as `str`)
         coefficient    the upper bound of the variable, the volume bid (as `np.float64`)
@@ -121,12 +139,15 @@ def bids(volume_bids, unit_info, next_variable_id):
 
     constraint_map = decision_variables.loc[:, ['variable_id', 'unit', 'service']]
     constraint_map = pd.merge(constraint_map, unit_info.loc[:, ['unit', 'region', 'dispatch_type']], 'inner', on='unit')
-    constraint_map['coefficient'] = np.where((constraint_map['dispatch_type'] == 'load') &
-                                             (constraint_map['service'] == 'energy'), -1.0, 1.0)
+    regional_constraint_map = constraint_map.loc[:,  ['variable_id', 'region', 'service', 'dispatch_type']]
+    regional_constraint_map['coefficient'] = np.where((regional_constraint_map['dispatch_type'] == 'load') &
+                                             (regional_constraint_map['service'] == 'energy'), -1.0, 1.0)
+    regional_constraint_map = regional_constraint_map.drop('dispatch_type', axis=1)
+    unit_level_constraint_map = constraint_map.loc[:,  ['variable_id', 'unit', 'service']]
+    unit_level_constraint_map['coefficient'] = 1.0
 
-    constraint_map = constraint_map.loc[:,  ['variable_id', 'unit', 'region', 'service', 'coefficient']]
     decision_variables = \
         decision_variables.loc[:, ['unit', 'capacity_band', 'service', 'variable_id', 'lower_bound', 'upper_bound',
                                    'type']]
 
-    return decision_variables, constraint_map
+    return decision_variables, unit_level_constraint_map, regional_constraint_map
