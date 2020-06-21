@@ -479,11 +479,13 @@ def test_hist_dispatch_values_meet_demand():
         assert test_passed
 
 
-def prices_full_featured():
-    inputs_database = 'tests/test_files/historical_inputs.db'
+def test_prices_full_featured():
+    inputs_database = 'test_files/historical_inputs.db'
     outputs = []
     for interval in get_test_intervals():
         print(interval)
+        if interval not in ['2019/01/05 14:10:00']:
+            continue
         # if interval in ['2019/01/28 03:35:00', '2019/01/28 20:50:00']:
         #     continue
         # if interval in ['2019/01/29 20:40:00']:
@@ -496,10 +498,10 @@ def prices_full_featured():
         market.set_unit_limit_constraints()
         market.set_region_demand_constraints()
         market.dispatch()
-        prices = market.get_price_comparison()
-        outputs.append(prices)
-    outputs = pd.concat(outputs)
-    outputs.to_csv('price_comp.csv')
+        disp = market.get_dispatch_comparison().sort_values('diff')
+        outputs.append(disp)
+    # outputs = pd.concat(outputs)
+    # outputs.to_csv('price_comp.csv')
 
 
 class HistoricalSpotMarket:
@@ -663,7 +665,6 @@ class HistoricalSpotMarket:
         self.market.link_interconnectors_to_generic_constraints(interconnector_generic_lhs)
         self.market.link_regions_to_generic_constraints(region_generic_lhs)
 
-
     def set_unit_dispatch_to_historical_values(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
 
@@ -808,6 +809,17 @@ class HistoricalSpotMarket:
         historical_prices.columns = ['time', 'region', 'service', 'hist_price']
         prices = pd.merge(prices, historical_prices, on=['time', 'region', 'service'])
         return prices
+
+    def get_dispatch_comparison(self):
+        DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
+        nempy_dispatch = self.market.get_unit_dispatch()
+        comp = pd.merge(nempy_dispatch[nempy_dispatch['service'] == 'energy'],
+                        DISPATCHLOAD.loc[:, ['DUID', 'TOTALCLEARED']],
+                        'left', left_on='unit', right_on='DUID')
+        comp['diff'] = comp['dispatch'] - comp['TOTALCLEARED']
+        comp = pd.merge(comp, self.market.unit_info.loc[:, ['unit', 'dispatch_type']], on='unit')
+        comp['diff'] = np.where(comp['dispatch_type'] == 'load', comp['diff'] * -1, comp['diff'])
+        return comp
 
 
 

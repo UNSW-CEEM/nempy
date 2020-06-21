@@ -327,7 +327,7 @@ class Spot:
             BidsNotMonotonicIncreasing
                 If the bids band price for all units are not monotonic increasing.
         """
-        energy_objective_function = objective_function.bids(self.decision_variables['bids'], price_bids)
+        energy_objective_function = objective_function.bids(self.decision_variables['bids'], price_bids, self.unit_info)
         if 'loss_factor' in self.unit_info.columns:
             energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function,
                                                                                  self.unit_info)

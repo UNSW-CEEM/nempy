@@ -1,8 +1,9 @@
 import pandas as pd
+import numpy as np
 from nempy import helper_functions as hf
 
 
-def bids(variable_ids, price_bids):
+def bids(variable_ids, price_bids, unit_info):
     """Create the cost coefficients of energy in bids in the objective function.
 
     This function defines the cost associated with each decision variable that represents a unit's energy bid. Costs are
@@ -55,6 +56,11 @@ def bids(variable_ids, price_bids):
                                   type_name='capacity_band', value_name='cost')
     # Match bid cost with existing variable ids
     objective_function = pd.merge(variable_ids, price_bids, how='inner', on=['unit', 'service', 'capacity_band'])
+    objective_function = pd.merge(objective_function, unit_info.loc[:, ['unit', 'dispatch_type']], how='inner',
+                                  on=['unit'])
+    objective_function['cost'] = np.where((objective_function['dispatch_type'] == 'load') &
+                                             (objective_function['service'] == 'energy'),
+                                          -1.0 * objective_function['cost'], objective_function['cost'])
     return objective_function
 
 
