@@ -919,6 +919,8 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['fcas_max_availability'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+    #def minimise_unit_output_differences
+
     @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
     @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
     @check.repeated_rows('regulation_units', ['unit', 'service'], arg=1)

@@ -2428,10 +2428,10 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     raise_reg['RAMPMAX'] = raise_reg['RAMPUPRATE'] * (5 / 60)
 
     # Check these ramp maxs are consistent with other AEMO outputs, otherwise increase untill consistency is achieved.
-    lower_reg['RAMPMAX'] = np.where(lower_reg['RAMPMAX'] < lower_reg['LOWERREGACTUALAVAILABILITY'],
-                                    lower_reg['LOWERREGACTUALAVAILABILITY'], lower_reg['RAMPMAX'])
-    raise_reg['RAMPMAX'] = np.where(raise_reg['RAMPMAX'] < raise_reg['RAISEREGACTUALAVAILABILITY'],
-                                    raise_reg['RAISEREGACTUALAVAILABILITY'], raise_reg['RAMPMAX'])
+    # lower_reg['RAMPMAX'] = np.where(lower_reg['RAMPMAX'] < lower_reg['LOWERREGACTUALAVAILABILITY'],
+    #                                 lower_reg['LOWERREGACTUALAVAILABILITY'], lower_reg['RAMPMAX'])
+    # raise_reg['RAMPMAX'] = np.where(raise_reg['RAMPMAX'] < raise_reg['RAISEREGACTUALAVAILABILITY'],
+    #                                 raise_reg['RAISEREGACTUALAVAILABILITY'], raise_reg['RAMPMAX'])
 
     lower_reg = lower_reg.drop(['RAMPDOWNRATE'], axis=1)
     raise_reg = raise_reg.drop(['RAMPUPRATE'], axis=1)
