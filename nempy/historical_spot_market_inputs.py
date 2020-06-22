@@ -2412,16 +2412,31 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
         ===============  ======================================================================================
 
     """
+    units_with_scada_ramp_up_rates = list(DISPATCHLOAD[(~DISPATCHLOAD['RAMPUPRATE'].isna()) & DISPATCHLOAD['RAMPUPRATE'] != 0]['DUID'])
+    units_with_no_scada_ramp_up_rates = list(DISPATCHLOAD[~DISPATCHLOAD['DUID'].isin(units_with_scada_ramp_up_rates)]['DUID'])
+    units_with_scada_ramp_down_rates = list(DISPATCHLOAD[(~DISPATCHLOAD['RAMPDOWNRATE'].isna()) & DISPATCHLOAD['RAMPDOWNRATE'] != 0]['DUID'])
+    units_with_no_scada_ramp_down_rates = list(DISPATCHLOAD[~DISPATCHLOAD['DUID'].isin(units_with_scada_ramp_down_rates)]['DUID'])
+    DISPATCHLOAD = DISPATCHLOAD[DISPATCHLOAD['DUID'].isin(units_with_scada_ramp_up_rates +
+                                                          units_with_scada_ramp_down_rates)]
+
     # Split bid based on the scaling that needs to be done.
-    lower_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG']
-    raise_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG']
-    bids_not_subject_to_scaling = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
+    lower_reg = BIDPEROFFER_D[(BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG') &
+                              BIDPEROFFER_D['DUID'].isin(units_with_scada_ramp_down_rates)]
+    raise_reg = BIDPEROFFER_D[(BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG') &
+                              BIDPEROFFER_D['DUID'].isin(units_with_scada_ramp_up_rates)]
+    bids_not_subject_to_scaling_1 = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
+    bids_not_subject_to_scaling_2 = BIDPEROFFER_D[(BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG') &
+                                                  (BIDPEROFFER_D['DUID'].isin(units_with_no_scada_ramp_up_rates))]
+    bids_not_subject_to_scaling_3 = BIDPEROFFER_D[(BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG') &
+                                                  (BIDPEROFFER_D['DUID'].isin(units_with_no_scada_ramp_down_rates))]
+    bids_not_subject_to_scaling = pd.concat([bids_not_subject_to_scaling_1,
+                                             bids_not_subject_to_scaling_2,
+                                             bids_not_subject_to_scaling_3])
+
 
     # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
-    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPDOWNRATE', 'LOWERREGACTUALAVAILABILITY']],
-                         'inner', on='DUID')
-    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPUPRATE', 'RAISEREGACTUALAVAILABILITY']],
-                         'inner', on='DUID')
+    lower_reg = pd.merge(lower_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPDOWNRATE']], 'inner', on='DUID')
+    raise_reg = pd.merge(raise_reg, DISPATCHLOAD.loc[:, ['DUID', 'RAMPUPRATE']], 'inner', on='DUID')
 
     # Calculate the max FCAS possible based on ramp rates.
     lower_reg['RAMPMAX'] = lower_reg['RAMPDOWNRATE'] * (5 / 60)

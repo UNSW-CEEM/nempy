@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import random
 from nempy import historical_spot_market_inputs as hi, markets, helper_functions as hf, \
     historical_interconnectors as hii
+from nempy import historical_inputs_from_xml as hist_xml
 from time import time
 
 
@@ -198,11 +199,14 @@ def test_determine_unit_limits():
 def test_fcas_trapezium_scaled_availability():
     inputs_database = 'test_files/historical_inputs.db'
     for interval in get_test_intervals():
+        # if interval != '2019/01/16 12:20:00':
+        #     continue
+        print(interval)
         market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
         market.add_unit_bids_to_market()
         market.set_unit_fcas_constraints()
         market.set_unit_limit_constraints()
-        market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
+        market.set_unit_dispatch_to_historical_values(wiggle_room=0.0001)
         market.dispatch(calc_prices=False)
         market.do_fcas_availabilities_match_historical()
 
@@ -319,9 +323,13 @@ def test_hist_dispatch_values_meet_demand():
 def test_prices_full_featured():
     inputs_database = 'test_files/historical_inputs.db'
     outputs = []
+    c = 0
     for interval in get_test_intervals():
+        c += 1
+        if c > 10:
+            break
         print(interval)
-        if interval not in ['2019/01/30 17:10:00']:
+        if interval not in ['2019/01/23 14:20:00']:
             continue
         # if interval in ['2019/01/28 03:35:00', '2019/01/28 20:50:00']:
         #     continue
@@ -355,22 +363,43 @@ class HistoricalSpotMarket:
         self.market = markets.Spot()
 
     def add_unit_bids_to_market(self):
+
+        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=self.interval)
+        initial_cons = xml_inputs.get_unit_initial_conditions_dataframe()
+        self.initial_cons = initial_cons
+
+        x = xml_inputs.get_unit_fast_start_parameters()
+
         # Unit info.
         DUDETAILSUMMARY = self.inputs_manager.DUDETAILSUMMARY.get_data(self.interval)
         unit_info = hi.format_unit_info(DUDETAILSUMMARY)
 
         # Unit bids.
         BIDPEROFFER_D = self.inputs_manager.BIDPEROFFER_D.get_data(self.interval)
+        BIDPEROFFER_D = xml_inputs.get_unit_volume_bids()
         BIDDAYOFFER_D = self.inputs_manager.BIDDAYOFFER_D.get_data(self.interval)
 
         # The unit operating conditions at the start of the historical interval.
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
         DISPATCHLOAD['AGCSTATUS'] = pd.to_numeric(DISPATCHLOAD['AGCSTATUS'])
+        # DISPATCHLOAD = pd.merge(DISPATCHLOAD, initial_cons.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']], 'left', on='DUID')
+        # DISPATCHLOAD['RAMPUPRATE'] = np.where((~DISPATCHLOAD['RAMPUPRATE_y'].isna()) &
+        #                                       (DISPATCHLOAD['RAMPUPRATE_y'] < DISPATCHLOAD['RAMPUPRATE_x']),
+        #                                       DISPATCHLOAD['RAMPUPRATE_y'],
+        #                                       DISPATCHLOAD['RAMPUPRATE_x'])
+        # DISPATCHLOAD['RAMPDOWNRATE'] = np.where((~DISPATCHLOAD['RAMPDOWNRATE_y'].isna()) &
+        #                                         (DISPATCHLOAD['RAMPDOWNRATE_y'] < DISPATCHLOAD['RAMPDOWNRATE_x']),
+        #                                         DISPATCHLOAD['RAMPDOWNRATE_y'],
+        #                                         DISPATCHLOAD['RAMPDOWNRATE_x'])
+        # DISPATCHLOAD = DISPATCHLOAD.drop(['RAMPUPRATE_y', 'RAMPUPRATE_x', 'RAMPDOWNRATE_y', 'RAMPDOWNRATE_x'], axis=1)
+        # DISPATCHLOAD['INITIALMW'] = np.where(~DISPATCHLOAD['INITIALMW_y'].isna(), DISPATCHLOAD['INITIALMW_y'],
+        #                                       DISPATCHLOAD['INITIALMW_x'])
+        # DISPATCHLOAD = DISPATCHLOAD.drop(['INITIALMW_y', 'INITIALMW_x'], axis=1)
         self.unit_limits = hi.determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
 
         # FCAS bid prepocessing
         BIDPEROFFER_D = hi.scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
-        BIDPEROFFER_D = hi.scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
+        BIDPEROFFER_D = hi.scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_cons)
         BIDPEROFFER_D = hi.scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
         BIDPEROFFER_D, BIDDAYOFFER_D = hi.enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, self.unit_limits.loc[:, ['unit', 'capacity']])
@@ -411,9 +440,19 @@ class HistoricalSpotMarket:
         regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
         self.market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
         self.market.make_constraints_elastic('energy_and_regulation_capacity', 14000.0)
-        self.market.set_joint_ramping_constraints(regulation_trapeziums.loc[:, ['unit', 'service']],
-                                             self.unit_limits.loc[:, ['unit', 'initial_output',
-                                                                 'ramp_down_rate', 'ramp_up_rate']])
+        initial_cons = self.initial_cons.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
+        units_with_scada_ramp_rates = list(
+            initial_cons[(~initial_cons['RAMPUPRATE'].isna()) & initial_cons['RAMPUPRATE'] != 0]['DUID'])
+        initial_cons = initial_cons[initial_cons['DUID'].isin(units_with_scada_ramp_rates)]
+        initial_cons.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
+        reg_units = regulation_trapeziums.loc[:, ['unit', 'service']]
+
+        reg_units = pd.merge(initial_cons, regulation_trapeziums.loc[:, ['unit', 'service']], 'inner', on='unit')
+        reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_up_rate'].isna()) |
+                              (reg_units['service'] == 'lower_reg') & (~reg_units['ramp_down_rate'].isna())]
+        reg_units = reg_units.loc[:, ['unit', 'service']]
+        initial_cons = initial_cons.fillna(0)
+        self.market.set_joint_ramping_constraints(reg_units, initial_cons)
         self.market.make_constraints_elastic('joint_ramping', 14000.0)
 
         # Create constraints that enforce the lower and upper slope of the FCAS contingency
@@ -692,6 +731,7 @@ class HistoricalSpotMarket:
         availabilities['error'] = availabilities['availability_measured'] - availabilities['availability']
 
         availabilities['match'] = availabilities['error'].abs() < 0.1
+        availabilities = availabilities.sort_values('match')
         return availabilities
 
 
