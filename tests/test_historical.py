@@ -5,8 +5,9 @@ import numpy as np
 import os.path
 from datetime import datetime, timedelta
 import random
+import pytest
 from nempy import historical_spot_market_inputs as hi, markets, helper_functions as hf, \
-    historical_interconnectors as hii
+    historical_interconnectors as hii, historical_unit_limits
 from nempy import historical_inputs_from_xml as hist_xml
 from time import time
 
@@ -196,6 +197,107 @@ def test_determine_unit_limits():
         assert (unit_limits['assumption'].all())
 
 
+def test_if_schudeled_units_dispatched_above_bid_availability():
+    con = sqlite3.connect('test_files/historical_inputs.db')
+    inputs_manager = hi.DBManager(connection=con)
+    for interval in get_test_intervals():
+        print(interval)
+        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
+        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        TOTAL_UNIT_ENERGY_OFFER_VIOLATION = xml_inputs.get_non_intervention_violations()[
+            'TOTAL_UNIT_ENERGY_OFFER_VIOLATION']
+        bid_availability = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'RAMPDOWNRATE',
+                                                                     'RAMPUPRATE']]
+        bid_availability = bid_availability[bid_availability['BIDTYPE'] == 'ENERGY']
+        semi_dispatch_flag = xml_inputs.get_unit_fast_start_parameters().loc[:, ['DUID', 'SEMIDISPATCH']]
+        schedualed_units = semi_dispatch_flag[semi_dispatch_flag['SEMIDISPATCH'] == 0.0]
+        initial_cons = xml_inputs.get_unit_initial_conditions_dataframe().loc[:, ['DUID', 'INITIALMW']]
+        bid_availability = pd.merge(bid_availability, schedualed_units, 'inner', on='DUID')
+        bid_availability = pd.merge(bid_availability, dispatch_load, 'inner', on='DUID')
+        bid_availability = pd.merge(bid_availability, initial_cons, 'inner', on='DUID')
+        bid_availability['RAMPMIN'] = bid_availability['INITIALMW'] - bid_availability['RAMPDOWNRATE'] / 12
+        bid_availability['MAXAVAIL'] = np.where(bid_availability['RAMPMIN'] > bid_availability['MAXAVAIL'],
+                                                bid_availability['RAMPMIN'], bid_availability['MAXAVAIL'])
+        bid_availability['violation'] = np.where(bid_availability['TOTALCLEARED'] > bid_availability['MAXAVAIL'],
+                                                 bid_availability['TOTALCLEARED'] - bid_availability['MAXAVAIL'], 0.0)
+        measured_violation = bid_availability['violation'].sum()
+        assert measured_violation == pytest.approx(TOTAL_UNIT_ENERGY_OFFER_VIOLATION, abs=0.1)
+
+
+def test_if_schudeled_units_dispatched_above_UIGF():
+    con = sqlite3.connect('test_files/historical_inputs.db')
+    inputs_manager = hi.DBManager(connection=con)
+    for interval in get_test_intervals():
+        # if interval != '2019/01/25 16:15:00':
+        #     continue
+        print(interval)
+        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
+        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        UGIF_total_violation = xml_inputs.get_non_intervention_violations()['TOTAL_UGIF_VIOLATION']
+        ramp_rates = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE']]
+        ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
+        initial_cons = xml_inputs.get_unit_initial_conditions_dataframe().loc[:, ['DUID', 'INITIALMW']]
+        UGIFs = xml_inputs.get_UGIF_values().loc[:, ['DUID', 'UGIF']]
+        availability = pd.merge(UGIFs, dispatch_load, 'inner', on='DUID')
+        availability = pd.merge(availability, initial_cons, 'inner', on='DUID')
+        availability = pd.merge(availability, ramp_rates, 'inner', on='DUID')
+        availability['violation'] = np.where(availability['TOTALCLEARED'] > availability['UGIF'],
+                                             availability['TOTALCLEARED'] - availability['UGIF'], 0.0)
+        measured_violation = availability['violation'].sum()
+        assert measured_violation == pytest.approx(UGIF_total_violation, abs=0.001)
+
+
+def test_if_ramp_rates_calculated_correctly():
+    con = sqlite3.connect('test_files/historical_inputs.db')
+    inputs_manager = hi.DBManager(connection=con)
+    for interval in get_test_intervals():
+        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
+        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        TOTAL_RAMP_RATE_VIOLATION = xml_inputs.get_non_intervention_violations()['TOTAL_RAMP_RATE_VIOLATION']
+        ramp_rates = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
+        initial_cons = xml_inputs.get_unit_initial_conditions_dataframe().loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE',
+                                                                                  'RAMPUPRATE']]
+        ramp_rates = pd.merge(ramp_rates, initial_cons, 'left', on='DUID')
+        ramp_rates['RAMPDOWNRATE'] = np.where(~ramp_rates['RAMPDOWNRATE_y'].isna(), ramp_rates['RAMPDOWNRATE_y'],
+                                              ramp_rates['RAMPDOWNRATE_x'])
+        ramp_rates['RAMPUPRATE'] = np.where(~ramp_rates['RAMPUPRATE_y'].isna(), ramp_rates['RAMPUPRATE_y'],
+                                            ramp_rates['RAMPUPRATE_x'])
+        availability = pd.merge(dispatch_load, ramp_rates, 'inner', on='DUID')
+        availability['RAMPMIN'] = availability['INITIALMW'] - availability['RAMPDOWNRATE'] / 12
+        availability['RAMPMAX'] = availability['INITIALMW'] + availability['RAMPUPRATE'] / 12
+        availability['violation'] = np.where((availability['TOTALCLEARED'] > availability['RAMPMAX']),
+                                             availability['TOTALCLEARED'] - availability['RAMPMAX'], 0.0)
+        availability['violation'] = np.where((availability['TOTALCLEARED'] < availability['RAMPMIN']),
+                                             availability['RAMPMIN'] - availability['TOTALCLEARED'], 0.0)
+        measured_violation = availability['violation'].sum()
+        assert measured_violation == pytest.approx(TOTAL_RAMP_RATE_VIOLATION, abs=0.1)
+
+
+def test_fast_start_constraints():
+    con = sqlite3.connect('test_files/historical_inputs.db')
+    inputs_manager = hi.DBManager(connection=con)
+    for interval in get_test_intervals():
+        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
+        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        fast_start_profiles = xml_inputs.get_unit_fast_start_parameters()
+        c1 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
+        c2 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
+        c3 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
+        c4 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
+        constraints = pd.concat([c1, c2, c3, c4])
+        constraints = pd.merge(constraints, dispatch_load, left_on='unit', right_on='DUID')
+        constraints['violation'] = np.where((constraints['TOTALCLEARED'] > constraints['max']),
+                                            constraints['TOTALCLEARED'] - constraints['max'], 0.0)
+        constraints['violation'] = np.where((constraints['TOTALCLEARED'] < constraints['min']),
+                                            constraints['min'] - constraints['TOTALCLEARED'], 0.0)
+        measured_violation = constraints['violation'].sum()
+        TOTAL_FAST_START_VIOLATION = xml_inputs.get_non_intervention_violations()['TOTAL_FAST_START_VIOLATION']
+        if measured_violation > 0.0:
+            x=1
+        assert measured_violation == pytest.approx(TOTAL_FAST_START_VIOLATION, abs=0.1)
+
+
 def test_fcas_trapezium_scaled_availability():
     inputs_database = 'test_files/historical_inputs.db'
     for interval in get_test_intervals():
@@ -355,7 +457,7 @@ class HistoricalSpotMarket:
         self.inputs_manager = hi.DBManager(connection=self.con)
         self.interval = interval
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                        'LOWERREG', 'RAISEREG']
+                         'LOWERREG', 'RAISEREG']
         self.service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
                                      'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
@@ -364,11 +466,9 @@ class HistoricalSpotMarket:
 
     def add_unit_bids_to_market(self):
 
-        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=self.interval)
-        initial_cons = xml_inputs.get_unit_initial_conditions_dataframe()
+        self.xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=self.interval)
+        initial_cons = self.xml_inputs.get_unit_initial_conditions_dataframe()
         self.initial_cons = initial_cons
-
-        x = xml_inputs.get_unit_fast_start_parameters()
 
         # Unit info.
         DUDETAILSUMMARY = self.inputs_manager.DUDETAILSUMMARY.get_data(self.interval)
@@ -408,7 +508,7 @@ class HistoricalSpotMarket:
 
         # Change bidding data to conform to nempy input format.
         volume_bids = hi.format_volume_bids(self.BIDPEROFFER_D)
-        price_bids = hi.format_price_bids(self.BIDDAYOFFER_D )
+        price_bids = hi.format_price_bids(self.BIDDAYOFFER_D)
 
         # Add generators to the market.
         self.market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])
@@ -416,18 +516,20 @@ class HistoricalSpotMarket:
         # Set volume of each bids.
         volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
         self.market.set_unit_volume_bids(volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                        '6', '7', '8', '9', '10']])
+                                                             '6', '7', '8', '9', '10']])
 
         # Set prices of each bid.
         price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
         self.market.set_unit_price_bids(price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                      '6', '7', '8', '9', '10']])
+                                                           '6', '7', '8', '9', '10']])
 
     def set_unit_limit_constraints(self):
         # Set unit operating limits.
+        x = self.xml_inputs.get_unit_fast_start_parameters()
         self.market.set_unit_capacity_constraints(self.unit_limits.loc[:, ['unit', 'capacity']])
         self.market.set_unit_ramp_up_constraints(self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-        self.market.set_unit_ramp_down_constraints(self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+        self.market.set_unit_ramp_down_constraints(
+            self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
 
     def set_unit_fcas_constraints(self):
         # Create constraints that enforce the top of the FCAS trapezium.
@@ -497,7 +599,6 @@ class HistoricalSpotMarket:
         bass_link_reverse_direction = hii.create_reverse_flow_interconnectors(bass_link)
         interconnector_generic_lhs = pd.concat([interconnector_generic_lhs, bass_link_forward_direction,
                                                 bass_link_reverse_direction])
-
 
         self.market.set_generic_constraints(generic_rhs)
         self.market.make_constraints_elastic('generic', violation_cost=0.0)
@@ -612,7 +713,7 @@ class HistoricalSpotMarket:
         region_summary['calc_demand'] = region_summary['dispatch'] + region_summary['inflow'] \
                                         - region_summary['interconnector_losses'] - \
                                         region_summary['transmission_losses']
-        region_summary['diff'] =region_summary['calc_demand'] - region_summary['demand']
+        region_summary['diff'] = region_summary['calc_demand'] - region_summary['demand']
         region_summary['no_error'] = region_summary['diff'].abs() < tolerance
         return region_summary['no_error'].all()
 
@@ -733,8 +834,3 @@ class HistoricalSpotMarket:
         availabilities['match'] = availabilities['error'].abs() < 0.1
         availabilities = availabilities.sort_values('match')
         return availabilities
-
-
-
-
-

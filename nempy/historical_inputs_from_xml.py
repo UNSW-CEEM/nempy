@@ -18,6 +18,8 @@ class xml_inputs:
         Path(cache_folder).mkdir(parents=False, exist_ok=True)
         if not self.interval_inputs_in_cache():
             self.download_xml_from_nemweb()
+            if not self.interval_inputs_in_cache():
+                raise ValueError('File not downloaded.')
         self.load_xml()
 
     def interval_inputs_in_cache(self):
@@ -31,7 +33,11 @@ class xml_inputs:
         interval_number = self.get_interval_number_as_str()
         base_name = "NEMSPDOutputs_{year}{month}{day}{interval_number}00.loaded"
         name = base_name.format(year=year, month=month, day=day, interval_number=interval_number)
-        return name
+        path_name = Path(self.cache_folder) / name
+        if os.path.exists(path_name):
+            return name
+        else:
+            return name.replace('.loaded', '_OCD.loaded')
 
     def download_xml_from_nemweb(self):
         year, month, day = self.get_market_year_month_day_as_str()
@@ -85,7 +91,11 @@ class xml_inputs:
     def get_unit_initial_conditions_dataframe(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
         initial_conditions = dict(DUID=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[])
-        name_map = dict(INITIALMW='InitialMW', RAMPUPRATE='SCADARampUpRate', RAMPDOWNRATE='SCADARampDnRate')
+        if self.is_intervention_period():
+            INITIALMW_name = 'WhatIfInitialMW'
+        else:
+            INITIALMW_name = 'InitialMW'
+        name_map = dict(INITIALMW=INITIALMW_name, RAMPUPRATE='SCADARampUpRate', RAMPDOWNRATE='SCADARampDnRate')
         for trader in traders:
             initial_conditions['DUID'].append(trader['@TraderID'])
             initial_cons = trader['TraderInitialConditionCollection']['TraderInitialCondition']
@@ -103,15 +113,15 @@ class xml_inputs:
     def get_unit_fast_start_parameters(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
         initial_conditions = dict(DUID=[], MinLoadingMW=[], CurrentMode=[], CurrentModeTime=[], T1=[], T2=[],
-                                  T3=[], T4=[])
-        cols = dict(MinLoadingMW='@MinLoadingMW', CurrentMode='@CurrentMode',
+                                  T3=[], T4=[], SEMIDISPATCH=[])
+        cols = dict(MinLoadingMW='@MinLoadingMW', CurrentMode='@CurrentMode', SEMIDISPATCH='@SemiDispatch',
                     CurrentModeTime='@CurrentModeTime', T1='@T1', T2='@T2', T3='@T3', T4='@T4')
         for trader in traders:
             row = False
             if '@CurrentMode' in trader:
                 for key, name in cols.items():
                     row = True
-                    value = float(trader[name])
+                    value = int(trader[name])
                     initial_conditions[key].append(value)
             if row:
                 initial_conditions['DUID'].append(trader['@TraderID'])
@@ -124,13 +134,14 @@ class xml_inputs:
         trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], MAXAVAIL=[], ENABLEMENTMIN=[], ENABLEMENTMAX=[],
                                        LOWBREAKPOINT=[], HIGHBREAKPOINT=[], BANDAVAIL1=[], BANDAVAIL2=[],
                                        BANDAVAIL3=[], BANDAVAIL4=[], BANDAVAIL5=[], BANDAVAIL6=[], BANDAVAIL7=[],
-                                       BANDAVAIL8=[], BANDAVAIL9=[], BANDAVAIL10=[])
+                                       BANDAVAIL8=[], BANDAVAIL9=[], BANDAVAIL10=[], RAMPDOWNRATE=[], RAMPUPRATE=[])
         name_map = dict(BIDTYPE='@TradeType', MAXAVAIL='@MaxAvail', ENABLEMENTMIN='@EnablementMin',
                         ENABLEMENTMAX='@EnablementMax',  LOWBREAKPOINT='@LowBreakpoint',
                         HIGHBREAKPOINT='@HighBreakpoint', BANDAVAIL1='@BandAvail1', BANDAVAIL2='@BandAvail2',
                         BANDAVAIL3='@BandAvail3', BANDAVAIL4='@BandAvail4', BANDAVAIL5='@BandAvail5',
                         BANDAVAIL6='@BandAvail6', BANDAVAIL7='@BandAvail7', BANDAVAIL8='@BandAvail8',
-                        BANDAVAIL9='@BandAvail9', BANDAVAIL10='@BandAvail10')
+                        BANDAVAIL9='@BandAvail9', BANDAVAIL10='@BandAvail10', RAMPDOWNRATE='@RampDnRate',
+                        RAMPUPRATE='@RampUpRate')
         for trader in traders:
             if type(trader['TradeCollection']['Trade']) != list:
                 trades = trader['TradeCollection']
@@ -169,9 +180,31 @@ class xml_inputs:
         for trader in traders:
             if '@UIGF' in trader:
                 trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                trades_by_unit_and_type['UGIF'].append(trader['@UIGF'])
+                trades_by_unit_and_type['UGIF'].append(float(trader['@UIGF']))
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
         return trades_by_unit_and_type
+
+    def get_non_intervention_violations(self):
+        outputs = self.xml['NEMSPDCaseFile']['NemSpdOutputs']
+        name_map = dict(TOTAL_UGIF_VIOLATION='@TotalUIGFViolation',
+                        TOTAL_UNIT_CAPACITY_VIOLATION='@TotalUnitMWCapacityViolation',
+                        TOTAL_UNIT_ENERGY_OFFER_VIOLATION='@TotalEnergyOfferViolation',
+                        TOTAL_RAMP_RATE_VIOLATION='@TotalRampRateViolation',
+                        TOTAL_FAST_START_VIOLATION='@TotalFastStartViolation')
+        violations = {}
+        if type(outputs['PeriodSolution']) == list:
+            for solution in outputs['PeriodSolution']:
+                if solution['@Intervention'] == '0':
+                    for name, aemo_name in name_map.items():
+                        violations[name] = float(solution[aemo_name])
+        else:
+            for name, aemo_name in name_map.items():
+                violations[name] = float(outputs['PeriodSolution'][aemo_name])
+        return violations
+
+    def is_intervention_period(self):
+        return type(self.xml['NEMSPDCaseFile']['NemSpdOutputs']['PeriodSolution']) == list
+
 
 
 
