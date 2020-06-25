@@ -1,1 +1,2 @@
-from nempy import markets, historical_spot_market_inputs
+from nempy import markets
+from nempy.historical import historical_spot_market_inputs

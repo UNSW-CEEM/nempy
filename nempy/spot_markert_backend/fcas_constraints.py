@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from nempy import helper_functions as hf
+from nempy.help_functions import helper_functions as hf
 
 
 def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch_interval, next_constraint_id):

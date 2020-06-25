@@ -1,15 +1,16 @@
 import sqlite3
 import pandas as pd
-from pandas._testing import assert_frame_equal
 import numpy as np
-import os.path
 from datetime import datetime, timedelta
 import random
 import pytest
-from nempy import historical_spot_market_inputs as hi, markets, helper_functions as hf, \
-    historical_interconnectors as hii, historical_unit_limits
-from nempy import historical_inputs_from_xml as hist_xml
-from time import time
+import pickle
+
+from nempy import markets, historical
+from nempy.spot_markert_backend import check
+from nempy.help_functions import helper_functions as hf
+from nempy.historical import historical_inputs_from_xml as hist_xml, historical_interconnectors as hii, \
+    historical_spot_market_inputs as hi, units, inputs
 
 
 # Define a set of random intervals to test
@@ -26,53 +27,38 @@ def get_test_intervals():
 
 
 def test_setup():
-    # Setup the database of historical inputs to test the Spot market class with.
-    if not os.path.isfile('test_files/historical_inputs.db') or True:
-        # Create a database for the require inputs.
-        con = sqlite3.connect('test_files/historical_inputs.db')
-        inputs_manager = hi.DBManager(connection=con)
-        inputs_manager.DISPATCHINTERCONNECTORRES.create_table_in_sqlite_db()
-        # Download data were inputs are needed on a monthly basis.
-        finished = False
-        for year in range(2019, 2020):
-            for month in range(1, 2):
-                if year == 2020 and month == 4:
-                    finished = True
-                    break
-                inputs_manager.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
-                # inputs_manager.DISPATCHREGIONSUM.add_data(year=year, month=month)
-                # inputs_manager.DISPATCHLOAD.add_data(year=year, month=month)
-                # inputs_manager.BIDPEROFFER_D.add_data(year=year, month=month)
-                # inputs_manager.BIDDAYOFFER_D.add_data(year=year, month=month)
-                # inputs_manager.DISPATCHCONSTRAINT.add_data(year=year, month=month)
-                # inputs_manager.DISPATCHPRICE.add_data(year=year, month=month)
-                print(month)
 
-            if finished:
-                break
+    running_for_first_time = False
 
-        # Download data where inputs are just needed from the latest month.
-        # inputs_manager.INTERCONNECTOR.set_data(year=2020, month=3)
-        # inputs_manager.LOSSFACTORMODEL.set_data(year=2020, month=3)
-        # inputs_manager.LOSSMODEL.set_data(year=2020, month=3)
-        # inputs_manager.DUDETAILSUMMARY.set_data(year=2020, month=3)
-        # inputs_manager.DUDETAIL.create_table_in_sqlite_db()
-        # inputs_manager.DUDETAIL.set_data(year=2020, month=3)
-        # inputs_manager.INTERCONNECTORCONSTRAINT.set_data(year=2020, month=3)
-        # inputs_manager.GENCONDATA.set_data(year=2020, month=3)
-        # inputs_manager.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=2020, month=3)
-        # inputs_manager.SPDREGIONCONSTRAINT.set_data(year=2020, month=3)
-        # inputs_manager.SPDINTERCONNECTORCONSTRAINT.set_data(year=2020, month=3)
-        # inputs_manager.INTERCONNECTOR.set_data(year=2020, month=3)  # Interconnector data
-        # inputs_manager.MNSP_INTERCONNECTOR.set_data(year=2020, month=3)
+    con = sqlite3.connect('tests/test_files/historical.db')
+    historical_inputs = inputs.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='tests/test_files/historical_xml_files')
 
-        print('DB Build done.')
-        con.close()
+    if running_for_first_time:
+
+        historical_inputs.build_market_management_system_database(start_year=2019, start_month=1,
+                                                       end_year=2019, end_month=3)
+        #historical_inputs.build_xml_inputs_cache(start_year=2019, start_month=2,
+        #                              end_year=2019, end_month=2)
+
+    get_violation_intervals = True
+
+    if get_violation_intervals:
+        interval_with_fast_start_violations = \
+            historical_inputs.find_intervals_with_violations(limit=1000000,
+                                                             start_year=2019, start_month=2,
+                                                             end_year=2019, end_month=2)
+
+        with open('interval_with_fast_start_violations.pickle', 'wb') as f:
+            pickle.dump(interval_with_fast_start_violations, f, pickle.HIGHEST_PROTOCOL)
+
+    con.close()
 
 
 def test_historical_interconnector_losses():
     # Create a data base manager.
-    con = sqlite3.connect('test_files/historical_inputs.db')
+    con = sqlite3.connect('test_files/historical.db')
     inputs_manager = hi.DBManager(connection=con)
 
     for interval in get_test_intervals():
@@ -122,88 +108,13 @@ def test_historical_interconnector_losses():
         assert (comparison['ok'].all())
 
 
-def test_using_availability_and_ramp_rates():
-    """Test that using the availability and ramp up rate from DISPATCHLOAD always provides an upper bound on ouput.
-
-    Note we only test for units in dispatch mode 0.0, i.e. not fast start units. Fast start units would appear to have
-    their max output calculated using another procedure.
-    """
-
-    # Create a database for the require inputs.
-    con = sqlite3.connect('test_files/historical_inputs.db')
-
-    # Create a data base manager.
-    inputs_manager = hi.DBManager(connection=con)
-
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval)
-        dispatch_load = dispatch_load[dispatch_load['DISPATCHMODE'] == 0.0]
-        dispatch_load = dispatch_load.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPUPRATE', 'RAMPDOWNRATE',
-                                              'TOTALCLEARED', 'DISPATCHMODE']]
-        dispatch_load['RAMPMAX'] = dispatch_load['INITIALMW'] + dispatch_load['RAMPUPRATE'] * (5 / 60)
-        dispatch_load['RAMPMIN'] = dispatch_load['INITIALMW'] - dispatch_load['RAMPDOWNRATE'] * (5 / 60)
-        dispatch_load['assumption'] = ((dispatch_load['RAMPMAX'] + 0.01 >= dispatch_load['TOTALCLEARED']) &
-                                       (dispatch_load['AVAILABILITY'] + 0.01 >= dispatch_load['TOTALCLEARED'])) | \
-                                      (np.abs(dispatch_load['TOTALCLEARED'] - dispatch_load['RAMPMIN']) < 0.01)
-        assert (dispatch_load['assumption'].all())
-
-
-def test_max_capacity_not_less_than_availability():
-    """For historical testing we are using availability as the unit capacity, so we want to test that the unit capacity
-       or offer max is never lower than this value."""
-
-    # Create a database for the require inputs.
-    con = sqlite3.connect('test_files/historical_inputs.db')
-
-    # Create a data base manager.
-    inputs_manager = hi.DBManager(connection=con)
-
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval)
-        dispatch_load = dispatch_load.loc[:, ['DUID', 'AVAILABILITY']]
-        unit_capacity = inputs_manager.DUDETAIL.get_data(interval)
-        unit_capacity = pd.merge(unit_capacity, dispatch_load, 'inner', on='DUID')
-        unit_capacity['assumption'] = unit_capacity['AVAILABILITY'] <= unit_capacity['MAXCAPACITY']
-        assert (unit_capacity['assumption'].all())
-
-
-def test_determine_unit_limits():
-    """Test the procedure for determining unit limits from historical inputs.
-
-    It the limits set should always contain the historical amount dispatched within their bounds.
-    """
-
-    # Create a database for the require inputs.
-    con = sqlite3.connect('test_files/historical_inputs.db')
-
-    # Create a data base manager.
-    inputs_manager = hi.DBManager(connection=con)
-
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval)
-        dispatch_load = dispatch_load.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'TOTALCLEARED', 'SEMIDISPATCHCAP',
-                                              'RAMPUPRATE', 'RAMPDOWNRATE', 'DISPATCHMODE']]
-        unit_capacity = inputs_manager.BIDPEROFFER_D.get_data(interval)
-        unit_capacity = unit_capacity[unit_capacity['BIDTYPE'] == 'ENERGY']
-        unit_limits = hi.determine_unit_limits(dispatch_load, unit_capacity)
-        unit_limits = pd.merge(unit_limits, dispatch_load.loc[:, ['DUID', 'TOTALCLEARED', 'DISPATCHMODE']], 'inner',
-                               left_on='unit', right_on='DUID')
-        unit_limits['ramp_max'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (5 / 60)
-        unit_limits['ramp_min'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (5 / 60)
-        # Test the assumption that our calculated limits are not more restrictive then amount historically dispatched.
-        unit_limits['assumption'] = ~((unit_limits['TOTALCLEARED'] > unit_limits['capacity'] + 0.01) |
-                                      (unit_limits['TOTALCLEARED'] > unit_limits['ramp_max'] + 0.01) |
-                                      (unit_limits['TOTALCLEARED'] < unit_limits['ramp_min'] - 0.01))
-        assert (unit_limits['assumption'].all())
-
-
 def test_if_schudeled_units_dispatched_above_bid_availability():
-    con = sqlite3.connect('test_files/historical_inputs.db')
+    con = sqlite3.connect('test_files/historical.db')
     inputs_manager = hi.DBManager(connection=con)
     for interval in get_test_intervals():
         print(interval)
         dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
-        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
         TOTAL_UNIT_ENERGY_OFFER_VIOLATION = xml_inputs.get_non_intervention_violations()[
             'TOTAL_UNIT_ENERGY_OFFER_VIOLATION']
         bid_availability = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'RAMPDOWNRATE',
@@ -225,14 +136,14 @@ def test_if_schudeled_units_dispatched_above_bid_availability():
 
 
 def test_if_schudeled_units_dispatched_above_UIGF():
-    con = sqlite3.connect('test_files/historical_inputs.db')
+    con = sqlite3.connect('test_files/historical.db')
     inputs_manager = hi.DBManager(connection=con)
     for interval in get_test_intervals():
         # if interval != '2019/01/25 16:15:00':
         #     continue
         print(interval)
         dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
-        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
         UGIF_total_violation = xml_inputs.get_non_intervention_violations()['TOTAL_UGIF_VIOLATION']
         ramp_rates = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE']]
         ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
@@ -248,11 +159,11 @@ def test_if_schudeled_units_dispatched_above_UIGF():
 
 
 def test_if_ramp_rates_calculated_correctly():
-    con = sqlite3.connect('test_files/historical_inputs.db')
+    con = sqlite3.connect('test_files/historical.db')
     inputs_manager = hi.DBManager(connection=con)
     for interval in get_test_intervals():
         dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
-        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
         TOTAL_RAMP_RATE_VIOLATION = xml_inputs.get_non_intervention_violations()['TOTAL_RAMP_RATE_VIOLATION']
         ramp_rates = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
         ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
@@ -275,16 +186,16 @@ def test_if_ramp_rates_calculated_correctly():
 
 
 def test_fast_start_constraints():
-    con = sqlite3.connect('test_files/historical_inputs.db')
+    con = sqlite3.connect('test_files/historical.db')
     inputs_manager = hi.DBManager(connection=con)
     for interval in get_test_intervals():
         dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
-        xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=interval)
+        xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
         fast_start_profiles = xml_inputs.get_unit_fast_start_parameters()
-        c1 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
-        c2 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
-        c3 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
-        c4 = historical_unit_limits.fast_start_mode_one_constraints(fast_start_profiles)
+        c1 = units.fast_start_mode_one_constraints(fast_start_profiles)
+        c2 = units.fast_start_mode_two_constraints(fast_start_profiles)
+        c3 = units.fast_start_mode_three_constraints(fast_start_profiles)
+        c4 = units.fast_start_mode_four_constraints(fast_start_profiles)
         constraints = pd.concat([c1, c2, c3, c4])
         constraints = pd.merge(constraints, dispatch_load, left_on='unit', right_on='DUID')
         constraints['violation'] = np.where((constraints['TOTALCLEARED'] > constraints['max']),
@@ -298,13 +209,39 @@ def test_fast_start_constraints():
         assert measured_violation == pytest.approx(TOTAL_FAST_START_VIOLATION, abs=0.1)
 
 
+def test_fast_start_constraints_2():
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect(inputs_database)
+    historical_inputs = inputs.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
+
+    with open('interval_with_fast_start_violations.pickle', 'rb') as f:
+        interval_with_fast_start_violations = pickle.load(f)
+
+    for interval, types in interval_with_fast_start_violations.items():
+        if 'fast_start' in types:
+            print(interval)
+            market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
+                                          interval=interval)
+            market.add_unit_bids_to_market()
+            market.set_fast_start_constraints()
+            market.set_unit_dispatch_to_historical_values()
+            market.dispatch()
+            assert market.measured_violation_equals_historical_violation('fast_start')
+
+
 def test_fcas_trapezium_scaled_availability():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
         # if interval != '2019/01/16 12:20:00':
         #     continue
         print(interval)
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.set_unit_fcas_constraints()
         market.set_unit_limit_constraints()
@@ -314,9 +251,13 @@ def test_fcas_trapezium_scaled_availability():
 
 
 def test_slack_in_generic_constraints():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.add_generic_constraints()
@@ -327,10 +268,14 @@ def test_slack_in_generic_constraints():
 
 
 def test_slack_in_generic_constraints_use_fcas_requirements_interface():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
         print(interval)
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.add_generic_constraints_fcas_requirements()
@@ -342,10 +287,14 @@ def test_slack_in_generic_constraints_use_fcas_requirements_interface():
 
 
 def test_slack_in_generic_constraints_with_all_features():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
         print(interval)
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.add_generic_constraints_fcas_requirements()
@@ -360,9 +309,13 @@ def test_slack_in_generic_constraints_with_all_features():
 
 
 def test_hist_dispatch_values_feasible_with_demand_constraints():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
@@ -372,9 +325,13 @@ def test_hist_dispatch_values_feasible_with_demand_constraints():
 
 
 def test_hist_dispatch_values_feasible_with_unit_fcas_and_limit_constraints():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.set_unit_dispatch_to_historical_values()
@@ -385,9 +342,13 @@ def test_hist_dispatch_values_feasible_with_unit_fcas_and_limit_constraints():
 
 
 def test_hist_dispatch_values_feasible_with_unit_fcas_constraints():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.set_unit_dispatch_to_historical_values()
@@ -397,9 +358,13 @@ def test_hist_dispatch_values_feasible_with_unit_fcas_constraints():
 
 
 def test_hist_dispatch_values_feasible_with_unit_limit_constraints():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.set_unit_dispatch_to_historical_values()
@@ -409,9 +374,13 @@ def test_hist_dispatch_values_feasible_with_unit_limit_constraints():
 
 
 def test_hist_dispatch_values_meet_demand():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    inputs = historical.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.set_unit_dispatch_to_historical_values()
@@ -423,7 +392,7 @@ def test_hist_dispatch_values_meet_demand():
 
 
 def test_prices_full_featured():
-    inputs_database = 'test_files/historical_inputs.db'
+    inputs_database = 'test_files/historical.db'
     outputs = []
     c = 0
     for interval in get_test_intervals():
@@ -437,7 +406,7 @@ def test_prices_full_featured():
         #     continue
         # if interval in ['2019/01/29 20:40:00']:
         #     break
-        market = HistoricalSpotMarket(inputs_database=inputs_database, interval=interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.add_generic_constraints_fcas_requirements()
@@ -452,9 +421,10 @@ def test_prices_full_featured():
 
 
 class HistoricalSpotMarket:
-    def __init__(self, inputs_database, interval):
+    def __init__(self, inputs_database, inputs, interval):
         self.con = sqlite3.connect(inputs_database)
         self.inputs_manager = hi.DBManager(connection=self.con)
+        self.inputs = inputs
         self.interval = interval
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
                          'LOWERREG', 'RAISEREG']
@@ -466,7 +436,7 @@ class HistoricalSpotMarket:
 
     def add_unit_bids_to_market(self):
 
-        self.xml_inputs = hist_xml.xml_inputs(cache_folder='test_files/historical_xml_files', interval=self.interval)
+        self.xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=self.interval)
         initial_cons = self.xml_inputs.get_unit_initial_conditions_dataframe()
         self.initial_cons = initial_cons
 
@@ -476,7 +446,7 @@ class HistoricalSpotMarket:
 
         # Unit bids.
         BIDPEROFFER_D = self.inputs_manager.BIDPEROFFER_D.get_data(self.interval)
-        BIDPEROFFER_D = xml_inputs.get_unit_volume_bids()
+        BIDPEROFFER_D = self.xml_inputs.get_unit_volume_bids()
         BIDDAYOFFER_D = self.inputs_manager.BIDDAYOFFER_D.get_data(self.interval)
 
         # The unit operating conditions at the start of the historical interval.
@@ -498,6 +468,7 @@ class HistoricalSpotMarket:
         self.unit_limits = hi.determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
 
         # FCAS bid prepocessing
+        BIDPEROFFER_D = BIDPEROFFER_D.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
         BIDPEROFFER_D = hi.scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
         BIDPEROFFER_D = hi.scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_cons)
         BIDPEROFFER_D = hi.scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
@@ -530,6 +501,22 @@ class HistoricalSpotMarket:
         self.market.set_unit_ramp_up_constraints(self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
         self.market.set_unit_ramp_down_constraints(
             self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+
+    def set_fast_start_constraints(self):
+        unit_inputs = self.inputs.get_unit_inputs(self.interval)
+        fast_start_profiles = unit_inputs.get_fast_start_profiles()
+        self.market.set_fast_start_constraints(fast_start_profiles)
+        try:
+            self.market.make_constraints_elastic('fast_start', 0.0)
+        except check.ModelBuildError:
+            pass
+
+    def measured_violation_equals_historical_violation(self, constraint_key):
+        measured = self.market.get_elastic_constraints_violation_degree(constraint_key)
+        historical = self.xml_inputs.get_non_intervention_violations()[constraint_key]
+        if historical > 0.0:
+            pass
+        return measured == pytest.approx(historical, abs=0.1)
 
     def set_unit_fcas_constraints(self):
         # Create constraints that enforce the top of the FCAS trapezium.
@@ -572,7 +559,7 @@ class HistoricalSpotMarket:
         self.market.set_demand_constraints(regional_demand.loc[:, ['region', 'demand']])
 
     def add_interconnectors_to_market(self):
-        interconnector_inputs = hii.HistoricalInterconnectors(self.inputs_manager, self.interval)
+        interconnector_inputs = self.inputs.get_interconnector_inputs(self.interval)
         interconnector_inputs.add_loss_model()
         interconnector_inputs.add_market_interconnector_transmission_loss_factors()
         interconnector_inputs.split_bass_link_to_enable_dynamic_from_region_loss_shares()

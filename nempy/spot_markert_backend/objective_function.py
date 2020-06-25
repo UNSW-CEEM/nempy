@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from nempy import helper_functions as hf
+from nempy.help_functions import helper_functions as hf
 
 
 def bids(variable_ids, price_bids, unit_info):

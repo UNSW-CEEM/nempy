@@ -1,16 +1,17 @@
 import os
 import sqlite3
 import pandas as pd
-from nempy import markets, historical_spot_market_inputs as hi, helper_functions as hf
-from time import time
+from nempy import markets
+from nempy.help_functions import helper_functions as hf
+from nempy.historical import historical_spot_market_inputs as hi
 
 # Create a list of the historical dispatch intervals to be used.
 dispatch_intervals = hi.datetime_dispatch_sequence(start_time='2020/01/02 00:00:00',
                                                    end_time='2020/01/02 00:05:00')
 
 # Build a database of historical inputs if it doesn't already exist.
-if not os.path.isfile('historical_inputs.db'):
-    con = sqlite3.connect('historical_inputs.db')
+if not os.path.isfile('historical.db'):
+    con = sqlite3.connect('historical.db')
 
     # Create a data base manager.
     inputs_manager = hi.DBManager(connection=con)
@@ -57,7 +58,7 @@ if not os.path.isfile('historical_inputs.db'):
     con.close()
 
 # Connect to the database of historical inputs
-con = sqlite3.connect('historical_inputs.db')
+con = sqlite3.connect('historical.db')
 inputs_manager = hi.DBManager(connection=con)
 
 # List for saving outputs to.

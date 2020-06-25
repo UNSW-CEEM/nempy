@@ -1,5 +1,5 @@
 import pandas as pd
-from nempy import helper_functions as hf
+from nempy.help_functions import helper_functions as hf
 
 
 def capacity(unit_limits, next_constraint_id):
@@ -326,6 +326,63 @@ def fcas_max_availability(fcas_availability, next_constraint_id):
     return type_and_rhs, variable_map
 
 
+def create_fast_start_profile_constraints(fast_start_profiles, next_constraint_id, dispatch_interval):
+
+    mode_one_cons = fast_start_mode_one_constraints(fast_start_profiles, dispatch_interval)
+    mode_two_cons = fast_start_mode_two_constraints(fast_start_profiles, dispatch_interval)
+    mode_three_cons = fast_start_mode_three_constraints(fast_start_profiles, dispatch_interval)
+    mode_four_cons = fast_start_mode_four_constraints(fast_start_profiles, dispatch_interval)
+
+    type_and_rhs = []
+    variable_map = []
+
+    if not mode_one_cons.empty:
+        mode_one_min_type_rhs, mode_one_min_variable_map = \
+            create_constraints(mode_one_cons, next_constraint_id, 'min', '>=')
+        next_constraint_id = mode_one_min_type_rhs['constraint_id'].max() + 1
+        mode_one_max_type_rhs, mode_one_max_variable_map = \
+            create_constraints(mode_one_cons, next_constraint_id, 'max', '<=')
+        next_constraint_id = mode_one_max_type_rhs['constraint_id'].max() + 1
+        type_and_rhs.append(mode_one_min_type_rhs)
+        type_and_rhs.append(mode_one_max_type_rhs)
+        variable_map.append(mode_one_max_variable_map)
+        variable_map.append(mode_one_min_variable_map)
+
+    if not mode_two_cons.empty:
+        mode_two_min_type_rhs, mode_two_min_variable_map = \
+            create_constraints(mode_two_cons, next_constraint_id, 'min', '>=')
+        next_constraint_id = mode_two_min_type_rhs['constraint_id'].max() + 1
+        mode_two_max_type_rhs, mode_two_max_variable_map = \
+            create_constraints(mode_two_cons, next_constraint_id, 'max', '<=')
+        next_constraint_id = mode_two_max_type_rhs['constraint_id'].max() + 1
+        type_and_rhs.append(mode_two_min_type_rhs)
+        type_and_rhs.append(mode_two_max_type_rhs)
+        variable_map.append(mode_two_max_variable_map)
+        variable_map.append(mode_two_min_variable_map)
+
+    if not mode_three_cons.empty:
+        mode_three_min_type_rhs, mode_three_min_variable_map = \
+            create_constraints(mode_three_cons, next_constraint_id, 'min', '>=')
+        next_constraint_id = mode_three_min_type_rhs['constraint_id'].max() + 1
+        type_and_rhs.append(mode_three_min_type_rhs)
+        variable_map.append(mode_three_min_variable_map)
+
+    if not mode_four_cons.empty:
+        mode_four_min_type_rhs, mode_four_min_variable_map = \
+            create_constraints(mode_three_cons, next_constraint_id, 'min', '>=')
+        type_and_rhs.append(mode_four_min_type_rhs)
+        variable_map.append(mode_four_min_variable_map)
+
+    if len(type_and_rhs) > 0:
+        type_and_rhs = pd.concat(type_and_rhs)
+        variable_map = pd.concat(variable_map)
+    else:
+        type_and_rhs = pd.DataFrame()
+        variable_map = pd.DataFrame()
+
+    return type_and_rhs, variable_map
+
+
 def create_constraints(unit_limits, next_constraint_id, rhs_col, direction):
     # If no service column is present assume the constraints are for the energy service.
     if 'service' not in unit_limits.columns:
@@ -343,3 +400,53 @@ def create_constraints(unit_limits, next_constraint_id, rhs_col, direction):
     variable_map['coefficient'] = 1.0
 
     return type_and_rhs, variable_map
+
+
+def fast_start_mode_one_constraints(fast_start_profile, dispatch_interval):
+    units_ending_in_mode_one = \
+        fast_start_profile[(fast_start_profile['current_mode'] == 1) &
+                           (fast_start_profile['time_in_current_mode'] +
+                            dispatch_interval <= fast_start_profile['mode_one_length'])]
+    units_ending_in_mode_one['max'] = 0.0
+    units_ending_in_mode_one['min'] = 0.0
+    units_ending_in_mode_one = units_ending_in_mode_one.loc[:, ['unit', 'min', 'max']]
+    return units_ending_in_mode_one
+
+
+def fast_start_mode_two_constraints(fast_start_profile, dispatch_interval):
+    units_ending_in_mode_two = \
+        fast_start_profile[(fast_start_profile['current_mode'] == 2) &
+                           (fast_start_profile['time_in_current_mode'] +
+                            dispatch_interval <= fast_start_profile['mode_two_length'])]
+    units_ending_in_mode_two['target'] = (((units_ending_in_mode_two['time_in_current_mode'] +
+                                           dispatch_interval) / units_ending_in_mode_two['mode_two_length']) *
+                                          units_ending_in_mode_two['min_loading'])
+    units_ending_in_mode_two['min'] = units_ending_in_mode_two['target']
+    units_ending_in_mode_two['max'] = units_ending_in_mode_two['target']
+    units_ending_in_mode_two = units_ending_in_mode_two.loc[:, ['unit', 'min', 'max']]
+    return units_ending_in_mode_two
+
+
+def fast_start_mode_three_constraints(fast_start_profile, dispatch_interval):
+    units_ending_in_mode_three = \
+        fast_start_profile[(fast_start_profile['current_mode'] == 3) &
+                           (fast_start_profile['time_in_current_mode'] +
+                            dispatch_interval <= fast_start_profile['mode_three_length'])]
+    units_ending_in_mode_three['min'] = units_ending_in_mode_three['min_loading']
+    units_ending_in_mode_three = units_ending_in_mode_three.loc[:, ['unit', 'min']]
+    return units_ending_in_mode_three
+
+
+def fast_start_mode_four_constraints(fast_start_profile, dispatch_interval):
+    units_ending_in_mode_four = \
+        fast_start_profile[(fast_start_profile['current_mode'] == 4) &
+                           (fast_start_profile['time_in_current_mode'] +
+                            dispatch_interval <= fast_start_profile['mode_four_length'])]
+    units_ending_in_mode_four['target'] = (units_ending_in_mode_four['min_loading'] -
+                                           (((units_ending_in_mode_four['time_in_current_mode'] +
+                                           dispatch_interval) / units_ending_in_mode_four['mode_four_length']) *
+                                          units_ending_in_mode_four['min_loading']))
+    units_ending_in_mode_four['min'] = units_ending_in_mode_four['target']
+    units_ending_in_mode_four['max'] = units_ending_in_mode_four['target']
+    units_ending_in_mode_four = units_ending_in_mode_four.loc[:, ['unit', 'min', 'max']]
+    return units_ending_in_mode_four

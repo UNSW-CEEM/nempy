@@ -1,4 +1,4 @@
-from nempy import helper_functions as hf
+from nempy.help_functions import helper_functions as hf
 import pandas as pd
 
 

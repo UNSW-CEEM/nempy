@@ -1,6 +1,6 @@
 import pandas as pd
-from nempy import markets, historical_spot_market_inputs
-
+from nempy import markets
+from nempy.historical import historical_spot_market_inputs
 
 # Create a market instance.
 simple_market = markets.Spot()

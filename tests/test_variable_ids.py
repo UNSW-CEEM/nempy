@@ -1,6 +1,6 @@
 import pandas as pd
 from pandas._testing import assert_frame_equal
-from nempy import variable_ids
+from nempy.spot_markert_backend import variable_ids
 
 
 def test_energy_one_unit():

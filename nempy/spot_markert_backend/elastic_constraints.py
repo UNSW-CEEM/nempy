@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from nempy import helper_functions as hf, check
+from nempy.help_functions import helper_functions as hf
 
 
 def create_deficit_variables(constraint_rhs, next_variable_id):

@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
-from nempy import check, market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, \
-    interconnectors as inter, fcas_constraints, elastic_constraints, helper_functions as hf
-from nempy import spot_markert_backend as smb
+from nempy.help_functions import helper_functions as hf
+from nempy.spot_markert_backend import elastic_constraints, fcas_constraints, interconnectors as inter, \
+    market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, check
 
 
 class Spot:
@@ -668,6 +668,14 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['ramp_down'] = variable_map
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    def set_fast_start_constraints(self, fast_start_profiles):
+        rhs_and_type, variable_map = unit_constraints.create_fast_start_profile_constraints(
+            fast_start_profiles, self.next_constraint_id, self.dispatch_interval)
+        if not rhs_and_type.empty:
+            self.constraints_rhs_and_type['fast_start'] = rhs_and_type
+            self.constraint_to_variable_map['unit_level']['fast_start'] = variable_map
+            self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('demand', ['region', 'demand'])
     @check.allowed_columns('demand', ['region', 'demand'])
@@ -2004,7 +2012,7 @@ class Spot:
         elif constraints_key in self.constraints_rhs_and_type.keys():
             rhs_and_type = self.constraints_rhs_and_type[constraints_key].copy()
         else:
-            check.ModelBuildError('constraints_key does not exist.')
+            raise check.ModelBuildError('constraints_key does not exist.')
 
         # Add the column cost to the constraints definitions.
         if isinstance(violation_cost, str) and violation_cost == 'market_ceiling_price':
@@ -2030,13 +2038,20 @@ class Spot:
         else:
             ValueError("Input for violation cost can only be 'market_ceiling_price', numeric or a pd.Dataframe")
 
-        deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
-        self.decision_variables[constraints_key + '_deficit'] = \
-            deficit_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']]
-        self.objective_function_components[constraints_key + '_deficit'] = \
-            deficit_variables.loc[:, ['variable_id', 'cost']]
-        self.lhs_coefficients[constraints_key + '_deficit'] = lhs
-        self.next_variable_id = max(deficit_variables['variable_id']) + 1
+        if not rhs_and_type.empty:
+            deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
+            self.decision_variables[constraints_key + '_deficit'] = \
+                deficit_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']]
+            self.objective_function_components[constraints_key + '_deficit'] = \
+                deficit_variables.loc[:, ['variable_id', 'cost']]
+            self.lhs_coefficients[constraints_key + '_deficit'] = lhs
+            self.next_variable_id = max(deficit_variables['variable_id']) + 1
+
+    def get_elastic_constraints_violation_degree(self, constraints_key):
+        if constraints_key + '_deficit' in self.decision_variables:
+            return self.decision_variables[constraints_key + '_deficit']['value'].sum()
+        else:
+            return 0.0
 
     #@check.pre_dispatch
     def dispatch(self, price_market_constraints=True):

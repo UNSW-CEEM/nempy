@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from nempy import helper_functions as hf
+from nempy.help_functions import helper_functions as hf
 
 
 def create(definitions, next_variable_id):

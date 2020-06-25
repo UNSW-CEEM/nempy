@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
-from mip import Model, xsum, minimize, INTEGER, CONTINUOUS, OptimizationStatus, LinExpr, BINARY
-from nempy import check
-from time import time
+from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY
 
 
 class InterfaceToSolver:

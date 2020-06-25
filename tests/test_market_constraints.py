@@ -1,6 +1,6 @@
 import pandas as pd
 from pandas._testing import assert_frame_equal
-from nempy import market_constraints
+from nempy.spot_markert_backend import market_constraints
 
 
 def test_energy():

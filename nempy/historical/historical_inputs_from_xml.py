@@ -9,8 +9,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, time
 
 
-class xml_inputs:
-
+class XMLInputs:
     def __init__(self, cache_folder, interval):
         self.xml = None
         self.interval = interval
@@ -90,12 +89,13 @@ class xml_inputs:
 
     def get_unit_initial_conditions_dataframe(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
-        initial_conditions = dict(DUID=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[])
+        initial_conditions = dict(DUID=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[], AGCSTATUS=[])
         if self.is_intervention_period():
             INITIALMW_name = 'WhatIfInitialMW'
         else:
             INITIALMW_name = 'InitialMW'
-        name_map = dict(INITIALMW=INITIALMW_name, RAMPUPRATE='SCADARampUpRate', RAMPDOWNRATE='SCADARampDnRate')
+        name_map = dict(INITIALMW=INITIALMW_name, RAMPUPRATE='SCADARampUpRate', RAMPDOWNRATE='SCADARampDnRate',
+                        AGCSTATUS='AGCStatus')
         for trader in traders:
             initial_conditions['DUID'].append(trader['@TraderID'])
             initial_cons = trader['TraderInitialConditionCollection']['TraderInitialCondition']
@@ -105,7 +105,7 @@ class xml_inputs:
                         value = float(con['@Value'])
                         break
                     else:
-                        value = value = np.NAN
+                        value = np.NAN
                 initial_conditions[our_name].append(value)
         initial_conditions = pd.DataFrame(initial_conditions)
         return initial_conditions
@@ -186,11 +186,19 @@ class xml_inputs:
 
     def get_non_intervention_violations(self):
         outputs = self.xml['NEMSPDCaseFile']['NemSpdOutputs']
-        name_map = dict(TOTAL_UGIF_VIOLATION='@TotalUIGFViolation',
-                        TOTAL_UNIT_CAPACITY_VIOLATION='@TotalUnitMWCapacityViolation',
-                        TOTAL_UNIT_ENERGY_OFFER_VIOLATION='@TotalEnergyOfferViolation',
-                        TOTAL_RAMP_RATE_VIOLATION='@TotalRampRateViolation',
-                        TOTAL_FAST_START_VIOLATION='@TotalFastStartViolation')
+        name_map = dict(regional_demand='@TotalAreaGenViolation',
+                        interocnnector='@TotalInterconnectorViolation',
+                        generic_constraint='@TotalGenericViolation',
+                        ramp_rate='@TotalRampRateViolation',
+                        unit_capacity='@TotalUnitMWCapacityViolation',
+                        energy_constraint='@TotalEnergyConstrViolation',
+                        energy_offer='@TotalEnergyOfferViolation',
+                        fcas_profile='@TotalASProfileViolation',
+                        fast_start='@TotalFastStartViolation',
+                        mnsp_ramp_rate='@TotalMNSPRampRateViolation',
+                        msnp_offer='@TotalMNSPOfferViolation',
+                        mnsp_capacity='@TotalMNSPCapacityViolation',
+                        ugif='@TotalUIGFViolation')
         violations = {}
         if type(outputs['PeriodSolution']) == list:
             for solution in outputs['PeriodSolution']:

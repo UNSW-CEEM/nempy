@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import subprocess
 from pandas._testing import assert_frame_equal
-from nempy import historical_spot_market_inputs
+from nempy.historical import historical_spot_market_inputs
 
 
 def test_download_to_df():
