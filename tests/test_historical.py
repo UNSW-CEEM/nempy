@@ -30,10 +30,10 @@ def test_setup():
 
     running_for_first_time = False
 
-    con = sqlite3.connect('tests/test_files/historical.db')
+    con = sqlite3.connect('test_files/historical.db')
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
-        nemde_xml_cache_folder='tests/test_files/historical_xml_files')
+        nemde_xml_cache_folder='test_files/historical_xml_files')
 
     if running_for_first_time:
 
@@ -46,7 +46,7 @@ def test_setup():
 
     if get_violation_intervals:
         interval_with_fast_start_violations = \
-            historical_inputs.find_intervals_with_violations(limit=1000000,
+            historical_inputs.find_intervals_with_violations(limit=1,
                                                              start_year=2019, start_month=2,
                                                              end_year=2019, end_month=2)
 
@@ -159,67 +159,63 @@ def test_if_schudeled_units_dispatched_above_UIGF():
 
 
 def test_if_ramp_rates_calculated_correctly():
-    con = sqlite3.connect('test_files/historical.db')
-    inputs_manager = hi.DBManager(connection=con)
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
-        xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
-        TOTAL_RAMP_RATE_VIOLATION = xml_inputs.get_non_intervention_violations()['TOTAL_RAMP_RATE_VIOLATION']
-        ramp_rates = xml_inputs.get_unit_volume_bids().loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-        ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
-        initial_cons = xml_inputs.get_unit_initial_conditions_dataframe().loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE',
-                                                                                  'RAMPUPRATE']]
-        ramp_rates = pd.merge(ramp_rates, initial_cons, 'left', on='DUID')
-        ramp_rates['RAMPDOWNRATE'] = np.where(~ramp_rates['RAMPDOWNRATE_y'].isna(), ramp_rates['RAMPDOWNRATE_y'],
-                                              ramp_rates['RAMPDOWNRATE_x'])
-        ramp_rates['RAMPUPRATE'] = np.where(~ramp_rates['RAMPUPRATE_y'].isna(), ramp_rates['RAMPUPRATE_y'],
-                                            ramp_rates['RAMPUPRATE_x'])
-        availability = pd.merge(dispatch_load, ramp_rates, 'inner', on='DUID')
-        availability['RAMPMIN'] = availability['INITIALMW'] - availability['RAMPDOWNRATE'] / 12
-        availability['RAMPMAX'] = availability['INITIALMW'] + availability['RAMPUPRATE'] / 12
-        availability['violation'] = np.where((availability['TOTALCLEARED'] > availability['RAMPMAX']),
-                                             availability['TOTALCLEARED'] - availability['RAMPMAX'], 0.0)
-        availability['violation'] = np.where((availability['TOTALCLEARED'] < availability['RAMPMIN']),
-                                             availability['RAMPMIN'] - availability['TOTALCLEARED'], 0.0)
-        measured_violation = availability['violation'].sum()
-        assert measured_violation == pytest.approx(TOTAL_RAMP_RATE_VIOLATION, abs=0.1)
-
-
-def test_fast_start_constraints():
-    con = sqlite3.connect('test_files/historical.db')
-    inputs_manager = hi.DBManager(connection=con)
-    for interval in get_test_intervals():
-        dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
-        xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
-        fast_start_profiles = xml_inputs.get_unit_fast_start_parameters()
-        c1 = units.fast_start_mode_one_constraints(fast_start_profiles)
-        c2 = units.fast_start_mode_two_constraints(fast_start_profiles)
-        c3 = units.fast_start_mode_three_constraints(fast_start_profiles)
-        c4 = units.fast_start_mode_four_constraints(fast_start_profiles)
-        constraints = pd.concat([c1, c2, c3, c4])
-        constraints = pd.merge(constraints, dispatch_load, left_on='unit', right_on='DUID')
-        constraints['violation'] = np.where((constraints['TOTALCLEARED'] > constraints['max']),
-                                            constraints['TOTALCLEARED'] - constraints['max'], 0.0)
-        constraints['violation'] = np.where((constraints['TOTALCLEARED'] < constraints['min']),
-                                            constraints['min'] - constraints['TOTALCLEARED'], 0.0)
-        measured_violation = constraints['violation'].sum()
-        TOTAL_FAST_START_VIOLATION = xml_inputs.get_non_intervention_violations()['TOTAL_FAST_START_VIOLATION']
-        if measured_violation > 0.0:
-            x=1
-        assert measured_violation == pytest.approx(TOTAL_FAST_START_VIOLATION, abs=0.1)
-
-
-def test_fast_start_constraints_2():
     inputs_database = 'test_files/historical.db'
     con = sqlite3.connect(inputs_database)
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
 
-    with open('interval_with_fast_start_violations.pickle', 'rb') as f:
-        interval_with_fast_start_violations = pickle.load(f)
+    for interval in get_test_intervals():
+        print(interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
+                                      interval=interval)
+        market.add_unit_bids_to_market()
+        market.set_ramp_rate_limits()
+        market.set_unit_dispatch_to_historical_values()
+        market.dispatch()
+        assert market.measured_violation_equals_historical_violation(historical_name='ramp_rate',
+                                                                     nempy_constraints=['ramp_up', 'ramp_down'])
 
-    for interval, types in interval_with_fast_start_violations.items():
+    with open('interval_with_violations.pickle', 'rb') as f:
+        interval_with_violations = pickle.load(f)
+
+    for interval, types in interval_with_violations.items():
+        if 'ramp_rate' in types:
+            print(interval)
+            market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
+                                          interval=interval)
+            market.add_unit_bids_to_market()
+            market.set_ramp_rate_limits()
+            market.set_unit_dispatch_to_historical_values()
+            market.dispatch()
+            assert market.measured_violation_equals_historical_violation(historical_name='ramp_rate',
+                                                                         nempy_constraints=['ramp_up', 'ramp_down'])
+
+
+def test_fast_start_constraints():
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect(inputs_database)
+    historical_inputs = inputs.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
+
+    for interval in get_test_intervals():
+        if interval != '2019/01/31 05:30:00':
+            continue
+        print(interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
+                                      interval=interval)
+        market.add_unit_bids_to_market()
+        market.set_fast_start_constraints()
+        market.set_unit_dispatch_to_historical_values()
+        market.dispatch()
+        assert market.measured_violation_equals_historical_violation('fast_start',
+                                                                     nempy_constraints=['fast_start'])
+
+    with open('interval_with_violations.pickle', 'rb') as f:
+        interval_with_violations = pickle.load(f)
+
+    for interval, types in interval_with_violations.items():
         if 'fast_start' in types:
             print(interval)
             market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
@@ -228,7 +224,8 @@ def test_fast_start_constraints_2():
             market.set_fast_start_constraints()
             market.set_unit_dispatch_to_historical_values()
             market.dispatch()
-            assert market.measured_violation_equals_historical_violation('fast_start')
+            assert market.measured_violation_equals_historical_violation('fast_start',
+                                                                         nempy_constraints=['fast_start'])
 
 
 def test_fcas_trapezium_scaled_availability():
@@ -432,90 +429,48 @@ class HistoricalSpotMarket:
                                      'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
                                      'ENERGY': 'energy'}
+        self.unit_inputs = self.inputs.get_unit_inputs(self.interval)
         self.market = markets.Spot()
 
     def add_unit_bids_to_market(self):
-
-        self.xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=self.interval)
-        initial_cons = self.xml_inputs.get_unit_initial_conditions_dataframe()
-        self.initial_cons = initial_cons
-
-        # Unit info.
-        DUDETAILSUMMARY = self.inputs_manager.DUDETAILSUMMARY.get_data(self.interval)
-        unit_info = hi.format_unit_info(DUDETAILSUMMARY)
-
-        # Unit bids.
-        BIDPEROFFER_D = self.inputs_manager.BIDPEROFFER_D.get_data(self.interval)
-        BIDPEROFFER_D = self.xml_inputs.get_unit_volume_bids()
-        BIDDAYOFFER_D = self.inputs_manager.BIDDAYOFFER_D.get_data(self.interval)
-
-        # The unit operating conditions at the start of the historical interval.
-        DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
-        DISPATCHLOAD['AGCSTATUS'] = pd.to_numeric(DISPATCHLOAD['AGCSTATUS'])
-        # DISPATCHLOAD = pd.merge(DISPATCHLOAD, initial_cons.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']], 'left', on='DUID')
-        # DISPATCHLOAD['RAMPUPRATE'] = np.where((~DISPATCHLOAD['RAMPUPRATE_y'].isna()) &
-        #                                       (DISPATCHLOAD['RAMPUPRATE_y'] < DISPATCHLOAD['RAMPUPRATE_x']),
-        #                                       DISPATCHLOAD['RAMPUPRATE_y'],
-        #                                       DISPATCHLOAD['RAMPUPRATE_x'])
-        # DISPATCHLOAD['RAMPDOWNRATE'] = np.where((~DISPATCHLOAD['RAMPDOWNRATE_y'].isna()) &
-        #                                         (DISPATCHLOAD['RAMPDOWNRATE_y'] < DISPATCHLOAD['RAMPDOWNRATE_x']),
-        #                                         DISPATCHLOAD['RAMPDOWNRATE_y'],
-        #                                         DISPATCHLOAD['RAMPDOWNRATE_x'])
-        # DISPATCHLOAD = DISPATCHLOAD.drop(['RAMPUPRATE_y', 'RAMPUPRATE_x', 'RAMPDOWNRATE_y', 'RAMPDOWNRATE_x'], axis=1)
-        # DISPATCHLOAD['INITIALMW'] = np.where(~DISPATCHLOAD['INITIALMW_y'].isna(), DISPATCHLOAD['INITIALMW_y'],
-        #                                       DISPATCHLOAD['INITIALMW_x'])
-        # DISPATCHLOAD = DISPATCHLOAD.drop(['INITIALMW_y', 'INITIALMW_x'], axis=1)
-        self.unit_limits = hi.determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
-
-        # FCAS bid prepocessing
-        BIDPEROFFER_D = BIDPEROFFER_D.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
-        BIDPEROFFER_D = hi.scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
-        BIDPEROFFER_D = hi.scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_cons)
-        BIDPEROFFER_D = hi.scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
-        BIDPEROFFER_D, BIDDAYOFFER_D = hi.enforce_preconditions_for_enabling_fcas(
-            BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, self.unit_limits.loc[:, ['unit', 'capacity']])
-        self.BIDPEROFFER_D, self.BIDDAYOFFER_D = hi.use_historical_actual_availability_to_filter_fcas_bids(
-            BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD)
-
-        # Change bidding data to conform to nempy input format.
-        volume_bids = hi.format_volume_bids(self.BIDPEROFFER_D)
-        price_bids = hi.format_price_bids(self.BIDDAYOFFER_D)
-
-        # Add generators to the market.
-        self.market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])
-
-        # Set volume of each bids.
-        volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
-        self.market.set_unit_volume_bids(volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                             '6', '7', '8', '9', '10']])
-
-        # Set prices of each bid.
-        price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
-        self.market.set_unit_price_bids(price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
-                                                           '6', '7', '8', '9', '10']])
+        unit_info = self.unit_inputs.get_unit_info()
+        self.market.set_unit_info(unit_info)
+        volume_bids, price_bids = self.unit_inputs.get_processed_bids()
+        self.market.set_unit_volume_bids(volume_bids)
+        self.market.set_unit_price_bids(price_bids)
 
     def set_unit_limit_constraints(self):
-        # Set unit operating limits.
-        x = self.xml_inputs.get_unit_fast_start_parameters()
-        self.market.set_unit_capacity_constraints(self.unit_limits.loc[:, ['unit', 'capacity']])
-        self.market.set_unit_ramp_up_constraints(self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+        unit_availability_limit = self.unit_inputs.get_unit_availability()
+        self.market.set_unit_capacity_constraints(unit_availability_limit)
+
+    # def set_unit_ugif_limits(self):
+    #     unit_availability_limit = self.unit_inputs.get_unit_availability()
+    #     self.market.set_unit_capacity_constraints(unit_availability_limit)
+
+    def set_ramp_rate_limits(self):
+        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+        self.market.set_unit_ramp_up_constraints(
+            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
         self.market.set_unit_ramp_down_constraints(
-            self.unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+        self.market.make_constraints_elastic('ramp_up', violation_cost=0.0)
+        self.market.make_constraints_elastic('ramp_down', violation_cost=0.0)
 
     def set_fast_start_constraints(self):
-        unit_inputs = self.inputs.get_unit_inputs(self.interval)
-        fast_start_profiles = unit_inputs.get_fast_start_profiles()
+        fast_start_profiles = self.unit_inputs.get_fast_start_profiles()
         self.market.set_fast_start_constraints(fast_start_profiles)
         try:
             self.market.make_constraints_elastic('fast_start', 0.0)
         except check.ModelBuildError:
             pass
 
-    def measured_violation_equals_historical_violation(self, constraint_key):
-        measured = self.market.get_elastic_constraints_violation_degree(constraint_key)
-        historical = self.xml_inputs.get_non_intervention_violations()[constraint_key]
-        if historical > 0.0:
-            pass
+    def measured_violation_equals_historical_violation(self, historical_name, nempy_constraints):
+        measured = 0.0
+        for name in nempy_constraints:
+            measured += self.market.get_elastic_constraints_violation_degree(name)
+        historical = self.unit_inputs.xml_inputs.get_non_intervention_violations()[historical_name]
+        if historical > 0.0 or measured > 0.0:
+            x=1
         return measured == pytest.approx(historical, abs=0.1)
 
     def set_unit_fcas_constraints(self):
