@@ -126,21 +126,20 @@ def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch
 
     constraints = pd.merge(constraints, unit_info, 'left', on='unit')
 
-    def calc_rhs(initial, ramp_down, ramp_up, dispatch_interval, dispatch_type, service):
+    def calc_rhs(initial, ramp_rate, dispatch_interval, dispatch_type, service):
         if dispatch_type == 'generator':
             if service == 'raise_reg':
-                rhs = initial + ramp_up * dispatch_interval / 60
+                rhs = initial + ramp_rate * dispatch_interval / 60
             elif service == 'lower_reg':
-                rhs = initial - ramp_down * dispatch_interval / 60
+                rhs = initial - ramp_rate * dispatch_interval / 60
         elif dispatch_type == 'load':
             if service == 'raise_reg':
-                rhs = initial - ramp_down * dispatch_interval / 60
+                rhs = initial - ramp_rate * dispatch_interval / 60
             elif service == 'lower_reg':
-                rhs = initial + ramp_up * dispatch_interval / 60
+                rhs = initial + ramp_rate * dispatch_interval / 60
         return rhs
 
-    constraints['rhs'] = constraints.apply(lambda x: calc_rhs(x['initial_output'], x['ramp_down_rate'],
-                                                              x['ramp_up_rate'], dispatch_interval,
+    constraints['rhs'] = constraints.apply(lambda x: calc_rhs(x['initial_output'], x['ramp_rate'], dispatch_interval,
                                                               x['dispatch_type'], x['service']), axis=1)
 
     # Set the inequality type based on the regulation service being provided.

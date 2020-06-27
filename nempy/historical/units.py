@@ -30,12 +30,11 @@ class HistoricalUnits:
         bid_availability = bid_availability.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'RAMPDOWNRATE', 'RAMPUPRATE']]
         bid_availability = bid_availability[bid_availability['BIDTYPE'] == 'ENERGY']
 
-        semi_dispatch_flag = self.xml_fast_start_profiles.loc[:, ['DUID', 'SEMIDISPATCH']]
-        schedualed_units = semi_dispatch_flag[semi_dispatch_flag['SEMIDISPATCH'] == 0.0]
+        non_schedualed_units = list(self.get_unit_uigf_limits()['unit'])
 
         initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW']]
 
-        bid_availability = pd.merge(bid_availability, schedualed_units, 'inner', on='DUID')
+        bid_availability = bid_availability[~bid_availability['DUID'].isin(non_schedualed_units)]
         bid_availability = pd.merge(bid_availability, initial_cons, 'inner', on='DUID')
 
         bid_availability['RAMPMIN'] = bid_availability['INITIALMW'] - bid_availability['RAMPDOWNRATE'] / 12
@@ -111,13 +110,14 @@ class HistoricalUnits:
         unit_info = self.get_unit_info()
         unit_availability = self.get_unit_availability()
 
-        # BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, initial_conditions)
+        DISPATCHLOAD = self.mms_database.DISPATCHLOAD.get_data(self.interval)
+        BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
         BIDPEROFFER_D = scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
         BIDPEROFFER_D = scaling_for_uigf(BIDPEROFFER_D, ugif_values)
-        BIDPEROFFER_D, BIDDAYOFFER_D = enforce_preconditions_for_enabling_fcas(
+        self.BIDPEROFFER_D, BIDDAYOFFER_D = enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, initial_conditions, unit_availability)
 
-        volume_bids = format_volume_bids(BIDPEROFFER_D, self.service_name_mapping)
+        volume_bids = format_volume_bids(self.BIDPEROFFER_D, self.service_name_mapping)
         price_bids = format_price_bids(BIDDAYOFFER_D, self.service_name_mapping)
         volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
         volume_bids = volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
@@ -126,6 +126,122 @@ class HistoricalUnits:
         price_bids = price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
                                         '6', '7', '8', '9', '10']]
         return volume_bids, price_bids
+
+    def add_fcas_trapezium_constraints(self):
+        self.fcas_trapeziums = format_fcas_trapezium_constraints(self.BIDPEROFFER_D, self.service_name_mapping)
+
+    def get_fcas_max_availability(self):
+        return self.fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
+
+    def get_fcas_regulation_trapeziums(self):
+        return self.fcas_trapeziums[self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
+
+    def get_scada_ramp_up_rates(self):
+        initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
+        initial_cons.columns = ['unit', 'initial_output', 'ramp_rate']
+        units_with_scada_ramp_rates = list(
+            initial_cons[(~initial_cons['ramp_rate'].isna()) & initial_cons['ramp_rate'] != 0]['unit'])
+        initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
+        return initial_cons
+
+    def get_scada_ramp_down_rates(self):
+        initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
+        initial_cons.columns = ['unit', 'initial_output', 'ramp_rate']
+        units_with_scada_ramp_rates = list(
+            initial_cons[(~initial_cons['ramp_rate'].isna()) & initial_cons['ramp_rate'] != 0]['unit'])
+        initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
+        return initial_cons
+
+    def get_raise_reg_units_with_scada_ramp_rates(self):
+        reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
+        reg_units = pd.merge(self.get_scada_ramp_up_rates(), reg_units, 'inner', on='unit')
+        reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_rate'].isna())]
+        reg_units = reg_units.loc[:, ['unit', 'service']]
+        return reg_units
+
+    def get_lower_reg_units_with_scada_ramp_rates(self):
+        reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
+        reg_units = pd.merge(self.get_scada_ramp_down_rates(), reg_units, 'inner', on='unit')
+        reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_rate'].isna())]
+        reg_units = reg_units.loc[:, ['unit', 'service']]
+        return reg_units
+
+    def get_contingency_services(self):
+        return self.fcas_trapeziums[~self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
+
+
+
+
+def format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
+    """Extracts and re-formats the fcas trapezium data from the AEMO MSS table BIDDAYOFFER_D.
+
+    Examples
+    --------
+
+    >>> BIDPEROFFER_D = pd.DataFrame({
+    ... 'DUID': ['A', 'B'],
+    ... 'BIDTYPE': ['RAISE60SEC', 'ENERGY'],
+    ... 'MAXAVAIL': [60.0, 0.0],
+    ... 'ENABLEMENTMIN': [20.0, 0.0],
+    ... 'LOWBREAKPOINT': [40.0, 0.0],
+    ... 'HIGHBREAKPOINT': [60.0, 0.0],
+    ... 'ENABLEMENTMAX': [80.0, 0.0]})
+
+    >>> fcas_trapeziums = format_fcas_trapezium_constraints(BIDPEROFFER_D)
+
+    >>> print(fcas_trapeziums)
+      unit    service  ...  high_break_point  enablement_max
+    0    A  raise_60s  ...              60.0            80.0
+    <BLANKLINE>
+    [1 rows x 7 columns]
+
+    Parameters
+    ----------
+    BIDPEROFFER_D : pd.DataFrame
+
+        ==============  ====================================================
+        Columns:        Description:
+        DUID            unique identifier of a unit (as `str`)
+        BIDTYPE         the service being provided (as `str`)
+        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
+        ENABLEMENTMIN   the energy dispatch level at which the unit can begin to
+                        provide the FCAS service, in MW (as `np.float64`)
+        LOWBREAKPOINT   the energy dispatch level at which the unit can provide
+                        the full FCAS offered, in MW (as `np.float64`)
+        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
+                        longer provide the full FCAS service offered,
+                        in MW (as `np.float64`)
+        ENABLEMENTMAX   the energy dispatch level at which the unit can
+                        no longer provide any FCAS service,
+                        in MW (as `np.float64`)
+        ==============  ====================================================
+
+    Returns
+    ----------
+    fcas_trapeziums : pd.DataFrame
+
+            ================   ======================================================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit (as `str`)
+            service            the contingency service being offered (as `str`)
+            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
+            enablement_min     the energy dispatch level at which the unit can begin to provide the
+                               contingency service, in MW (as `np.float64`)
+            low_break_point    the energy dispatch level at which the unit can provide the full
+                               contingency service offered, in MW (as `np.float64`)
+            high_break_point   the energy dispatch level at which the unit can no longer provide the
+                               full contingency service offered, in MW (as `np.float64`)
+            enablement_max     the energy dispatch level at which the unit can no longer begin
+                               the contingency service, in MW (as `np.float64`)
+            ================   ======================================================================
+    """
+    BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
+    trapezium_cons = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'ENABLEMENTMIN', 'LOWBREAKPOINT',
+                                           'HIGHBREAKPOINT', 'ENABLEMENTMAX']]
+    trapezium_cons.columns = ['unit', 'service', 'max_availability', 'enablement_min', 'low_break_point',
+                              'high_break_point', 'enablement_max']
+    trapezium_cons['service'] = trapezium_cons['service'].apply(lambda x: service_name_mapping[x])
+    return trapezium_cons
 
 
 def format_volume_bids(BIDPEROFFER_D, service_name_mapping):
