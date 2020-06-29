@@ -62,10 +62,9 @@ class HistoricalUnits:
         ramp_rates = pd.merge(ramp_rates, initial_cons, 'left', on='DUID')
         ramp_rates = ramp_rates[~ramp_rates['DUID'].isin(units_ending_in_mode_two)]
 
-        ramp_rates['RAMPDOWNRATE'] = np.where(~ramp_rates['RAMPDOWNRATE_y'].isna(), ramp_rates['RAMPDOWNRATE_y'],
-                                              ramp_rates['RAMPDOWNRATE_x'])
-        ramp_rates['RAMPUPRATE'] = np.where(~ramp_rates['RAMPUPRATE_y'].isna(), ramp_rates['RAMPUPRATE_y'],
-                                            ramp_rates['RAMPUPRATE_x'])
+        ramp_rates['RAMPDOWNRATE'] = np.fmin(ramp_rates['RAMPDOWNRATE_x'], ramp_rates['RAMPDOWNRATE_y'])
+        ramp_rates['RAMPUPRATE'] = np.fmin(ramp_rates['RAMPUPRATE_x'], ramp_rates['RAMPUPRATE_y'])
+
         if not fast_start_profiles.empty:
             fast_start_profiles = fast_start_mode_two_targets(fast_start_profiles)
             fast_start_target = fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_profiles, self.dispatch_interval)
@@ -95,7 +94,7 @@ class HistoricalUnits:
 
     def get_unit_info(self):
         unit_info = format_unit_info(self.DUDETAILSUMMARY, self.dispatch_type_name_map)
-        return unit_info.loc[:, ['unit', 'region', 'dispatch_type']]
+        return unit_info.loc[:, ['unit', 'region', 'dispatch_type', 'loss_factor']]
 
     def get_unit_availability(self):
         bid_availability = self.get_unit_bid_availability()
@@ -1149,9 +1148,11 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     fcas_bids = fcas_bids[fcas_bids['ENABLEMENTMAX'] >= 0.0]
 
     # Filter out fcas_bids where the unit is not initially operating between the enablement min and max.
+    # Round initial ouput to 5 decimial places because the enablement min and max are given to this number, without
+    # this some units are dropped that shouldn't be.
     fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'AGCSTATUS']], 'inner', on='DUID')
-    fcas_bids = fcas_bids[(fcas_bids['ENABLEMENTMAX'] >= fcas_bids['INITIALMW']) &
-                          (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'])]
+    fcas_bids = fcas_bids[(fcas_bids['ENABLEMENTMAX'] >= fcas_bids['INITIALMW'].round(5)) &
+                          (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'].round(5))]
 
     # Filter out fcas_bids where the AGC status is not set to 1.0
     fcas_bids = fcas_bids[~((fcas_bids['AGCSTATUS'] == 0.0) & (fcas_bids['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])))]

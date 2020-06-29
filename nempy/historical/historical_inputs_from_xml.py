@@ -210,9 +210,242 @@ class XMLInputs:
                 violations[name] = float(outputs['PeriodSolution'][aemo_name])
         return violations
 
+    def get_constraint_violation_prices(self):
+        inputs = self.xml['NEMSPDCaseFile']['NemSpdInputs']
+        name_map = dict(regional_demand='@EnergyDeficitPrice',
+                        interocnnector='@InterconnectorPrice',
+                        generic_constraint='@GenericConstraintPrice',
+                        ramp_rate='@RampRatePrice',
+                        unit_capacity='@CapacityPrice',
+                        #energy_constraint='@TotalEnergyConstrViolation',
+                        energy_offer='@OfferPrice',
+                        fcas_profile='@ASProfilePrice',
+                        fcas_max_avail='@ASMaxAvailPrice',
+                        fcas_enablement_min='@ASEnablementMinPrice',
+                        fcas_enablement_max='@ASEnablementMaxPrice',
+                        fast_start='@FastStartPrice',
+                        mnsp_ramp_rate='@MNSPRampRatePrice',
+                        msnp_offer='@MNSPOfferPrice',
+                        mnsp_capacity='@MNSPCapacityPrice',
+                        ugif='@UIGFSurplusPrice',
+                        voll='@VoLL')
+        violations = {}
+        for name, aemo_name in name_map.items():
+            violations[name] = float(inputs['Case'][aemo_name])
+        return violations
+
     def is_intervention_period(self):
         return type(self.xml['NEMSPDCaseFile']['NemSpdOutputs']['PeriodSolution']) == list
 
+    def get_constraint_rhs(self):
+        """
+
+        Examples
+        --------
+
+        >>> xml = XMLInputs('../../tests/test_files/historical_xml_files', '2019/01/27 13:45:00')
+
+        >>> xml.get_constraint_rhs()
+                         set           rhs
+        0               #BANN1_E     32.000000
+        1              #BNGSF2_E      3.000000
+        2            #CHILDSF1_E      0.000000
+        3            #CROWLWF1_E     48.000000
+        4             #CSPVPS1_E     29.000000
+        ..                   ...           ...
+        736          V_OWF_NRB_0  10000.001000
+        737  V_OWF_TGTSNRBHTN_30  10030.000000
+        738        V_S_NIL_ROCOF   1203.600037
+        739          V_T_NIL_BL1    125.000000
+        740        V_T_NIL_FCSPS  19985.000000
+        <BLANKLINE>
+        [741 rows x 2 columns]
+
+        Returns
+        -------
+
+        """
+        constraints = self.xml['NEMSPDCaseFile']['NemSpdOutputs']['ConstraintSolution']
+        rhs_values = dict(set=[], rhs=[])
+        for con in constraints:
+            rhs_values['set'].append(con['@ConstraintID'])
+            rhs_values['rhs'].append(float(con['@RHS']))
+        return pd.DataFrame(rhs_values)
+
+    def get_constraint_type(self):
+        """
+
+        Examples
+        --------
+
+        >>> xml = XMLInputs('../../tests/test_files/historical_xml_files', '2019/01/27 13:45:00')
+
+        >>> xml.get_constraint_type()
+                             set type
+        0               #BANN1_E   LE
+        1              #BNGSF2_E   LE
+        2            #CHILDSF1_E   LE
+        3            #CROWLWF1_E   LE
+        4             #CSPVPS1_E   LE
+        ..                   ...  ...
+        736          V_OWF_NRB_0   LE
+        737  V_OWF_TGTSNRBHTN_30   LE
+        738        V_S_NIL_ROCOF   LE
+        739          V_T_NIL_BL1   LE
+        740        V_T_NIL_FCSPS   LE
+        <BLANKLINE>
+        [741 rows x 2 columns]
+
+        Returns
+        -------
+
+        """
+        constraints = self.xml['NEMSPDCaseFile']['NemSpdInputs']['GenericConstraintCollection']['GenericConstraint']
+        rhs_values = dict(set=[], type=[], cost=[])
+        for con in constraints:
+            rhs_values['set'].append(con['@ConstraintID'])
+            rhs_values['type'].append(con['@Type'])
+            rhs_values['cost'].append(float(con['@ViolationPrice']))
+        return pd.DataFrame(rhs_values)
+
+    def get_constraint_region_lhs(self):
+        """
+
+        Examples
+        --------
+
+        >>> xml = XMLInputs('../../tests/test_files/historical_xml_files', '2019/01/27 13:45:00')
+
+        >>> xml.get_constraint_region_lhs()
+                           set region service  coefficient
+        0        F_I+LREG_0120   NSW1    L5RE          1.0
+        1        F_I+LREG_0120   QLD1    L5RE          1.0
+        2        F_I+LREG_0120    SA1    L5RE          1.0
+        3        F_I+LREG_0120   TAS1    L5RE          1.0
+        4        F_I+LREG_0120   VIC1    L5RE          1.0
+        ..                 ...    ...     ...          ...
+        478   F_T+NIL_WF_TG_R5   TAS1    R5RE          1.0
+        479   F_T+NIL_WF_TG_R6   TAS1    R6SE          1.0
+        480  F_T+NIL_WF_TG_R60   TAS1    R60S          1.0
+        481      F_T+RREG_0050   TAS1    R5RE          1.0
+        482    F_T_NIL_MINP_R6   TAS1    R6SE          1.0
+        <BLANKLINE>
+        [483 rows x 4 columns]
+
+        Returns
+        -------
+
+        """
+        constraints = self.xml['NEMSPDCaseFile']['NemSpdInputs']['GenericConstraintCollection']['GenericConstraint']
+        lhs_values = dict(set=[], region=[], service=[], coefficient=[])
+        for con in constraints:
+            lhs = con['LHSFactorCollection']
+            if 'RegionFactor' in lhs:
+                if type(lhs['RegionFactor']) == list:
+                    for term in lhs['RegionFactor']:
+                        lhs_values['set'].append(con['@ConstraintID'])
+                        lhs_values['region'].append(term['@RegionID'])
+                        lhs_values['service'].append(term['@TradeType'])
+                        lhs_values['coefficient'].append(float(term['@Factor']))
+                else:
+                    term = lhs['RegionFactor']
+                    lhs_values['set'].append(con['@ConstraintID'])
+                    lhs_values['region'].append(term['@RegionID'])
+                    lhs_values['service'].append(term['@TradeType'])
+                    lhs_values['coefficient'].append(float(term['@Factor']))
+        return pd.DataFrame(lhs_values)
+
+    def get_constraint_unit_lhs(self):
+        """
+
+        Examples
+        --------
+
+        >>> xml = XMLInputs('../../tests/test_files/historical_xml_files', '2019/01/27 13:45:00')
+
+        >>> xml.get_constraint_unit_lhs()
+                              set      unit service  coefficient
+        0                #BANN1_E     BANN1    ENOF          1.0
+        1               #BNGSF2_E    BNGSF2    ENOF          1.0
+        2             #CHILDSF1_E  CHILDSF1    ENOF          1.0
+        3             #CROWLWF1_E  CROWLWF1    ENOF          1.0
+        4              #CSPVPS1_E   CSPVPS1    ENOF          1.0
+        ...                   ...       ...     ...          ...
+        6013    V_GANWR_SF_BAT_50   GANNSF1    ENOF          1.0
+        6014      V_MTGBRAND_33WT  MTGELWF1    ENOF          1.0
+        6015     V_OAKHILL_TFB_42  OAKLAND1    ENOF          1.0
+        6016          V_OWF_NRB_0  OAKLAND1    ENOF          1.0
+        6017  V_OWF_TGTSNRBHTN_30  OAKLAND1    ENOF          1.0
+        <BLANKLINE>
+        [6018 rows x 4 columns]
+
+        Returns
+        -------
+
+        """
+        constraints = self.xml['NEMSPDCaseFile']['NemSpdInputs']['GenericConstraintCollection']['GenericConstraint']
+        lhs_values = dict(set=[], unit=[], service=[], coefficient=[])
+        for con in constraints:
+            lhs = con['LHSFactorCollection']
+            if 'TraderFactor' in lhs:
+                if type(lhs['TraderFactor']) == list:
+                    for term in lhs['TraderFactor']:
+                        lhs_values['set'].append(con['@ConstraintID'])
+                        lhs_values['unit'].append(term['@TraderID'])
+                        lhs_values['service'].append(term['@TradeType'])
+                        lhs_values['coefficient'].append(float(term['@Factor']))
+                else:
+                    term = lhs['TraderFactor']
+                    lhs_values['set'].append(con['@ConstraintID'])
+                    lhs_values['unit'].append(term['@TraderID'])
+                    lhs_values['service'].append(term['@TradeType'])
+                    lhs_values['coefficient'].append(float(term['@Factor']))
+        return pd.DataFrame(lhs_values)
+
+    def get_constraint_interconnector_lhs(self):
+        """
+
+        Examples
+        --------
+
+        >>> xml = XMLInputs('../../tests/test_files/historical_xml_files', '2019/01/27 13:45:00')
+
+        >>> xml.get_constraint_interconnector_lhs()
+                             set interconnector  coefficient
+        0               DATASNAP      N-Q-MNSP1          1.0
+        1        DATASNAP_DFS_LS      N-Q-MNSP1          1.0
+        2      DATASNAP_DFS_NCAN      N-Q-MNSP1          1.0
+        3    DATASNAP_DFS_NCWEST      N-Q-MNSP1          1.0
+        4      DATASNAP_DFS_NNTH      N-Q-MNSP1          1.0
+        ..                   ...            ...          ...
+        619      V^^S_NIL_TBSE_1           V-SA          1.0
+        620      V^^S_NIL_TBSE_2           V-SA          1.0
+        621        V_S_NIL_ROCOF           V-SA          1.0
+        622          V_T_NIL_BL1      T-V-MNSP1         -1.0
+        623        V_T_NIL_FCSPS      T-V-MNSP1         -1.0
+        <BLANKLINE>
+        [624 rows x 3 columns]
+
+        Returns
+        -------
+
+        """
+        constraints = self.xml['NEMSPDCaseFile']['NemSpdInputs']['GenericConstraintCollection']['GenericConstraint']
+        lhs_values = dict(set=[], interconnector=[], coefficient=[])
+        for con in constraints:
+            lhs = con['LHSFactorCollection']
+            if 'InterconnectorFactor' in lhs:
+                if type(lhs['InterconnectorFactor']) == list:
+                    for term in lhs['InterconnectorFactor']:
+                        lhs_values['set'].append(con['@ConstraintID'])
+                        lhs_values['interconnector'].append(term['@InterconnectorID'])
+                        lhs_values['coefficient'].append(float(term['@Factor']))
+                else:
+                    term = lhs['InterconnectorFactor']
+                    lhs_values['set'].append(con['@ConstraintID'])
+                    lhs_values['interconnector'].append(term['@InterconnectorID'])
+                    lhs_values['coefficient'].append(float(term['@Factor']))
+        return pd.DataFrame(lhs_values)
 
 
 

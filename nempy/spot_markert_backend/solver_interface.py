@@ -1,13 +1,13 @@
 import numpy as np
 import pandas as pd
-from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY
+from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, GRB
 
 
 class InterfaceToSolver:
     """A wrapper for the mip model class, allows interaction with mip using pd.DataFrames."""
     def __init__(self):
         self.variables = {}
-        self.mip_model = Model("market")
+        self.mip_model = Model("market", solver_name=GRB)
         self.mip_model.verbose = 0
 
     def add_variables(self, decision_variables):
