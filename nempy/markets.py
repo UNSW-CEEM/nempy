@@ -341,7 +341,7 @@ class Spot:
     @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
     @check.column_values_must_be_real('unit_limits', ['capacity'])
     @check.column_values_not_negative('unit_limits', ['capacity'])
-    def set_unit_capacity_constraints(self, unit_limits):
+    def set_unit_bid_capacity_constraints(self, unit_limits):
         """Creates constraints that limit unit output based on capacity.
 
         Examples
@@ -438,8 +438,117 @@ class Spot:
         # 1. Create the constraints
         rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self.next_constraint_id)
         # 2. Save constraint details.
-        self.constraints_rhs_and_type['unit_capacity'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['unit_capacity'] = variable_map
+        self.constraints_rhs_and_type['unit_bid_capacity'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['unit_bid_capacity'] = variable_map
+        # 3. Update the constraint and variable id counter
+        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    @check.energy_bid_ids_exist
+    @check.required_columns('unit_limits', ['unit', 'capacity'])
+    @check.allowed_columns('unit_limits', ['unit', 'capacity'])
+    @check.repeated_rows('unit_limits', ['unit'])
+    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
+    @check.column_values_must_be_real('unit_limits', ['capacity'])
+    @check.column_values_not_negative('unit_limits', ['capacity'])
+    def set_unit_ugif_capacity(self, unit_limits):
+        """Creates constraints that limit unit output based on capacity.
+
+        Examples
+        --------
+        This is an example of the minimal set of steps for using this method.
+
+        Import required packages.
+
+        >>> import pandas as pd
+        >>> from nempy import markets
+
+        Initialise the market instance.
+
+        >>> simple_market = markets.Spot()
+
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
+
+        Add unit information
+
+        >>> simple_market.set_unit_info(unit_info)
+
+        Define a set of bids, in this example we have two units called A and B, with three bid bands.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        Create energy unit bid decision variables.
+
+        >>> simple_market.set_unit_volume_bids(volume_bids)
+
+        Define a set of unit capacities.
+
+        >>> unit_limits = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'capacity': [60.0, 100.0]})
+
+        Create unit capacity based constraints.
+
+        >>> simple_market.set_unit_capacity_constraints(unit_limits)
+
+        The market should now have a set of constraints.
+
+        >>> print(simple_market.constraints_rhs_and_type['unit_capacity'])
+          unit  constraint_id type    rhs
+        0    A              0   <=   60.0
+        1    B              1   <=  100.0
+
+        ... and a mapping of those constraints to the variable types on the lhs.
+
+        >>> print(simple_market.constraint_to_variable_map['unit_level']['unit_capacity'])
+           constraint_id unit service  coefficient
+        0              0    A  energy          1.0
+        1              1    B  energy          1.0
+
+
+        Parameters
+        ----------
+        unit_limits : pd.DataFrame
+            Capacity by unit.
+
+            ========  =====================================================================================
+            Columns:  Description:
+            unit      unique identifier of a dispatch unit (as `str`)
+            capacity  The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
+            ========  =====================================================================================
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+            ModelBuildError
+                If the volume bids have not been set yet.
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If the column 'units' or 'capacity' is missing.
+            UnexpectedColumn
+                There is a column that is not 'units' or 'capacity'.
+            ColumnValues
+                If there are inf, null or negative values in the bid band columns.
+        """
+        # 1. Create the constraints
+        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self.next_constraint_id)
+        # 2. Save constraint details.
+        self.constraints_rhs_and_type['ugif_capacity'] = rhs_and_type
+        self.constraint_to_variable_map['unit_level']['ugif_capacity'] = variable_map
         # 3. Update the constraint and variable id counter
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
@@ -927,7 +1036,7 @@ class Spot:
         self.constraint_to_variable_map['unit_level']['fcas_max_availability'] = variable_map
         self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    #def minimise_unit_output_differences
+    # def minimise_unit_output_differences
 
     @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
     @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
@@ -2171,7 +2280,34 @@ class Spot:
         else:
             return 0.0
 
-    #@check.pre_dispatch
+    def set_tie_break_constraints(self, cost):
+        price_bids = self.objective_function_components['bids']
+        energy_price_bids = price_bids[price_bids['service'] == 'energy']
+        energy_price_bids = pd.merge(energy_price_bids,
+                                     self.decision_variables['bids'].loc[:, ['variable_id', 'upper_bound']],
+                                     on='variable_id')
+        energy_price_bids = pd.merge(energy_price_bids, self.unit_info.loc[:, ['unit', 'region']], on='unit')
+        constraints = pd.merge(energy_price_bids, energy_price_bids, on=['cost', 'region'])
+        constraints = constraints[constraints['unit_x'] != constraints['unit_y']]
+        constraints = constraints.loc[:, ['variable_id_x', 'upper_bound_x', 'variable_id_y', 'upper_bound_y']]
+        constraints = hf.save_index(constraints, 'constraint_id', self.next_constraint_id)
+        lhs_one = constraints.loc[:, ['constraint_id', 'variable_id_x', 'upper_bound_x']]
+        lhs_one['variable_id'] = lhs_one['variable_id_x']
+        lhs_one['coefficient'] = 1 / lhs_one['upper_bound_x']
+        lhs_two = constraints.loc[:, ['constraint_id', 'variable_id_y', 'upper_bound_y']]
+        lhs_two['variable_id'] = lhs_two['variable_id_y']
+        lhs_two['coefficient'] = - 1 / lhs_two['upper_bound_y']
+        lhs = pd.concat([lhs_one.loc[:, ['constraint_id', 'variable_id', 'coefficient']],
+                         lhs_two.loc[:, ['constraint_id', 'variable_id', 'coefficient']]])
+        rhs = constraints.loc[:, ['constraint_id']]
+        rhs['type'] = '='
+        rhs['rhs'] = 0.0
+        self.lhs_coefficients['tie_break'] = lhs
+        self.constraints_rhs_and_type['tie_break'] = rhs
+        self.next_variable_id = rhs['constraint_id'].max() + 1
+        self.make_constraints_elastic('tie_break', violation_cost=cost)
+
+    # @check.pre_dispatch
     def dispatch(self, price_market_constraints=True):
         """Combines the elements of the linear program and solves to find optimal dispatch.
 
@@ -2386,7 +2522,8 @@ class Spot:
         if self.market_constraints_rhs_and_type and price_market_constraints:
             for constraint_group in self.market_constraints_rhs_and_type:
                 constraints_to_price = list(self.market_constraints_rhs_and_type[constraint_group]['constraint_id'])
-                prices = si.price_constraints(constraints_to_price)
+                prices = si.price_constraints(constraints_to_price, self.decision_variables['bids'],
+                                              self.objective_function_components['bids'])
                 self.market_constraints_rhs_and_type[constraint_group]['price'] = \
                     self.market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
@@ -3040,12 +3177,17 @@ class Spot:
             if constraint_type in self.constraints_rhs_and_type.keys():
                 service_coefficients = self.constraint_to_variable_map['unit_level'][constraint_type]
                 service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit', 'service', 'coefficient']]
-                constraint_slack = self.constraints_rhs_and_type[constraint_type].loc[:, ['constraint_id', 'slack']]
+                constraint_slack = self.constraints_rhs_and_type[constraint_type].loc[:,
+                                   ['constraint_id', 'slack', 'type']]
                 slack_temp = pd.merge(service_coefficients, constraint_slack, on='constraint_id')
                 fcas_variable_slack.append(slack_temp)
 
         fcas_variable_slack = pd.concat(fcas_variable_slack)
-        fcas_variable_slack['service_slack'] = fcas_variable_slack['slack'] / fcas_variable_slack['coefficient'].abs()
+        fcas_variable_slack['service_slack'] = \
+            np.where(((fcas_variable_slack['coefficient'] < 0.0) & (fcas_variable_slack['type'] == '<=')) |
+                     ((fcas_variable_slack['coefficient'] > 0.0) & (fcas_variable_slack['type'] == '>=')) |
+                     ((fcas_variable_slack['coefficient'] < 0.00001) & (fcas_variable_slack['coefficient'] > -0.00001)),
+                     np.Inf, fcas_variable_slack['slack'].abs() / fcas_variable_slack['coefficient'].abs())
         fcas_variable_slack = \
             fcas_variable_slack.groupby(['unit', 'service'], as_index=False).aggregate({'service_slack': 'min'})
         fcas_variable_slack = fcas_variable_slack[fcas_variable_slack['service'] != 'energy']

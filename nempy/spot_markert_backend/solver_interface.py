@@ -9,6 +9,7 @@ class InterfaceToSolver:
         self.variables = {}
         self.mip_model = Model("market", solver_name=GRB)
         self.mip_model.verbose = 0
+        #self.mip_model.max_mip_gap = 1e-6
 
     def add_variables(self, decision_variables):
         """Add decision variables to the model.
@@ -445,7 +446,7 @@ class InterfaceToSolver:
                                                                 self.mip_model)
         return slack
 
-    def price_constraints(self, constraint_ids_to_price):
+    def price_constraints(self, constraint_ids_to_price, volume_bids, price_bids):
         """For each constraint_id find the marginal value of the constraint.
 
         This is done by incrementing the constraint by a value of 1.0 and re-optimizing the model, the marginal cost
@@ -512,12 +513,22 @@ class InterfaceToSolver:
         # Record the original objective value.
         start_obj = self.mip_model.objective.x
         costs = {}
+        initial_solution = pd.merge(volume_bids.loc[:, ['unit', 'service', 'variable_id', 'value']],
+                                    price_bids.loc[:, ['variable_id', 'cost']], on='variable_id')
         for id in constraint_ids_to_price:
-            constraint = self.mip_model.constr_by_name(str(id))
-            constraint.rhs += 1.0
             self.mip_model.optimize()
-            marginal_cost = self.mip_model.objective.x - start_obj
-            constraint.rhs -= 1.0
+            initial_solution['value'] = \
+                self.get_optimal_values_of_decision_variables(initial_solution.loc[:, ['variable_id']])
+            constraint = self.mip_model.constr_by_name(str(id))
+            constraint.rhs += 0.0001
+            self.mip_model.optimize()
+            initial_solution['new_value'] = \
+                self.get_optimal_values_of_decision_variables(initial_solution.loc[:, ['variable_id']])
+            initial_solution['change'] = (initial_solution['new_value'] - initial_solution['value']) * 10000
+            initial_solution['marginal_cost'] = initial_solution['change'] * initial_solution['cost']
+            #marginal_cost = (self.mip_model.objective.x - start_obj) * 1000
+            marginal_cost = initial_solution['marginal_cost'].sum()
+            constraint.rhs -= 0.0001
             costs[id] = marginal_cost
         # Reset the model to have correct optimal solution.
         self.mip_model.optimize()

@@ -23,12 +23,12 @@ def get_test_intervals():
     intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
-    return times_formatted
+    return ['2019/01/25 13:45:00']
 
 
 def test_setup():
 
-    running_for_first_time = False
+    running_for_first_time = True
 
     con = sqlite3.connect('test_files/historical.db')
     historical_inputs = inputs.HistoricalInputs(
@@ -42,7 +42,7 @@ def test_setup():
         #historical_inputs.build_xml_inputs_cache(start_year=2019, start_month=2,
         #                              end_year=2019, end_month=2)
 
-    get_violation_intervals = True
+    get_violation_intervals = False
 
     if get_violation_intervals:
         interval_with_fast_start_violations = \
@@ -139,8 +139,6 @@ def test_if_schudeled_units_dispatched_above_UIGF():
     con = sqlite3.connect('test_files/historical.db')
     inputs_manager = hi.DBManager(connection=con)
     for interval in get_test_intervals():
-        # if interval != '2019/01/25 16:15:00':
-        #     continue
         print(interval)
         dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval).loc[:, ['DUID', 'TOTALCLEARED']]
         xml_inputs = hist_xml.XMLInputs(cache_folder='test_files/historical_xml_files', interval=interval)
@@ -200,8 +198,6 @@ def test_fast_start_constraints():
         nemde_xml_cache_folder='test_files/historical_xml_files')
 
     for interval in get_test_intervals():
-        if interval != '2019/01/31 05:30:00':
-            continue
         print(interval)
         market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
                                       interval=interval)
@@ -226,6 +222,25 @@ def test_fast_start_constraints():
             market.dispatch()
             assert market.measured_violation_equals_historical_violation('fast_start',
                                                                          nempy_constraints=['fast_start'])
+            
+            
+def test_capacity_constraints():
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect(inputs_database)
+    historical_inputs = inputs.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
+
+    for interval in get_test_intervals():
+        print(interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
+                                      interval=interval)
+        market.add_unit_bids_to_market()
+        market.set_unit_limit_constraints()
+        market.set_unit_dispatch_to_historical_values()
+        market.dispatch()
+        assert market.measured_violation_equals_historical_violation('unit_capacity',
+                                                                     nempy_constraints=['unit_capacity'])
 
 
 def test_fcas_trapezium_scaled_availability():
@@ -236,12 +251,6 @@ def test_fcas_trapezium_scaled_availability():
         nemde_xml_cache_folder='test_files/historical_xml_files')
     skip = True
     for interval in get_test_intervals():
-        if interval == '2019/01/07 19:35:00':
-            skip = False
-        if skip:
-            continue
-        if interval != '2019/01/03 06:30:00':
-            continue
         print(interval)
         market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
         market.add_unit_bids_to_market()
@@ -260,6 +269,18 @@ def test_fcas_trapezium_scaled_availability():
         assert avails['error'].abs().max() < 1.1
 
 
+def test_all_units_and_service_dispatch_historically_present_in_market():
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    historical_inputs = inputs.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
+    for interval in get_test_intervals():
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
+        market.add_unit_bids_to_market()
+        assert market.all_dispatch_units_and_service_have_decision_variables()
+
+
 def test_slack_in_generic_constraints():
     inputs_database = 'test_files/historical.db'
     con = sqlite3.connect('test_files/historical.db')
@@ -267,8 +288,6 @@ def test_slack_in_generic_constraints():
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
-        # if interval != '2019/01/31 15:20:00':
-        #     continue
         print(interval)
         market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
         market.add_unit_bids_to_market()
@@ -294,6 +313,7 @@ def test_slack_in_generic_constraints_use_fcas_requirements_interface():
         market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
         market.set_interconnector_flow_to_historical_values()
         market.dispatch(calc_prices=False)
+        assert market.all_constraints_presenet()
         assert market.is_generic_constraint_slack_correct()
         assert market.is_fcas_constraint_slack_correct()
 
@@ -414,15 +434,9 @@ def test_prices_full_featured():
     c = 0
     for interval in get_test_intervals():
         c += 1
-        if c > 10:
+        if c > 100:
             break
         print(interval)
-        if interval not in ['2019/01/30 04:30:00']:
-            continue
-        # if interval in ['2019/01/28 03:35:00', '2019/01/28 20:50:00']:
-        #     continue
-        # if interval in ['2019/01/29 20:40:00']:
-        #     break
         market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
@@ -431,12 +445,14 @@ def test_prices_full_featured():
         market.set_unit_limit_constraints()
         market.set_region_demand_constraints()
         market.set_ramp_rate_limits()
-        inter_vars = market.market.decision_variables['interconnectors']
-        inter_vars = inter_vars[inter_vars['interconnector'].isin(['T-V-MNSP1_forward', 'T-V-MNSP1_reverse'])]
-        inter_vars = inter_vars.loc[:, ['variable_id']]
-        inter_vars['cost'] = -0.01
-        market.market.objective_function_components['inters'] = inter_vars
+        market.market.set_tie_break_constraints(cost=1e-6)
+        # inter_vars = market.market.decision_variables['interconnectors']
+        # inter_vars = inter_vars[inter_vars['interconnector'].isin(['T-V-MNSP1_forward', 'T-V-MNSP1_reverse'])]
+        # inter_vars = inter_vars.loc[:, ['variable_id']]
+        # inter_vars['cost'] = -0.01
+        # market.market.objective_function_components['inters'] = inter_vars
         market.dispatch()
+        avails = market.market.get_fcas_availability()
         disp = market.get_dispatch_comparison().sort_values('diff')
         outputs.append(market.get_price_comparison())
     outputs = pd.concat(outputs)
@@ -466,10 +482,16 @@ class HistoricalSpotMarket:
         self.market.set_unit_price_bids(price_bids)
 
     def set_unit_limit_constraints(self):
-        unit_availability_limit = self.unit_inputs.get_unit_availability()
-        self.market.set_unit_capacity_constraints(unit_availability_limit)
-        cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['energy_offer']
-        self.market.make_constraints_elastic('unit_capacity', violation_cost=cost)
+        unit_bid_limit = self.unit_inputs.get_unit_bid_availability()
+        self.market.set_unit_bid_capacity_constraints(unit_bid_limit)
+        cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['unit_capacity']
+        self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
+        unit_ugif_limit = self.unit_inputs.get_unit_uigf_limits()
+        self.market.set_unit_ugif_capacity(unit_ugif_limit)
+        cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['ugif']
+        self.market.make_constraints_elastic('ugif_capacity', violation_cost=cost)
+
+        
 
     # def set_unit_ugif_limits(self):
     #     unit_availability_limit = self.unit_inputs.get_unit_availability()
@@ -597,8 +619,8 @@ class HistoricalSpotMarket:
         generic_rhs['type'] = generic_type['type'].apply(lambda x: type_map[x])
 
         bid_type_map = dict(ENOF='energy', LDOF='energy', L5RE='lower_reg', R5RE='raise_reg', R5MI='raise_5min',
-                            L5MI='lower_5min', R60S='raise_60sec', L60S='lower_60sec', R6SE='raise_6sec',
-                            L6SE='lower_6sec')
+                            L5MI='lower_5min', R60S='raise_60s', L60S='lower_60s', R6SE='raise_6s',
+                            L6SE='lower_6s')
 
         unit_generic_lhs = self.unit_inputs.xml_inputs.get_constraint_unit_lhs()
         unit_generic_lhs['service'] = unit_generic_lhs['service'].apply(lambda x: bid_type_map[x])
@@ -670,6 +692,33 @@ class HistoricalSpotMarket:
         decision_variables = pd.concat([decision_variables_first_bid, decision_variables_remaining_bids])
 
         self.market.decision_variables['bids'] = decision_variables
+
+    def all_dispatch_units_and_service_have_decision_variables(self, wiggle_room=0.001):
+        DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
+
+        bounds = DISPATCHLOAD.loc[:, ['DUID'] + self.services]
+        bounds.columns = ['unit'] + self.services
+
+        bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=self.services, type_name='service',
+                                  value_name='dispatched')
+
+        bounds['service'] = bounds['service'].apply(lambda x: self.service_name_mapping[x])
+
+        bounds = bounds[bounds['dispatched'] > 0.001]
+
+        decision_variables = self.market.decision_variables['bids'].copy()
+
+        decision_variables = decision_variables.groupby(['unit', 'service'], as_index=False).first()
+
+        decision_variables = pd.merge(bounds, decision_variables, how='left', on=['unit', 'service'])
+
+        decision_variables['not_missing'] = ~decision_variables['variable_id'].isna()
+
+        decision_variables = decision_variables.sort_values('not_missing')
+
+        return decision_variables['not_missing'].all()
+
+
 
     def set_interconnector_flow_to_historical_values(self, wiggle_room=0.1):
         # Historical interconnector dispatch
@@ -758,6 +807,13 @@ class HistoricalSpotMarket:
         generic_cons_slack['no_error'] = generic_cons_slack['comp'] < 0.9
         return generic_cons_slack['no_error'].all()
 
+    def all_constraints_presenet(self):
+        DISPATCHCONSTRAINT = list(self.inputs_manager.DISPATCHCONSTRAINT.get_data(self.interval)['CONSTRAINTID'])
+        fcas = list(self.market.market_constraints_rhs_and_type['fcas']['set'])
+        generic = list(self.market.constraints_rhs_and_type['generic']['set'])
+        generic = generic + fcas
+        return set(DISPATCHCONSTRAINT) < set(generic + [1])
+
     def get_price_comparison(self):
         energy_prices = self.market.get_energy_prices()
         energy_prices['time'] = self.interval
@@ -782,11 +838,15 @@ class HistoricalSpotMarket:
 
     def get_dispatch_comparison(self):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
+        bounds = DISPATCHLOAD.loc[:, ['DUID'] + self.services]
+        bounds.columns = ['unit'] + self.services
+        bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=self.services, type_name='service',
+                                  value_name='dispatched')
+        bounds['service'] = bounds['service'].apply(lambda x: self.service_name_mapping[x])
+
         nempy_dispatch = self.market.get_unit_dispatch()
-        comp = pd.merge(nempy_dispatch[nempy_dispatch['service'] == 'energy'],
-                        DISPATCHLOAD.loc[:, ['DUID', 'TOTALCLEARED']],
-                        'left', left_on='unit', right_on='DUID')
-        comp['diff'] = comp['dispatch'] - comp['TOTALCLEARED']
+        comp = pd.merge(bounds, nempy_dispatch, 'inner', on=['unit', 'service'])
+        comp['diff'] = comp['dispatch'] - comp['dispatched']
         comp = pd.merge(comp, self.market.unit_info.loc[:, ['unit', 'dispatch_type']], on='unit')
         comp['diff'] = np.where(comp['dispatch_type'] == 'load', comp['diff'] * -1, comp['diff'])
         return comp

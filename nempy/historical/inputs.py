@@ -11,7 +11,7 @@ class HistoricalInputs:
             historical_spot_market_inputs.DBManager(connection=market_management_system_database_connection)
 
     def build_market_management_system_database(self, start_year, start_month, end_year, end_month):
-        self.mms_db.create_tables()
+        #self.mms_db.create_tables()
 
         # Download data were inputs are needed on a monthly basis.
         finished = False
@@ -20,30 +20,33 @@ class HistoricalInputs:
                 if year == end_year and month == end_month + 1:
                     finished = True
                     break
-                self.mms_db.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
-                self.mms_db.DISPATCHREGIONSUM.add_data(year=year, month=month)
-                self.mms_db.DISPATCHLOAD.add_data(year=year, month=month)
-                self.mms_db.BIDPEROFFER_D.add_data(year=year, month=month)
-                self.mms_db.BIDDAYOFFER_D.add_data(year=year, month=month)
-                self.mms_db.DISPATCHCONSTRAINT.add_data(year=year, month=month)
-                self.mms_db.DISPATCHPRICE.add_data(year=year, month=month)
+                # self.mms_db.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
+                # self.mms_db.DISPATCHREGIONSUM.add_data(year=year, month=month)
+                # self.mms_db.DISPATCHLOAD.add_data(year=year, month=month)
+                # self.mms_db.BIDPEROFFER_D.add_data(year=year, month=month)
+                # self.mms_db.BIDDAYOFFER_D.add_data(year=year, month=month)
+                # self.mms_db.DISPATCHCONSTRAINT.add_data(year=year, month=month)
+                # self.mms_db.DISPATCHPRICE.add_data(year=year, month=month)
 
             if finished:
                 break
 
         # Download data where inputs are just needed from the latest month.
-        self.mms_db.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.mms_db.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
-        self.mms_db.LOSSMODEL.set_data(year=end_year, month=end_month)
+        # self.mms_db.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.mms_db.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
+        # self.mms_db.LOSSMODEL.set_data(year=end_year, month=end_month)
+        self.mms_db.DUDETAILSUMMARY.create_table_in_sqlite_db()
         self.mms_db.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
+        # self.mms_db.DUDETAIL.set_data(year=end_year, month=end_month)
+        # self.mms_db.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.mms_db.GENCONDATA.set_data(year=end_year, month=end_month)
+        # self.mms_db.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.mms_db.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.mms_db.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.mms_db.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.mms_db.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        self.mms_db.DUDETAIL.create_table_in_sqlite_db()
         self.mms_db.DUDETAIL.set_data(year=end_year, month=end_month)
-        self.mms_db.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.mms_db.GENCONDATA.set_data(year=end_year, month=end_month)
-        self.mms_db.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.mms_db.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.mms_db.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.mms_db.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.mms_db.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
 
     def build_xml_inputs_cache(self, start_year, start_month, end_year, end_month):
         start = datetime(year=start_year, month=start_month, day=1)

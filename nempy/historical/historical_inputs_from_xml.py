@@ -268,8 +268,9 @@ class XMLInputs:
         constraints = self.xml['NEMSPDCaseFile']['NemSpdOutputs']['ConstraintSolution']
         rhs_values = dict(set=[], rhs=[])
         for con in constraints:
-            rhs_values['set'].append(con['@ConstraintID'])
-            rhs_values['rhs'].append(float(con['@RHS']))
+            if con['@Intervention'] == '0':
+                rhs_values['set'].append(con['@ConstraintID'])
+                rhs_values['rhs'].append(float(con['@RHS']))
         return pd.DataFrame(rhs_values)
 
     def get_constraint_type(self):
@@ -340,7 +341,7 @@ class XMLInputs:
         lhs_values = dict(set=[], region=[], service=[], coefficient=[])
         for con in constraints:
             lhs = con['LHSFactorCollection']
-            if 'RegionFactor' in lhs:
+            if lhs is not None and 'RegionFactor' in lhs:
                 if type(lhs['RegionFactor']) == list:
                     for term in lhs['RegionFactor']:
                         lhs_values['set'].append(con['@ConstraintID'])
@@ -387,7 +388,7 @@ class XMLInputs:
         lhs_values = dict(set=[], unit=[], service=[], coefficient=[])
         for con in constraints:
             lhs = con['LHSFactorCollection']
-            if 'TraderFactor' in lhs:
+            if lhs is not None and 'TraderFactor' in lhs:
                 if type(lhs['TraderFactor']) == list:
                     for term in lhs['TraderFactor']:
                         lhs_values['set'].append(con['@ConstraintID'])
@@ -434,7 +435,7 @@ class XMLInputs:
         lhs_values = dict(set=[], interconnector=[], coefficient=[])
         for con in constraints:
             lhs = con['LHSFactorCollection']
-            if 'InterconnectorFactor' in lhs:
+            if lhs is not None and 'InterconnectorFactor' in lhs:
                 if type(lhs['InterconnectorFactor']) == list:
                     for term in lhs['InterconnectorFactor']:
                         lhs_values['set'].append(con['@ConstraintID'])

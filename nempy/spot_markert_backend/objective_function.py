@@ -105,5 +105,7 @@ def scale_by_loss_factors(objective_function, unit_info):
     # Match units with their loss factors.
     objective_function = pd.merge(objective_function, unit_info, how='inner', on='unit')
     # Refer bids cost to regional reference node, if a loss factor  was provided.
-    objective_function['cost'] = objective_function['cost'] / objective_function['loss_factor']
+    objective_function['cost'] = np.where(objective_function['service'] == 'energy',
+                                          objective_function['cost'] / objective_function['loss_factor'],
+                                          objective_function['cost'])
     return objective_function

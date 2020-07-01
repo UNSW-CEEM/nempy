@@ -163,7 +163,8 @@ class _MMSTable:
             'VIOLATIONDEGREE': 'REAL', 'MARGINALVALUE': 'REAL', 'RAISE6SECRRP': 'REAL',
             'RAISE60SECRRP': 'REAL', 'RAISE5MINRRP': 'REAL', 'RAISEREGRRP': 'REAL', 'LOWER6SECRRP': 'REAL',
             'LOWER60SECRRP': 'REAL', 'LOWER5MINRRP': 'REAL', 'LOWERREGRRP': 'REAL', 'FROM_REGION_TLF': 'REAL',
-            'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT', 'TOREGION': 'TEXT'
+            'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT', 'TOREGION': 'TEXT',
+            'REGISTEREDCAPACITY': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1253,8 +1254,11 @@ class DBManager:
                                                          'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
         self.DUDETAIL = InputsByEffectiveDateVersionNo(
-            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'MAXCAPACITY'],
+            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY'],
             table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        # self.DUDETAIL = InputsByEffectiveDateVersionNo(
+        #     table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'MAXCAPACITY'],
+        #     table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHCONSTRAINT = InputsBySettlementDate(
             table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
                                                             'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO',
