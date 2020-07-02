@@ -122,6 +122,10 @@ class XMLInputs:
                 for key, name in cols.items():
                     row = True
                     value = int(trader[name])
+                    if name == '@CurrentMode' and '@WhatIfCurrentMode' in trader:
+                        value = int(trader['@WhatIfCurrentMode'])
+                    if name == '@CurrentModeTime' and '@WhatIfCurrentModeTime' in trader:
+                        value = int(trader['@WhatIfCurrentModeTime'])
                     initial_conditions[key].append(value)
             if row:
                 initial_conditions['DUID'].append(trader['@TraderID'])
@@ -447,6 +451,23 @@ class XMLInputs:
                     lhs_values['interconnector'].append(term['@InterconnectorID'])
                     lhs_values['coefficient'].append(float(term['@Factor']))
         return pd.DataFrame(lhs_values)
+
+    def get_bass_link_bid_availability(self):
+        """
+
+        Examples
+        --------
+
+        >>> xml = XMLInputs('../../tests/test_files/historical_xml_files', '2019/01/27 13:45:00')
+
+        >>> xml.get_bass_link_bid_availability()
+
+        Returns
+        -------
+
+        """
+        bass_link_bids = self.xml['NEMSPDCaseFile']['NemSpdInputs']['InterconnectorPeriodCollection']['']
+
 
 
 

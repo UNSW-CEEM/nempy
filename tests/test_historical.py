@@ -240,7 +240,7 @@ def test_capacity_constraints():
         market.set_unit_dispatch_to_historical_values()
         market.dispatch()
         assert market.measured_violation_equals_historical_violation('unit_capacity',
-                                                                     nempy_constraints=['unit_capacity'])
+                                                                     nempy_constraints=['unit_bid_capacity'])
 
 
 def test_fcas_trapezium_scaled_availability():
@@ -306,13 +306,15 @@ def test_slack_in_generic_constraints_use_fcas_requirements_interface():
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
+        print(interval)
         market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.add_generic_constraints_fcas_requirements()
-        market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
-        market.set_interconnector_flow_to_historical_values()
+        market.set_unit_dispatch_to_historical_values(wiggle_room=0.0)
+        market.set_interconnector_flow_to_historical_values(wiggle_room=0.0)
         market.dispatch(calc_prices=False)
+        market.market.get_elastic_constraints_violation_degree('generic')
         assert market.all_constraints_presenet()
         assert market.is_generic_constraint_slack_correct()
         assert market.is_fcas_constraint_slack_correct()
@@ -339,71 +341,6 @@ def test_slack_in_generic_constraints_with_all_features():
         # assert market.is_generic_constraint_slack_correct()
         # assert market.is_fcas_constraint_slack_correct()
         # assert market.is_regional_demand_meet()
-
-
-def test_hist_dispatch_values_feasible_with_demand_constraints():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
-    for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
-        market.set_interconnector_flow_to_historical_values()
-        market.set_region_demand_constraints()
-        market.dispatch(calc_prices=False)
-
-
-def test_hist_dispatch_values_feasible_with_unit_fcas_and_limit_constraints():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
-    for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.set_unit_dispatch_to_historical_values()
-        market.set_interconnector_flow_to_historical_values()
-        market.set_unit_fcas_constraints()
-        market.set_unit_limit_constraints()
-        market.dispatch()
-
-
-def test_hist_dispatch_values_feasible_with_unit_fcas_constraints():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
-    for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.set_unit_dispatch_to_historical_values()
-        market.set_interconnector_flow_to_historical_values()
-        market.set_unit_fcas_constraints()
-        market.dispatch()
-
-
-def test_hist_dispatch_values_feasible_with_unit_limit_constraints():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
-    for interval in get_test_intervals():
-        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.set_unit_dispatch_to_historical_values()
-        market.set_interconnector_flow_to_historical_values()
-        market.set_unit_limit_constraints()
-        market.dispatch()
 
 
 def test_hist_dispatch_values_meet_demand():
@@ -445,16 +382,18 @@ def test_prices_full_featured():
         market.set_unit_limit_constraints()
         market.set_region_demand_constraints()
         market.set_ramp_rate_limits()
-        market.market.set_tie_break_constraints(cost=1e-6)
+        market.set_fast_start_constraints()
+        market.market.set_tie_break_constraints(cost=1e-3)
         # inter_vars = market.market.decision_variables['interconnectors']
         # inter_vars = inter_vars[inter_vars['interconnector'].isin(['T-V-MNSP1_forward', 'T-V-MNSP1_reverse'])]
         # inter_vars = inter_vars.loc[:, ['variable_id']]
         # inter_vars['cost'] = -0.01
         # market.market.objective_function_components['inters'] = inter_vars
-        market.dispatch()
+        market.dispatch(calc_prices=True)
         avails = market.market.get_fcas_availability()
         disp = market.get_dispatch_comparison().sort_values('diff')
-        outputs.append(market.get_price_comparison())
+        price_comp = market.get_price_comparison()
+        outputs.append(price_comp)
     outputs = pd.concat(outputs)
     outputs.to_csv('price_comp.csv')
 
@@ -616,7 +555,7 @@ class HistoricalSpotMarket:
         generic_type = self.unit_inputs.xml_inputs.get_constraint_type()
         generic_rhs = pd.merge(generic_rhs, generic_type.loc[:, ['set', 'type']], on='set')
         type_map = {'LE': '<=', 'EQ': '=', 'GE': '>='}
-        generic_rhs['type'] = generic_type['type'].apply(lambda x: type_map[x])
+        generic_rhs['type'] = generic_rhs['type'].apply(lambda x: type_map[x])
 
         bid_type_map = dict(ENOF='energy', LDOF='energy', L5RE='lower_reg', R5RE='raise_reg', R5MI='raise_5min',
                             L5MI='lower_5min', R60S='raise_60s', L60S='lower_60s', R6SE='raise_6s',
@@ -719,7 +658,6 @@ class HistoricalSpotMarket:
         return decision_variables['not_missing'].all()
 
 
-
     def set_interconnector_flow_to_historical_values(self, wiggle_room=0.1):
         # Historical interconnector dispatch
         DISPATCHINTERCONNECTORRES = self.inputs_manager.DISPATCHINTERCONNECTORRES.get_data(self.interval)
@@ -774,6 +712,7 @@ class HistoricalSpotMarket:
 
         DISPATCHCONSTRAINT = self.inputs_manager.DISPATCHCONSTRAINT.get_data(self.interval)
         generic_cons_slack = self.market.constraints_rhs_and_type['generic']
+        generic_cons_slack['slack'] = generic_cons_slack['slack'].abs()
         generic_cons_slack = pd.merge(generic_cons_slack, DISPATCHCONSTRAINT, left_on='set',
                                       right_on='CONSTRAINTID')
         generic_cons_slack['aemo_slack'] = (generic_cons_slack['RHS'] - generic_cons_slack['LHS'])
@@ -798,6 +737,7 @@ class HistoricalSpotMarket:
 
         DISPATCHCONSTRAINT = self.inputs_manager.DISPATCHCONSTRAINT.get_data(self.interval)
         generic_cons_slack = self.market.market_constraints_rhs_and_type['fcas']
+        generic_cons_slack['slack'] = generic_cons_slack['slack'].abs()
         generic_cons_slack = pd.merge(generic_cons_slack, DISPATCHCONSTRAINT, left_on='set',
                                       right_on='CONSTRAINTID')
         generic_cons_slack['aemo_slack'] = (generic_cons_slack['RHS'] - generic_cons_slack['LHS'])

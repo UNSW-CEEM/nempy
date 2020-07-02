@@ -37,9 +37,9 @@ class HistoricalUnits:
         bid_availability = bid_availability[~bid_availability['DUID'].isin(non_schedualed_units)]
         bid_availability = pd.merge(bid_availability, initial_cons, 'inner', on='DUID')
 
-        bid_availability['RAMPMIN'] = bid_availability['INITIALMW'] - bid_availability['RAMPDOWNRATE'] / 12
-        bid_availability['MAXAVAIL'] = np.where(bid_availability['RAMPMIN'] > bid_availability['MAXAVAIL'],
-                                                bid_availability['RAMPMIN'], bid_availability['MAXAVAIL'])
+        # bid_availability['RAMPMIN'] = bid_availability['INITIALMW'] - bid_availability['RAMPDOWNRATE'] / 12
+        # bid_availability['MAXAVAIL'] = np.where(bid_availability['RAMPMIN'] > bid_availability['MAXAVAIL'],
+        #                                         bid_availability['RAMPMIN'], bid_availability['MAXAVAIL'])
 
         bid_availability = bid_availability.loc[:, ['DUID', 'MAXAVAIL']]
         bid_availability.columns = ['unit', 'capacity']

@@ -217,7 +217,7 @@ class HistoricalInterconnectors:
 
         bass_link, interconnectors = split_out_bass_link(self.interconnectors)
         bass_link = split_interconnectors_definitions_into_two_one_directional_links(bass_link)
-        bass_link['min'] = 0.0
+        bass_link['max'] = np.where(bass_link['interconnector'] == 'T-V-MNSP1_forward', 478.0, bass_link['max'])
         self.interconnectors = pd.concat([interconnectors, bass_link])
 
         if self.loss_functions is not None:

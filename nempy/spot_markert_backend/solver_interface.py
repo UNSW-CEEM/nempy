@@ -7,9 +7,9 @@ class InterfaceToSolver:
     """A wrapper for the mip model class, allows interaction with mip using pd.DataFrames."""
     def __init__(self):
         self.variables = {}
-        self.mip_model = Model("market", solver_name=GRB)
+        self.mip_model = Model("market")
         self.mip_model.verbose = 0
-        #self.mip_model.max_mip_gap = 1e-6
+        self.mip_model.max_mip_gap = 1e-10
 
     def add_variables(self, decision_variables):
         """Add decision variables to the model.
