@@ -75,7 +75,7 @@ def test_historical_interconnector_losses():
         regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
         inter_flow = inputs_manager.DISPATCHINTERCONNECTORRES.get_data(interval)
 
-        market = markets.Spot()
+        market = markets.SpotMarket()
 
         inter_flow = inter_flow.loc[:, ['INTERCONNECTORID', 'MWFLOW', 'MWLOSSES']]
         inter_flow.columns = ['interconnector', 'MWFLOW', 'MWLOSSES']
@@ -411,7 +411,7 @@ class HistoricalSpotMarket:
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
                                      'ENERGY': 'energy'}
         self.unit_inputs = self.inputs.get_unit_inputs(self.interval)
-        self.market = markets.Spot()
+        self.market = markets.SpotMarket()
 
     def add_unit_bids_to_market(self):
         unit_info = self.unit_inputs.get_unit_info()

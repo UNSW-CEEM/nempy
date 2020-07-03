@@ -87,7 +87,7 @@ print(fcas_requirements)
 # 1    nsw_raise_6s_requirement    NSW   raise_6s    10.0
 
 # Create the market model with unit service bids.
-simple_market = markets.Spot()
+simple_market = markets.SpotMarket()
 simple_market.set_unit_info(unit_info)
 simple_market.set_unit_energy_volume_bids(volume_bids)
 simple_market.set_unit_energy_price_bids(price_bids)

@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, GRB
+from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY
 
 
 class InterfaceToSolver:

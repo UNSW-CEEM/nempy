@@ -95,7 +95,7 @@ for interval in dispatch_intervals:
                                               regional_demand.loc[:, ['region', 'loss_function_demand']])
 
     # Create a market instance.
-    market = markets.Spot()
+    market = markets.SpotMarket()
 
     # Add generators to the market.
     market.set_unit_info(unit_info.loc[:, ['unit', 'region', 'dispatch_type']])

@@ -3,7 +3,7 @@ from nempy import markets
 from nempy.historical import historical_spot_market_inputs
 
 # Create a market instance.
-simple_market = markets.Spot()
+simple_market = markets.SpotMarket()
 
 # The only generator is located in NSW.
 unit_info = pd.DataFrame({

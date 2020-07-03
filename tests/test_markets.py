@@ -36,7 +36,7 @@ def test_one_region_energy_market():
         'demand': [60.0]  # MW
     })
 
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)
@@ -92,7 +92,7 @@ def test_two_region_energy_market():
         'demand': [60.0, 80.0]  # MW
     })
 
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)
@@ -117,7 +117,7 @@ def test_two_region_energy_market():
 
 def test_one_interconnector():
     # Create a market instance.
-    simple_market = markets.Spot()
+    simple_market = markets.SpotMarket()
 
     # The only generator is located in NSW.
     unit_info = pd.DataFrame({
@@ -256,7 +256,7 @@ def test_one_region_energy_and_raise_regulation_markets():
     })
 
     # Create the market model
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
     simple_market.set_unit_price_bids(price_bids)
@@ -361,7 +361,7 @@ def test_raise_6s_and_raise_reg():
     })
 
     # Create the market model with unit service bids.
-    simple_market = markets.Spot()
+    simple_market = markets.SpotMarket()
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
     simple_market.set_unit_price_bids(price_bids)
@@ -467,7 +467,7 @@ def test_two_region_energy_market_with_regional_generic_constraints():
         'min': [-120.0]
     })
 
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_interconnectors(interconnectors)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
@@ -546,7 +546,7 @@ def test_two_region_energy_market_with_unit_generic_constraints():
         'min': [-120.0]
     })
 
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_interconnectors(interconnectors)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
@@ -624,7 +624,7 @@ def test_two_region_energy_market_with_interconnector_generic_constraints():
         'min': [-120.0]
     })
 
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_interconnectors(interconnectors)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
@@ -694,7 +694,7 @@ def test_use_unit_generic_constraints_to_exclude_unit_from_providing_raise_reg()
     })
 
     # Create the market model with unit service bids.
-    simple_market = markets.Spot()
+    simple_market = markets.SpotMarket()
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
     simple_market.set_unit_price_bids(price_bids)
@@ -769,7 +769,7 @@ def test_one_region_energy_market_with_elastic_unit_generic_constraints():
         'coefficient': [1.0]
     })
 
-    simple_market = markets.Spot(dispatch_interval=5)
+    simple_market = markets.SpotMarket(dispatch_interval=5)
     simple_market.set_unit_info(unit_info)
     simple_market.set_unit_volume_bids(volume_bids)
     simple_market.set_unit_capacity_constraints(unit_limits)

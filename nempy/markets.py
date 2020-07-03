@@ -2,16 +2,15 @@ import numpy as np
 import pandas as pd
 from nempy.help_functions import helper_functions as hf
 from nempy.spot_markert_backend import elastic_constraints, fcas_constraints, interconnectors as inter, \
-    market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, check
+    market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, check, \
+    dataframe_validator as dv
 
 
-class Spot:
+class SpotMarket:
     """Class for constructing and dispatching the spot market on an interval basis."""
 
-    def __init__(self, dispatch_interval=5, market_ceiling_price=14000.0, market_floor_price=-1000.0):
+    def __init__(self, market_regions, dispatch_interval=5):
         self.dispatch_interval = dispatch_interval
-        self.market_ceiling_price = market_ceiling_price
-        self.market_floor_price = market_floor_price
         self.unit_info = None
         self.decision_variables = {}
         self.variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
@@ -26,31 +25,23 @@ class Spot:
         self.interconnector_loss_shares = None
         self.next_variable_id = 0
         self.next_constraint_id = 0
-        self.check = True
+        self.validate_inputs = True
+        self.market_regions = market_regions
+        self.allowed_dispatch_types = ['generator', 'load']
+        self.allowed_services = ['energy', 'raise_reg', 'lower_reg', 'raise_5min', 'lower_5min', 'raise_60s',
+                                 'lower_60s', 'raise_6s', 'lower_6s']
 
-    @check.required_columns('unit_info', ['unit', 'region'])
-    @check.allowed_columns('unit_info', ['unit', 'region', 'loss_factor', 'dispatch_type'])
-    @check.column_data_types('unit_info', {'unit': str, 'region': str, 'loss_factor': np.float64,
-                                           'dispatch_type': str})
-    @check.column_values_must_be_real('unit_info', ['loss_factor'])
-    @check.column_values_not_negative('unit_info', ['loss_factor'])
     def set_unit_info(self, unit_info):
-        """Add general information required.
+        """Add unit information to the model.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> simple_market = SpotMarket(market_regions=['NSW'])
 
-        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        Define the unit information data needed to initialise the market, in this example all units are in the same
         region.
 
         >>> unit_info = pd.DataFrame({
@@ -60,6 +51,13 @@ class Spot:
         Add unit information
 
         >>> simple_market.set_unit_info(unit_info)
+
+        Note the units are given default a dispatch_type and loss_factor.
+
+        >>> simple_market.get_unit_info()
+          unit region dispatch_type  loss_factor
+        0    A    NSW     generator          1.0
+        1    B    NSW     generator          1.0
 
         Parameters
         ----------
@@ -72,56 +70,83 @@ class Spot:
             region         location of unit, required (as `str`)
             loss_factor    marginal, average or combined loss factors, \n
                            :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
-                           optional (as `np.int64`)
-            dispatch_type  "load" or "generator" (as `str`)
+                           optional, (as `np.int64`)
+            dispatch_type  "load" or "generator", optional, (as `str`)
             =============  ============================================================================================
 
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any unit.
+                If there is more than one row for any 'unit'.
             ColumnDataTypeError
                 If columns are not of the require type.
             MissingColumnError
                 If the column 'units' or 'regions' is missing.
             UnexpectedColumn
-                There is a column that is not 'units', 'regions' or 'loss_factor'.
+                There is a column that is not 'units', 'regions', 'dispatch_type' or 'loss_factor'.
             ColumnValues
                 If there are inf, null or negative values in the 'loss_factor' column."""
 
         if 'dispatch_type' not in unit_info.columns:
             unit_info['dispatch_type'] = 'generator'
+
+        if 'loss_factor' not in unit_info.columns:
+            unit_info['loss_factor'] = 1.0
+
+        if self.validate_inputs:
+            self._validate_unit_info(unit_info)
+
         self.unit_info = unit_info
 
-    @check.required_columns('volume_bids', ['unit'])
-    @check.allowed_columns('volume_bids', ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.repeated_rows('volume_bids', ['unit', 'service'])
-    @check.column_data_types('volume_bids', {'unit': str, 'service': str, 'else': np.float64})
-    @check.column_values_must_be_real('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.column_values_not_negative('volume_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.all_units_have_info
-    def set_unit_volume_bids(self, volume_bids):
-        """Creates the decision variables corresponding to energy bids.
+    def _validate_unit_info(self, unit_info):
+        schema = dv.DataFrameSchema(name='unit_info', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self.market_regions))
+        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
+        schema.add_column(dv.SeriesSchema(name='loss_factor', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(unit_info)
 
-        Variables are created by reserving a variable id (as `int`) for each bid. Bids with a volume of 0 MW do not
-        have a variable created. The lower bound of the variables are set to zero and the upper bound to the bid
-        volume, the variable type is set to continuous.
-
-        Also clears any preexisting constraints sets or objective functions that depend on the energy bid decision
-        variables.
+    def get_unit_info(self):
+        """Return the unit information as used in dispatch.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        see ~nempy.markets.Spot.set_unit_info
 
-        Import required packages.
+        Returns
+        -------
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        pd.DataFrame
+
+            Information on a unit basis, not all columns are required.
+
+            ===========    ============================================================================================
+            Columns:       Description:
+            unit           unique identifier of a dispatch unit, required (as `str`)
+            region         location of unit, required (as `str`)
+            loss_factor    marginal, average or combined loss factors, \n
+                           :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
+                           optional (as `np.int64`)
+            dispatch_type  "load" or "generator" (as `str`)
+            =============  ============================================================================================
+        """
+        return self.unit_info
+
+    def set_unit_volume_bids(self, volume_bids):
+        """Creates the decision variables corresponding to unit bids.
+
+        Variables are created by reserving a variable id (as `int`) for each bid. Bids with a volume of 0 MW do not
+        have a variable created. The lower bound of the variables are set to zero and the upper bound to the bid
+        volume, the variable type is set to continuous. If a no services is specified for the bids they are given the
+        default service value of energy is used.
+
+        Examples
+        --------
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> simple_market = SpotMarket(market_regions=['NSW'])
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -192,7 +217,7 @@ class Spot:
             1         bid volume in the 1st band, in MW (as `np.float64`)
             2         bid volume in the 2nd band, in MW (as `np.float64`)
               :
-            10         bid volume in the nth band, in MW (as `np.float64`)
+            10        bid volume in the nth band, in MW (as `np.float64`)
             ========  ================================================================
 
         Returns
@@ -202,29 +227,44 @@ class Spot:
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any unit.
+                If there is more than one row for any unit and service combination.
             ColumnDataTypeError
                 If columns are not of the require type.
             MissingColumnError
                 If the column 'units' is missing or there are no bid bands.
             UnexpectedColumn
-                There is a column that is not 'units' or '1' to '10'.
+                There is a column that is not 'unit', 'service' or '1' to '10'.
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
+        self._check_unit_info_set()
+
+        if self.validate_inputs:
+            self._validate_volume_bids(volume_bids)
+
         self.decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map = \
             variable_ids.bids(volume_bids, self.unit_info, self.next_variable_id)
+
         self.variable_to_constraint_map['regional']['bids'] = variable_to_regional_constraint_map
         self.variable_to_constraint_map['unit_level']['bids'] = variable_to_unit_level_constraint_map
         self.next_variable_id = max(self.decision_variables['bids']['variable_id']) + 1
 
-    @check.energy_bid_ids_exist
-    @check.required_columns('price_bids', ['unit'])
-    @check.allowed_columns('price_bids', ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.repeated_rows('price_bids', ['unit', 'service'])
-    @check.column_data_types('price_bids', {'unit': str, 'service': str, 'else': np.float64})
-    @check.column_values_must_be_real('price_bids', ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-    @check.bid_prices_monotonic_increasing
+    def _validate_volume_bids(self, volume_bids):
+        schema = dv.DataFrameSchema(name='volume_bids', primary_keys=['unit', 'service'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self.unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self.allowed_services),
+                          optional=True)
+        schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        for bid_band in range(2, 11):
+            schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True,
+                                              not_negative=True), optional=True)
+        schema.validate(volume_bids)
+
+    def _check_unit_info_set(self):
+        if self.unit_info is None:
+            raise ModelBuildError('This cannot be performed before unit info is set.')
+
     def set_unit_price_bids(self, price_bids):
         """Creates the objective function costs corresponding to energy bids.
 
@@ -234,16 +274,10 @@ class Spot:
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> simple_market = SpotMarket(market_regions=['NSW'])
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -280,7 +314,7 @@ class Spot:
 
         >>> simple_market.set_unit_price_bids(price_bids)
 
-        The market should now have costs.
+        The the variable assocaited with each bid should now have a cost.
 
         >>> print(simple_market.objective_function_components['bids'])
            variable_id unit service capacity_band   cost
@@ -315,24 +349,39 @@ class Spot:
             ModelBuildError
                 If the volume bids have not been set yet.
             RepeatedRowError
-                If there is more than one row for any unit.
+                If there is more than one row for any unit and service combination.
             ColumnDataTypeError
                 If columns are not of the require type.
             MissingColumnError
                 If the column 'units' is missing or there are no bid bands.
             UnexpectedColumn
-                There is a column that is not 'units' or '1' to '10'.
+                There is a column that is not 'units', 'region' or '1' to '10'.
             ColumnValues
                 If there are inf, -inf or null values in the bid band columns.
             BidsNotMonotonicIncreasing
                 If the bids band price for all units are not monotonic increasing.
         """
         energy_objective_function = objective_function.bids(self.decision_variables['bids'], price_bids, self.unit_info)
-        if 'loss_factor' in self.unit_info.columns:
-            energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function,
-                                                                                 self.unit_info)
+        energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function, self.unit_info)
         self.objective_function_components['bids'] = \
             energy_objective_function.loc[:, ['variable_id', 'unit', 'service', 'capacity_band', 'cost']]
+
+    def _validate_price_bids(self, price_bids):
+        schema = dv.DataFrameSchema(name='price_bids', primary_keys=['unit', 'service'],
+                                    row_monatonic_increasing=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self.unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self.allowed_services),
+                          optional=True)
+        schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        for bid_band in range(2, 11):
+            schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True,
+                                              not_negative=True), optional=True)
+        schema.validate(price_bids)
+
+    def _check_unit_volume_bids_set(self):
+        if 'bids' not in self.decision_variables:
+            raise ModelBuildError('Price bids cannot be set before setting volume bids.')
 
     @check.energy_bid_ids_exist
     @check.required_columns('unit_limits', ['unit', 'capacity'])
@@ -3198,3 +3247,11 @@ class Spot:
 
         fcas_availability['availability'] = fcas_availability['dispatch'] + fcas_availability['service_slack']
         return fcas_availability.loc[:, ['unit', 'service', 'availability']]
+
+
+class ModelBuildError(Exception):
+    """Raise for building model components in wrong order."""
+
+
+class MissingTable(Exception):
+    """Raise for trying to access missing table."""
