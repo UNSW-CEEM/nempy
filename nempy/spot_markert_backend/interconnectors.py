@@ -116,6 +116,87 @@ def create(definitions, next_variable_id):
     return decision_variables, constraint_map
 
 
+def create_market_interconnector(definitions, next_variable_id):
+    """Create decision variables, and their mapping to constraints. For modeling interconnector flows.
+
+    Examples
+    --------
+    Definitions for two interconnectors, one called A, that nominal flows from region X to region Y, note A can flow in
+    both directions because of the way max and min are defined. The interconnector B nominal flows from Y to Z, but can
+    only flow in the forward direction.
+
+    >>> interconnector = pd.DataFrame({
+    ...     'link': ['A', 'B'],
+    ...     'interconnector': ['inter_one', 'inter_one'],
+    ...     'to_region': ['VIC', 'NSW'],
+    ...     'from_region': ['NSW', 'VIC'],
+    ...     'min': [0.0, 0.0],
+    ...     'max': [100.0, 110.0],
+    ...     'generic_constraint_factor': [1.0, -1.0],
+    ...     'from_region_loss_factor': [1.0, 0.9],
+    ...     'to_region_loss_factor': [0.9, 1.0]})
+
+    >>> print(interconnector)
+      link interconnector  ... from_region_loss_factor to_region_loss_factor
+    0    A      inter_one  ...                     1.0                   0.9
+    1    B      inter_one  ...                     0.9                   1.0
+    <BLANKLINE>
+    [2 rows x 9 columns]
+
+    Start creating new variable ids from 0.
+
+    >>> next_variable_id = 0
+
+    Run the function and print results.
+
+    >>> decision_variables, constraint_map = create_msnp(interconnector, next_variable_id)
+
+    >>> print(decision_variables)
+      link interconnector  ...        type  generic_constraint_factor
+    0    A      inter_one  ...  continuous                        1.0
+    1    B      inter_one  ...  continuous                       -1.0
+    <BLANKLINE>
+    [2 rows x 7 columns]
+
+    >>> print(constraint_map)
+       variable_id region service  coefficient
+    0            0    VIC  energy          0.9
+    1            1    NSW  energy          1.0
+    2            0    NSW  energy         -1.0
+    3            1    VIC  energy         -0.9
+    """
+
+    # Create a variable_id for each interconnector.
+    decision_variables = hf.save_index(definitions, 'variable_id', next_variable_id)
+
+    # Create two entries in the constraint_map for each interconnector. This means the variable will be mapped to the
+    # demand constraint of both connected regions.
+    constraint_map = hf.stack_columns(decision_variables, ['variable_id', 'link', 'interconnector', 'max', 'min'],
+                                      ['to_region', 'from_region'], 'direction', 'region')
+    loss_factors = hf.stack_columns(decision_variables, ['variable_id'],
+                                      ['from_region_loss_factor', 'to_region_loss_factor'], 'direction', 'loss_factor')
+    loss_factors['direction'] = loss_factors['direction'].apply(lambda x: x.replace('_loss_factor', ''))
+    constraint_map = pd.merge(constraint_map, loss_factors, on=['variable_id', 'direction'])
+
+
+    # Define decision variable attributes.
+    decision_variables['type'] = 'continuous'
+    decision_variables = decision_variables.loc[:, ['link', 'interconnector', 'variable_id', 'min', 'max', 'type',
+                                                    'generic_constraint_factor']]
+    decision_variables.columns = ['link', 'interconnector',  'variable_id', 'lower_bound', 'upper_bound', 'type',
+                                  'generic_constraint_factor']
+
+    # Set positive coefficient for the to_region so the interconnector flowing in the nominal direction helps meet the
+    # to_region demand constraint. Negative for the from_region, same logic.
+    constraint_map['coefficient'] = np.where(constraint_map['direction'] == 'to_region',
+                                             1.0 * constraint_map['loss_factor'],
+                                             -1.0 * constraint_map['loss_factor'])
+    constraint_map['service'] = 'energy'
+    constraint_map = constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
+
+    return decision_variables, constraint_map
+
+
 def link_inter_loss_to_interpolation_weights(weight_variables, loss_variables, loss_functions, next_constraint_id):
     """Create the constraints that force the interconnector losses to be set by the interpolation weights.
 
@@ -222,25 +303,25 @@ def link_inter_loss_to_interpolation_weights(weight_variables, loss_variables, l
     """
 
     # Create a constraint for each set of weight variables.
-    constraint_ids = weight_variables.loc[:, ['interconnector']].drop_duplicates('interconnector')
+    constraint_ids = weight_variables.loc[:, ['interconnector', 'inter_variable_id']].drop_duplicates('inter_variable_id')
     constraint_ids = hf.save_index(constraint_ids, 'constraint_id', next_constraint_id)
 
     # Map weight variables to their corresponding constraints.
-    lhs = pd.merge(weight_variables.loc[:, ['interconnector', 'variable_id', 'break_point']], constraint_ids, 'inner',
-                   on='interconnector')
-    lhs = pd.merge(lhs, loss_functions, 'inner', on='interconnector')
+    lhs = pd.merge(weight_variables.loc[:, ['interconnector', 'inter_variable_id', 'variable_id', 'break_point']],
+                   constraint_ids, 'inner', on=['inter_variable_id', 'interconnector'])
+    lhs = pd.merge(lhs, loss_functions.loc[:, ['inter_variable_id', 'loss_function']], 'inner', on='inter_variable_id')
 
     # Evaluate the loss function at each break point to get the lhs coefficient.
     lhs['coefficient'] = lhs.apply(lambda x: x['loss_function'](x['break_point']), axis=1)
     lhs = lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
     # Get the loss variables that will be on the rhs of the constraints.
-    rhs_variables = loss_variables.loc[:, ['interconnector', 'variable_id']]
-    rhs_variables.columns = ['interconnector', 'rhs_variable_id']
+    rhs_variables = loss_variables.loc[:, ['interconnector', 'inter_variable_id', 'variable_id']]
+    rhs_variables.columns = ['interconnector', 'inter_variable_id', 'rhs_variable_id']
     # Map the rhs variables to their constraints.
-    rhs = pd.merge(constraint_ids, rhs_variables, 'inner', on='interconnector')
+    rhs = pd.merge(constraint_ids, rhs_variables, 'inner', on=['inter_variable_id', 'interconnector'])
     rhs['type'] = '='
-    rhs = rhs.loc[:, ['interconnector', 'constraint_id', 'type', 'rhs_variable_id']]
+    rhs = rhs.loc[:, ['interconnector', 'inter_variable_id', 'constraint_id', 'type', 'rhs_variable_id']]
     return lhs, rhs
 
 
@@ -327,22 +408,22 @@ def link_weights_to_inter_flow(weight_variables, flow_variables, next_constraint
     """
 
     # Create a constraint for each set of weight variables.
-    constraint_ids = weight_variables.loc[:, ['interconnector']].drop_duplicates('interconnector')
+    constraint_ids = weight_variables.loc[:, ['interconnector', 'inter_variable_id']].drop_duplicates('inter_variable_id')
     constraint_ids = hf.save_index(constraint_ids, 'constraint_id', next_constraint_id)
 
     # Map weight variables to their corresponding constraints.
-    lhs = pd.merge(weight_variables.loc[:, ['interconnector', 'variable_id', 'break_point']], constraint_ids, 'inner',
-                   on='interconnector')
+    lhs = pd.merge(weight_variables.loc[:, ['interconnector', 'inter_variable_id', 'variable_id', 'break_point']],
+                   constraint_ids, 'inner', on='inter_variable_id')
     lhs['coefficient'] = lhs['break_point']
     lhs = lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
     # Get the interconnector variables that will be on the rhs of constraint.
-    rhs_variables = flow_variables.loc[:, ['interconnector', 'variable_id']]
-    rhs_variables.columns = ['interconnector', 'rhs_variable_id']
+    rhs_variables = flow_variables.loc[:, ['interconnector', 'inter_variable_id', 'variable_id']]
+    rhs_variables.columns = ['interconnector', 'inter_variable_id', 'rhs_variable_id']
     # Map the rhs variables to their constraints.
-    rhs = pd.merge(constraint_ids, rhs_variables, 'inner', on='interconnector')
+    rhs = pd.merge(constraint_ids, rhs_variables, 'inner', on=['inter_variable_id', 'interconnector'])
     rhs['type'] = '='
-    rhs = rhs.loc[:, ['interconnector', 'constraint_id', 'type', 'rhs_variable_id']]
+    rhs = rhs.loc[:, ['interconnector', 'inter_variable_id', 'constraint_id', 'type', 'rhs_variable_id']]
     return lhs, rhs
 
 
@@ -416,12 +497,12 @@ def create_weights_must_sum_to_one(weight_variables, next_constraint_id):
     """
 
     # Create a constraint for each set of weight variables.
-    constraint_ids = weight_variables.loc[:, ['interconnector']].drop_duplicates('interconnector')
+    constraint_ids = weight_variables.loc[:, ['inter_variable_id']].drop_duplicates('inter_variable_id')
     constraint_ids = hf.save_index(constraint_ids, 'constraint_id', next_constraint_id)
 
     # Map weight variables to their corresponding constraints.
-    lhs = pd.merge(weight_variables.loc[:, ['interconnector', 'variable_id']], constraint_ids, 'inner',
-                   on='interconnector')
+    lhs = pd.merge(weight_variables.loc[:, ['interconnector', 'inter_variable_id', 'variable_id']], constraint_ids,
+                   'inner', on='inter_variable_id')
     lhs['coefficient'] = 1.0
     lhs = lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
@@ -597,28 +678,31 @@ def create_loss_variables(inter_variables, inter_constraint_map, loss_shares, ne
     columns_for_loss_variables = \
         inter_variables.loc[:, ['interconnector', 'variable_id', 'lower_bound', 'upper_bound', 'type']]
     columns_for_loss_variables.columns = ['interconnector', 'inter_variable_id', 'lower_bound', 'upper_bound', 'type']
+    columns_for_loss_variables['upper_bound'] = \
+        columns_for_loss_variables.loc[:, ['lower_bound', 'upper_bound']].abs().max(axis=1)
+    columns_for_loss_variables['lower_bound'] = -1 * columns_for_loss_variables['upper_bound']
+
     inter_constraint_map = inter_constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
     inter_constraint_map.columns = ['inter_variable_id', 'region', 'service', 'coefficient']
 
     # Create a variable id for loss variables
-    loss_variables = hf.save_index(loss_shares.loc[:, ['interconnector', 'from_region_loss_share']], 'variable_id',
-                                   next_variable_id)
-    # Use interconnector variable definitions to formulate loss variable definitions.
-    columns_for_loss_variables['upper_bound'] = \
-        columns_for_loss_variables.loc[:, ['lower_bound', 'upper_bound']].abs().max(axis=1)
-    columns_for_loss_variables['lower_bound'] = -1 * columns_for_loss_variables['upper_bound']
-    loss_variables = pd.merge(loss_variables, columns_for_loss_variables, 'inner', on='interconnector')
+    loss_variables = hf.save_index(columns_for_loss_variables, 'variable_id', next_variable_id)
+    loss_variables = pd.merge(loss_variables,
+                              loss_shares.loc[:, ['inter_variable_id', 'from_region_loss_share', 'from_region']],
+                              on=['inter_variable_id'])
 
     # Create the loss variable constraint map by combining the new variables and the flow variable constraint map.
     constraint_map = pd.merge(
-        loss_variables.loc[:, ['variable_id', 'inter_variable_id', 'interconnector', 'from_region_loss_share']],
+        loss_variables.loc[:, ['variable_id', 'inter_variable_id', 'interconnector', 'from_region_loss_share',
+                               'from_region']],
         inter_constraint_map, 'inner', on='inter_variable_id')
 
     # Assign losses to regions according to the from_region_loss_share
-    constraint_map['coefficient'] = np.where(constraint_map['coefficient'] < 0.0,
+    constraint_map['coefficient'] = np.where(constraint_map['from_region'] == constraint_map['region'],
                                              - 1 * constraint_map['from_region_loss_share'],
                                              - 1 * (1 - constraint_map['from_region_loss_share']))
 
-    loss_variables = loss_variables.loc[:, ['interconnector', 'variable_id', 'lower_bound', 'upper_bound', 'type']]
+    loss_variables = loss_variables.loc[:, ['interconnector', 'variable_id', 'inter_variable_id', 'lower_bound',
+                                            'upper_bound', 'type']]
     constraint_map = constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
     return loss_variables, constraint_map

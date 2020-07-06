@@ -56,6 +56,9 @@ class HistoricalInterconnectors:
         self.inputs_manager = inputs_manager
         self.interval = interval
         self.INTERCONNECTORCONSTRAINT = self.inputs_manager.INTERCONNECTORCONSTRAINT.get_data(self.interval)
+        self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'] = \
+            np.where(self.INTERCONNECTORCONSTRAINT['INTERCONNECTORID'] == 'T-V-MNSP1', 1.0,
+                     self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'])
         self.INTERCONNECTOR = self.inputs_manager.INTERCONNECTOR.get_data()
         self.interconnectors = format_interconnector_definitions(self.INTERCONNECTOR, self.INTERCONNECTORCONSTRAINT)
         self.splitting_used = False
@@ -129,7 +132,10 @@ class HistoricalInterconnectors:
             ========================  ==================================================================================
 
         """
-        return self.interconnectors
+        regulated_interconnectors = \
+            self.INTERCONNECTORCONSTRAINT[self.INTERCONNECTORCONSTRAINT['ICTYPE'] == 'REGULATED']['INTERCONNECTORID']
+        interconnectors = self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors)]
+        return interconnectors
 
     def get_interconnector_loss_model(self):
         """Returns inputs in the format needed to set interconnector losses in the Spot market class.
@@ -231,39 +237,16 @@ class HistoricalInterconnectors:
 
         self.splitting_used = True
 
-    def add_market_interconnector_transmission_loss_factors(self):
-        """Add loss factor for each end of the interconnector, market interconnectors get historical values and
-        regulated interconnectors get a default value of one.
+    def get_market_interconnector_links(self):
 
-        Examples
-        --------
-
-        For this example we use a fake DBManager. In production use the historical_spot_market_inputs.DBManager class.
-
-        >>> input_manager = FakeDBManager()
-
-        >>> interconnector_inputs = HistoricalInterconnectors(input_manager, '2019/01/01 00:00:00')
-
-        >>> interconnector_inputs.add_market_interconnector_transmission_loss_factors()
-
-        >>> interconnectors = interconnector_inputs.get_interconnector_definitions()
-
-        >>> print(interconnectors)
-          interconnector from_region  ... from_region_loss_factor  to_region_loss_factor
-        0      T-V-MNSP1         TAS  ...                     1.0                   0.75
-        1              Y         VIC  ...                     1.0                   1.00
-        <BLANKLINE>
-        [2 rows x 7 columns]
-
-        """
-
-        if self.splitting_used:
-            raise OrderError('Transmission loss factors must be added before splitting bass link.')
         MNSP_INTERCONNECTOR = self.inputs_manager.MNSP_INTERCONNECTOR.get_data(self.interval)
         mnsp_transmission_loss_factors = format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
                                                                                self.INTERCONNECTORCONSTRAINT)
-        self.interconnectors = add_inerconnector_transmission_loss_factors(self.interconnectors,
-                                                                           mnsp_transmission_loss_factors)
+        mnsp_transmission_loss_factors['max'] = \
+            np.where(mnsp_transmission_loss_factors['link'] == 'BLNKTAS', 478.0,
+                     mnsp_transmission_loss_factors['max'])
+        return mnsp_transmission_loss_factors
+
 
 
 class OrderError(Exception):
@@ -625,11 +608,13 @@ def format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR, INTERCONNECTORCON
     INTERCONNECTORCONSTRAINT = INTERCONNECTORCONSTRAINT[INTERCONNECTORCONSTRAINT['ICTYPE'] == 'MNSP']
     MNSP_INTERCONNECTOR = pd.merge(MNSP_INTERCONNECTOR, INTERCONNECTORCONSTRAINT, on=['INTERCONNECTORID'])
     MNSP_INTERCONNECTOR = MNSP_INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'LINKID', 'FROM_REGION_TLF', 'TO_REGION_TLF',
-                                                      'FROMREGION', 'TOREGION']]
+                                                      'FROMREGION', 'TOREGION', 'LHSFACTOR', 'MAXCAPACITY']]
     mnsp_transmission_loss_factors = MNSP_INTERCONNECTOR.rename(columns={
-        'INTERCONNECTORID': 'interconnector', 'LINKID': 'link_id', 'FROM_REGION_TLF': 'from_region_loss_factor',
-        'TO_REGION_TLF': 'to_region_loss_factor', 'FROMREGION': 'from_region', 'TOREGION': 'to_region'
+        'INTERCONNECTORID': 'interconnector', 'LINKID': 'link', 'FROM_REGION_TLF': 'from_region_loss_factor',
+        'TO_REGION_TLF': 'to_region_loss_factor', 'FROMREGION': 'from_region', 'TOREGION': 'to_region',
+        'LHSFACTOR': 'generic_constraint_factor', 'MAXCAPACITY': 'max'
     })
+    mnsp_transmission_loss_factors['min'] = 0.0
     return mnsp_transmission_loss_factors
 
 

@@ -164,7 +164,7 @@ class _MMSTable:
             'RAISE60SECRRP': 'REAL', 'RAISE5MINRRP': 'REAL', 'RAISEREGRRP': 'REAL', 'LOWER6SECRRP': 'REAL',
             'LOWER60SECRRP': 'REAL', 'LOWER5MINRRP': 'REAL', 'LOWERREGRRP': 'REAL', 'FROM_REGION_TLF': 'REAL',
             'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT', 'TOREGION': 'TEXT',
-            'REGISTEREDCAPACITY': 'REAL'
+            'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1243,7 +1243,7 @@ class DBManager:
                                                       'LOWERREGACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
-            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'RRP', 'RAISE6SECRRP',
+            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECRRP',
                                                        'RAISE60SECRRP', 'RAISE5MINRRP', 'RAISEREGRRP',
                                                        'LOWER6SECRRP', 'LOWER60SECRRP', 'LOWER5MINRRP',
                                                        'LOWERREGRRP'],
@@ -1303,7 +1303,7 @@ class DBManager:
         self.MNSP_INTERCONNECTOR = InputsByEffectiveDateVersionNo(
             table_name='MNSP_INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO',
                                                              'FROMREGION', 'TOREGION', 'FROM_REGION_TLF',
-                                                             'TO_REGION_TLF'],
+                                                             'TO_REGION_TLF', 'LHSFACTOR', 'MAXCAPACITY'],
             table_primary_keys=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
 
     def create_tables(self):

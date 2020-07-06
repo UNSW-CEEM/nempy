@@ -131,6 +131,17 @@ class InterfaceToSolver:
         # This is a hack to make mip knows there are binary constraints.
         k = self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
+    def add_sos_type_1(self, sos_variables):
+        # Function that adds sets to mip model.
+        def add_sos_vars(sos_group):
+            self.mip_model.add_sos(list(zip(sos_group['vars'], [1.0 for i in range(len(sos_variables['vars']))])), 1)
+        # For each variable_id get the variable object from the mip model
+        sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: self.variables[x])
+        # Break up the sets based on their id and add them to the model separately.
+        sos_variables.groupby('sos_id').apply(add_sos_vars)
+        # This is a hack to make mip knows there are binary constraints.
+        k = self.mip_model.add_var(var_type=BINARY, obj=0.0)
+
     def add_objective_function(self, objective_function):
         """Add the objective function to the mip model.
 
@@ -924,4 +935,15 @@ def create_interconnector_generic_constraint_lhs(generic_constraint_interconnect
                                   interconnector_variables.loc[:, ['interconnector', 'variable_id']],
                                   on=['interconnector'])
     interconnector_lhs = pd.merge(interconnector_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
+    return interconnector_lhs.loc[:, ['constraint_id', 'variable_id', 'coefficient']]
+
+
+def create_market_interconnector_generic_constraint_lhs(generic_constraint_interconnectors, generic_constraint_ids,
+                                                 interconnector_variables):
+    interconnector_lhs = pd.merge(generic_constraint_interconnectors,
+                                  interconnector_variables.loc[:, ['interconnector', 'variable_id',
+                                                                   'generic_constraint_factor']],
+                                  on=['interconnector'])
+    interconnector_lhs = pd.merge(interconnector_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
+    interconnector_lhs['coefficient'] = interconnector_lhs['coefficient'] * interconnector_lhs['generic_constraint_factor']
     return interconnector_lhs.loc[:, ['constraint_id', 'variable_id', 'coefficient']]

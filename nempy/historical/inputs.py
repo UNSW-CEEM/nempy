@@ -12,6 +12,7 @@ class HistoricalInputs:
 
     def build_market_management_system_database(self, start_year, start_month, end_year, end_month):
         #self.mms_db.create_tables()
+        self.mms_db.DISPATCHPRICE.create_table_in_sqlite_db()
 
         # Download data were inputs are needed on a monthly basis.
         finished = False
@@ -26,7 +27,7 @@ class HistoricalInputs:
                 # self.mms_db.BIDPEROFFER_D.add_data(year=year, month=month)
                 # self.mms_db.BIDDAYOFFER_D.add_data(year=year, month=month)
                 # self.mms_db.DISPATCHCONSTRAINT.add_data(year=year, month=month)
-                # self.mms_db.DISPATCHPRICE.add_data(year=year, month=month)
+                self.mms_db.DISPATCHPRICE.add_data(year=year, month=month)
 
             if finished:
                 break
@@ -35,8 +36,8 @@ class HistoricalInputs:
         # self.mms_db.INTERCONNECTOR.set_data(year=end_year, month=end_month)
         # self.mms_db.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
         # self.mms_db.LOSSMODEL.set_data(year=end_year, month=end_month)
-        self.mms_db.DUDETAILSUMMARY.create_table_in_sqlite_db()
-        self.mms_db.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
+        # self.mms_db.DUDETAILSUMMARY.create_table_in_sqlite_db()
+        # self.mms_db.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
         # self.mms_db.DUDETAIL.set_data(year=end_year, month=end_month)
         # self.mms_db.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
         # self.mms_db.GENCONDATA.set_data(year=end_year, month=end_month)
@@ -44,9 +45,10 @@ class HistoricalInputs:
         # self.mms_db.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
         # self.mms_db.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
         # self.mms_db.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.mms_db.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
         # self.mms_db.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.mms_db.DUDETAIL.create_table_in_sqlite_db()
-        self.mms_db.DUDETAIL.set_data(year=end_year, month=end_month)
+        # self.mms_db.DUDETAIL.create_table_in_sqlite_db()
+        # self.mms_db.DUDETAIL.set_data(year=end_year, month=end_month)
 
     def build_xml_inputs_cache(self, start_year, start_month, end_year, end_month):
         start = datetime(year=start_year, month=start_month, day=1)
