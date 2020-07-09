@@ -28,7 +28,7 @@ def get_test_intervals():
 
 def test_setup():
 
-    running_for_first_time = False
+    running_for_first_time = True
 
     con = sqlite3.connect('test_files/historical.db')
     historical_inputs = inputs.HistoricalInputs(
@@ -369,11 +369,7 @@ def test_prices_full_featured():
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     outputs = []
-    c = 0
     for interval in get_test_intervals():
-        c += 1
-        if c > 100:
-            break
         print(interval)
         market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
         market.add_unit_bids_to_market()
@@ -385,18 +381,41 @@ def test_prices_full_featured():
         market.set_ramp_rate_limits()
         market.set_fast_start_constraints()
         market.market.set_tie_break_constraints(cost=1e-3)
-        # inter_vars = market.market.decision_variables['interconnectors']
-        # inter_vars = inter_vars[inter_vars['interconnector'].isin(['T-V-MNSP1_forward', 'T-V-MNSP1_reverse'])]
-        # inter_vars = inter_vars.loc[:, ['variable_id']]
-        # inter_vars['cost'] = -0.01
-        # market.market.objective_function_components['inters'] = inter_vars
         market.dispatch(calc_prices=True)
-        avails = market.market.get_fcas_availability()
-        disp = market.get_dispatch_comparison().sort_values('diff')
+        #avails = market.market.get_fcas_availability()
+        #disp = market.get_dispatch_comparison().sort_values('diff')
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
     outputs.to_csv('price_comp.csv')
+
+
+def test_prices_full_featured_one_day_sequence():
+    inputs_database = 'test_files/historical.db'
+    con = sqlite3.connect('test_files/historical.db')
+    historical_inputs = inputs.HistoricalInputs(
+        market_management_system_database_connection=con,
+        nemde_xml_cache_folder='test_files/historical_xml_files')
+    outputs = []
+    for interval in hi.datetime_dispatch_sequence(start_time='2019/01/15 00:00:00', end_time='2019/01/16 00:00:00'):
+        print(interval)
+        market = HistoricalSpotMarket(inputs_database=inputs_database, inputs=historical_inputs, interval=interval)
+        market.add_unit_bids_to_market()
+        market.add_interconnectors_to_market()
+        market.add_generic_constraints_fcas_requirements()
+        market.set_unit_fcas_constraints()
+        market.set_unit_limit_constraints()
+        market.set_region_demand_constraints()
+        market.set_ramp_rate_limits()
+        market.set_fast_start_constraints()
+        #market.market.set_tie_break_constraints(cost=1e-3)
+        market.dispatch(calc_prices=True)
+        #avails = market.market.get_fcas_availability()
+        #disp = market.get_dispatch_comparison().sort_values('diff')
+        price_comp = market.get_price_comparison()
+        outputs.append(price_comp)
+    outputs = pd.concat(outputs)
+    outputs.to_csv('price_comp_2019_01_15.csv')
 
 
 class HistoricalSpotMarket:
@@ -427,7 +446,7 @@ class HistoricalSpotMarket:
         cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['unit_capacity']
         self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
         unit_ugif_limit = self.unit_inputs.get_unit_uigf_limits()
-        self.market.set_unit_ugif_capacity(unit_ugif_limit)
+        self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_ugif_limit)
         cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['ugif']
         self.market.make_constraints_elastic('ugif_capacity', violation_cost=cost)
 
@@ -602,7 +621,7 @@ class HistoricalSpotMarket:
 
         bounds['service'] = bounds['service'].apply(lambda x: self.service_name_mapping[x])
 
-        decision_variables = self.market.decision_variables['bids'].copy()
+        decision_variables = self.market._decision_variables['bids'].copy()
 
         decision_variables = pd.merge(decision_variables, bounds, on=['unit', 'service'])
 
@@ -625,7 +644,7 @@ class HistoricalSpotMarket:
 
         decision_variables = pd.concat([decision_variables_first_bid, decision_variables_remaining_bids])
 
-        self.market.decision_variables['bids'] = decision_variables
+        self.market._decision_variables['bids'] = decision_variables
 
     def all_dispatch_units_and_service_have_decision_variables(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
@@ -640,7 +659,7 @@ class HistoricalSpotMarket:
 
         bounds = bounds[bounds['dispatched'] > 0.001]
 
-        decision_variables = self.market.decision_variables['bids'].copy()
+        decision_variables = self.market._decision_variables['bids'].copy()
 
         decision_variables = decision_variables.groupby(['unit', 'service'], as_index=False).first()
 
@@ -659,15 +678,15 @@ class HistoricalSpotMarket:
         interconnector_flow = DISPATCHINTERCONNECTORRES.loc[:, ['INTERCONNECTORID', 'MWFLOW']]
         interconnector_flow.columns = ['interconnector', 'flow']
 
-        flow_variables = self.market.decision_variables['interconnectors']
+        flow_variables = self.market._decision_variables['interconnectors']
         interconnector_flow_reg = interconnector_flow[interconnector_flow['interconnector'] != 'T-V-MNSP1']
         flow_variables = pd.merge(flow_variables, interconnector_flow_reg, 'inner', on=['interconnector'])
         flow_variables['lower_bound'] = flow_variables['flow'] - wiggle_room
         flow_variables['upper_bound'] = flow_variables['flow'] + wiggle_room
         flow_variables = flow_variables.drop(['flow'], axis=1)
-        self.market.decision_variables['interconnectors'] = flow_variables
+        self.market._decision_variables['interconnectors'] = flow_variables
 
-        flow_variables = self.market.decision_variables['market_interconnectors']
+        flow_variables = self.market._decision_variables['market_interconnectors']
         interconnector_flow_market = interconnector_flow[interconnector_flow['interconnector'] == 'T-V-MNSP1']
         interconnector_flow_market['link'] = np.where(interconnector_flow_market['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC')
         flow_variables = pd.merge(flow_variables, interconnector_flow_market, 'left', on=['interconnector', 'link'])
@@ -675,7 +694,7 @@ class HistoricalSpotMarket:
         flow_variables['upper_bound'] = flow_variables['flow'].abs() + wiggle_room
         flow_variables = flow_variables.drop(['flow'], axis=1)
         flow_variables = flow_variables.fillna(0.0)
-        self.market.decision_variables['market_interconnectors'] = flow_variables
+        self.market._decision_variables['market_interconnectors'] = flow_variables
 
     @staticmethod
     def _split_out_bass_link(interconnectors):
@@ -684,7 +703,12 @@ class HistoricalSpotMarket:
         return bass_link, interconnectors
 
     def dispatch(self, calc_prices=True):
-        self.market.dispatch(price_market_constraints=calc_prices)
+        if 'OCD' in self.unit_inputs.xml_inputs.get_file_name():
+            self.market.dispatch(price_market_constraints=calc_prices, over_constrained_dispatch_re_run=True,
+                                 energy_market_floor_price=-1000.0, energy_market_ceiling_price=14500.0,
+                                 fcas_market_ceiling_price=1000.0)
+        else:
+            self.market.dispatch(price_market_constraints=calc_prices, over_constrained_dispatch_re_run=False)
 
     def is_regional_demand_meet(self, tolerance=0.5):
         DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
@@ -712,7 +736,7 @@ class HistoricalSpotMarket:
             return slack
 
         DISPATCHCONSTRAINT = self.inputs_manager.DISPATCHCONSTRAINT.get_data(self.interval)
-        generic_cons_slack = self.market.constraints_rhs_and_type['generic']
+        generic_cons_slack = self.market._constraints_rhs_and_type['generic']
         generic_cons_slack['slack'] = generic_cons_slack['slack'].abs()
         generic_cons_slack = pd.merge(generic_cons_slack, DISPATCHCONSTRAINT, left_on='set',
                                       right_on='CONSTRAINTID')
@@ -737,7 +761,7 @@ class HistoricalSpotMarket:
             return slack
 
         DISPATCHCONSTRAINT = self.inputs_manager.DISPATCHCONSTRAINT.get_data(self.interval)
-        generic_cons_slack = self.market.market_constraints_rhs_and_type['fcas']
+        generic_cons_slack = self.market._market_constraints_rhs_and_type['fcas']
         generic_cons_slack['slack'] = generic_cons_slack['slack'].abs()
         generic_cons_slack = pd.merge(generic_cons_slack, DISPATCHCONSTRAINT, left_on='set',
                                       right_on='CONSTRAINTID')
@@ -750,8 +774,8 @@ class HistoricalSpotMarket:
 
     def all_constraints_presenet(self):
         DISPATCHCONSTRAINT = list(self.inputs_manager.DISPATCHCONSTRAINT.get_data(self.interval)['CONSTRAINTID'])
-        fcas = list(self.market.market_constraints_rhs_and_type['fcas']['set'])
-        generic = list(self.market.constraints_rhs_and_type['generic']['set'])
+        fcas = list(self.market._market_constraints_rhs_and_type['fcas']['set'])
+        generic = list(self.market._constraints_rhs_and_type['generic']['set'])
         generic = generic + fcas
         return set(DISPATCHCONSTRAINT) < set(generic + [1])
 
@@ -763,9 +787,9 @@ class HistoricalSpotMarket:
         fcas_prices['time'] = self.interval
         prices = pd.concat([energy_prices, fcas_prices])
 
-        price_to_service = {'ROP': 'energy', 'RAISE6SECRRP': 'raise_6s', 'RAISE60SECRRP': 'raise_60s',
-                            'RAISE5MINRRP': 'raise_5min', 'RAISEREGRRP': 'raise_reg', 'LOWER6SECRRP': 'lower_6s',
-                            'LOWER60SECRRP': 'lower_60s', 'LOWER5MINRRP': 'lower_5min', 'LOWERREGRRP': 'lower_reg'}
+        price_to_service = {'ROP': 'energy', 'RAISE6SECROP': 'raise_6s', 'RAISE60SECROP': 'raise_60s',
+                            'RAISE5MINROP': 'raise_5min', 'RAISEREGROP': 'raise_reg', 'LOWER6SECROP': 'lower_6s',
+                            'LOWER60SECROP': 'lower_60s', 'LOWER5MINROP': 'lower_5min', 'LOWERREGROP': 'lower_reg'}
         price_columns = list(price_to_service.keys())
         historical_prices = self.inputs_manager.DISPATCHPRICE.get_data(self.interval)
         historical_prices = hf.stack_columns(historical_prices, cols_to_keep=['SETTLEMENTDATE', 'REGIONID'],
@@ -788,7 +812,7 @@ class HistoricalSpotMarket:
         nempy_dispatch = self.market.get_unit_dispatch()
         comp = pd.merge(bounds, nempy_dispatch, 'inner', on=['unit', 'service'])
         comp['diff'] = comp['dispatch'] - comp['dispatched']
-        comp = pd.merge(comp, self.market.unit_info.loc[:, ['unit', 'dispatch_type']], on='unit')
+        comp = pd.merge(comp, self.market._unit_info.loc[:, ['unit', 'dispatch_type']], on='unit')
         comp['diff'] = np.where(comp['dispatch_type'] == 'load', comp['diff'] * -1, comp['diff'])
         return comp
 

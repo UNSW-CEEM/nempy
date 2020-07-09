@@ -6,88 +6,94 @@ from nempy.spot_markert_backend import elastic_constraints, fcas_constraints, in
     dataframe_validator as dv
 
 
+# noinspection PyProtectedMember
 class SpotMarket:
-    """Class for constructing and dispatching the spot market on an interval basis."""
+    """Class for constructing and dispatching the spot market on an interval basis.
 
-    def __init__(self, market_regions, dispatch_interval=5):
+    Examples
+    --------
+
+    Define the unit information data needed to initialise the market, in this example all units are in the same
+    region.
+
+    >>> unit_info = pd.DataFrame({
+    ...     'unit': ['A', 'B'],
+    ...     'region': ['NSW', 'NSW']})
+
+    Initialise the market instance.
+
+    >>> market = SpotMarket(market_regions=['NSW'],
+    ...                            unit_info=unit_info)
+
+    The units are given a default dispatch_type and loss_factor. Note this data is stored in a private method and
+    not intended for public use.
+
+    >>> market._unit_info
+      unit region dispatch_type  loss_factor
+    0    A    NSW     generator          1.0
+    1    B    NSW     generator          1.0
+
+    Parameters
+    ----------
+    market_regions : list[str]
+        The market regions, used to validate inputs.
+
+    unit_info : pd.DataFrame
+        Information on a unit basis, not all columns are required.
+
+        =============  ===============================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit,
+                       (as `str`)
+        region         location of unit, required (as `str`)
+        loss_factor    marginal, average or combined loss factors, \n
+                       :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
+                       optional, (as `np.int64`)
+        dispatch_type  "load" or "generator", optional, (as `str`)
+        =============  ===============================================
+
+    dispatch_interval : int
+        The length of the dispatch interval in minutes, used for interpreting ramp rates.
+
+    Raises
+    ------
+        RepeatedRowError
+            If there is more than one row for any 'unit'.
+        ColumnDataTypeError
+            If columns are not of the require type.
+        MissingColumnError
+            If the column 'units' or 'regions' is missing.
+        UnexpectedColumn
+            There is a column that is not 'units', 'regions', 'dispatch_type' or 'loss_factor'.
+        ColumnValues
+            If there are inf, null or negative values in the 'loss_factor' column."""
+
+    def __init__(self, market_regions, unit_info, dispatch_interval=5):
         self.dispatch_interval = dispatch_interval
-        self.unit_info = None
-        self.decision_variables = {}
-        self.variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
-        self.constraint_to_variable_map = {'regional': {}, 'unit_level': {}}
-        self.lhs_coefficients = {}
-        self.generic_constraint_lhs = {}
-        self.constraints_rhs_and_type = {}
-        self.constraints_dynamic_rhs_and_type = {}
-        self.market_constraints_rhs_and_type = {}
-        self.objective_function_components = {}
-        self.interconnector_directions = None
-        self.market_interconnector_directions = None
-        self.interconnector_loss_shares = None
-        self.next_variable_id = 0
-        self.next_constraint_id = 0
+        self._unit_info = None
+        self._decision_variables = {}
+        self._variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
+        self._constraint_to_variable_map = {'regional': {}, 'unit_level': {}}
+        self._lhs_coefficients = {}
+        self._generic_constraint_lhs = {}
+        self._constraints_rhs_and_type = {}
+        self._constraints_dynamic_rhs_and_type = {}
+        self._market_constraints_rhs_and_type = {}
+        self._objective_function_components = {}
+        self._interconnector_directions = None
+        self._market_interconnector_directions = None
+        self._interconnector_loss_shares = None
+        self._next_variable_id = 0
+        self._next_constraint_id = 0
         self.validate_inputs = True
         self.check = True
-        self.market_regions = market_regions
-        self.allowed_dispatch_types = ['generator', 'load']
-        self.allowed_services = ['energy', 'raise_reg', 'lower_reg', 'raise_5min', 'lower_5min', 'raise_60s',
-                                 'lower_60s', 'raise_6s', 'lower_6s']
-
-    def set_unit_info(self, unit_info):
-        """Add unit information to the model.
-
-        Examples
-        --------
-
-        Initialise the market instance.
-
-        >>> simple_market = SpotMarket(market_regions=['NSW'])
-
-        Define the unit information data needed to initialise the market, in this example all units are in the same
-        region.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW']})
-
-        Add unit information
-
-        >>> simple_market.set_unit_info(unit_info)
-
-        Note the units are given default a dispatch_type and loss_factor.
-
-        >>> simple_market.get_unit_info()
-          unit region dispatch_type  loss_factor
-        0    A    NSW     generator          1.0
-        1    B    NSW     generator          1.0
-
-        Parameters
-        ----------
-        unit_info : pd.DataFrame
-            Information on a unit basis, not all columns are required.
-
-            ===========    ============================================================================================
-            Columns:       Description:
-            unit           unique identifier of a dispatch unit, required (as `str`)
-            region         location of unit, required (as `str`)
-            loss_factor    marginal, average or combined loss factors, \n
-                           :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
-                           optional, (as `np.int64`)
-            dispatch_type  "load" or "generator", optional, (as `str`)
-            =============  ============================================================================================
-
-        Raises
-        ------
-            RepeatedRowError
-                If there is more than one row for any 'unit'.
-            ColumnDataTypeError
-                If columns are not of the require type.
-            MissingColumnError
-                If the column 'units' or 'regions' is missing.
-            UnexpectedColumn
-                There is a column that is not 'units', 'regions', 'dispatch_type' or 'loss_factor'.
-            ColumnValues
-                If there are inf, null or negative values in the 'loss_factor' column."""
+        self._market_regions = market_regions
+        self._allowed_dispatch_types = ['generator', 'load']
+        self._allowed_services = ['energy', 'raise_reg', 'lower_reg', 'raise_5min', 'lower_5min', 'raise_60s',
+                                  'lower_60s', 'raise_6s', 'lower_6s']
+        self._allowed_fcas_services = self._allowed_services[:]
+        self._allowed_fcas_services.remove('energy')
+        self._allowed_constraint_types = ['<=', '=', '>=']
 
         if 'dispatch_type' not in unit_info.columns:
             unit_info['dispatch_type'] = 'generator'
@@ -98,42 +104,16 @@ class SpotMarket:
         if self.validate_inputs:
             self._validate_unit_info(unit_info)
 
-        self.unit_info = unit_info
+        self._unit_info = unit_info
 
     def _validate_unit_info(self, unit_info):
         schema = dv.DataFrameSchema(name='unit_info', primary_keys=['unit'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str))
-        schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self.market_regions))
+        schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
         schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.add_column(dv.SeriesSchema(name='loss_factor', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
         schema.validate(unit_info)
-
-    def get_unit_info(self):
-        """Return the unit information as used in dispatch.
-
-        Examples
-        --------
-        see ~nempy.markets.Spot.set_unit_info
-
-        Returns
-        -------
-
-        pd.DataFrame
-
-            Information on a unit basis, not all columns are required.
-
-            ===========    ============================================================================================
-            Columns:       Description:
-            unit           unique identifier of a dispatch unit, required (as `str`)
-            region         location of unit, required (as `str`)
-            loss_factor    marginal, average or combined loss factors, \n
-                           :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
-                           optional (as `np.int64`)
-            dispatch_type  "load" or "generator" (as `str`)
-            =============  ============================================================================================
-        """
-        return self.unit_info
 
     def set_unit_volume_bids(self, volume_bids):
         """Creates the decision variables corresponding to unit bids.
@@ -146,10 +126,6 @@ class SpotMarket:
         Examples
         --------
 
-        Initialise the market instance.
-
-        >>> simple_market = SpotMarket(market_regions=['NSW'])
-
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -157,9 +133,10 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Add unit information
+        Initialise the market instance.
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                            unit_info=unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -171,11 +148,11 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         The market should now have the variables.
 
-        >>> print(simple_market.decision_variables['bids'])
+        >>> print(market._decision_variables['bids'])
           unit capacity_band service  variable_id  lower_bound  upper_bound        type
         0    A             1  energy            0          0.0         20.0  continuous
         1    A             2  energy            1          0.0         20.0  continuous
@@ -186,7 +163,7 @@ class SpotMarket:
 
         A mapping of these variables to constraints acting on that unit and service should also exist.
 
-        >>> print(simple_market.variable_to_constraint_map['unit_level']['bids'])
+        >>> print(market._variable_to_constraint_map['unit_level']['bids'])
            variable_id unit service  coefficient
         0            0    A  energy          1.0
         1            1    A  energy          1.0
@@ -197,7 +174,7 @@ class SpotMarket:
 
         A mapping of these variables to constraints acting on the units region and service should also exist.
 
-        >>> print(simple_market.variable_to_constraint_map['regional']['bids'])
+        >>> print(market._variable_to_constraint_map['regional']['bids'])
            variable_id region service  coefficient
         0            0    NSW  energy          1.0
         1            1    NSW  energy          1.0
@@ -211,16 +188,19 @@ class SpotMarket:
         volume_bids : pd.DataFrame
             Bids by unit, in MW, can contain up to 10 bid bands, these should be labeled '1' to '10'.
 
-            ========  ================================================================
+            ========  ================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
-            service   the service being provided, optional, if missing energy assumed
-                      (as `str`)
-            1         bid volume in the 1st band, in MW (as `np.float64`)
-            2         bid volume in the 2nd band, in MW (as `np.float64`)
+            service   the service being provided, optional, \n
+                      default 'energy', (as `str`)
+            1         bid volume in the 1st band, in MW, \n
+                      (as `np.float64`)
+            2         bid volume in the 2nd band, in MW, optional, \n
+                      (as `np.float64`)
               :
-            10        bid volume in the nth band, in MW (as `np.float64`)
-            ========  ================================================================
+            10        bid volume in the nth band, in MW, optional, \n
+                      (as `np.float64`)
+            ========  ================================================
 
         Returns
         -------
@@ -239,22 +219,21 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-        self._check_unit_info_set()
 
         if self.validate_inputs:
             self._validate_volume_bids(volume_bids)
 
-        self.decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map = \
-            variable_ids.bids(volume_bids, self.unit_info, self.next_variable_id)
+        self._decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map = \
+            variable_ids.bids(volume_bids, self._unit_info, self._next_variable_id)
 
-        self.variable_to_constraint_map['regional']['bids'] = variable_to_regional_constraint_map
-        self.variable_to_constraint_map['unit_level']['bids'] = variable_to_unit_level_constraint_map
-        self.next_variable_id = max(self.decision_variables['bids']['variable_id']) + 1
+        self._variable_to_constraint_map['regional']['bids'] = variable_to_regional_constraint_map
+        self._variable_to_constraint_map['unit_level']['bids'] = variable_to_unit_level_constraint_map
+        self._next_variable_id = max(self._decision_variables['bids']['variable_id']) + 1
 
     def _validate_volume_bids(self, volume_bids):
         schema = dv.DataFrameSchema(name='volume_bids', primary_keys=['unit', 'service'])
-        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self.unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self.allowed_services),
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services),
                           optional=True)
         schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
@@ -262,10 +241,6 @@ class SpotMarket:
             schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True,
                                               not_negative=True), optional=True)
         schema.validate(volume_bids)
-
-    def _check_unit_info_set(self):
-        if self.unit_info is None:
-            raise ModelBuildError('This cannot be performed before unit info is set.')
 
     def set_unit_price_bids(self, price_bids):
         """Creates the objective function costs corresponding to energy bids.
@@ -277,10 +252,6 @@ class SpotMarket:
         Examples
         --------
 
-        Initialise the market instance.
-
-        >>> simple_market = SpotMarket(market_regions=['NSW'])
-
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -288,9 +259,10 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Add unit information
+        Initialise the market instance.
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -302,7 +274,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids. Bids for each unit need to be monotonically increasing.
 
@@ -314,11 +286,11 @@ class SpotMarket:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         The the variable assocaited with each bid should now have a cost.
 
-        >>> print(simple_market.objective_function_components['bids'])
+        >>> print(market._objective_function_components['bids'])
            variable_id unit service capacity_band   cost
         0            0    A  energy             1   50.0
         1            1    A  energy             2  100.0
@@ -332,15 +304,19 @@ class SpotMarket:
         price_bids : pd.DataFrame
             Bids by unit, in $/MW, can contain up to 10 bid bands.
 
-            ========  ===============================================================
+            ========  ================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
-            service   the service being provided, optional, if missing energy assumed
-                      (as `str`)
-            1         bid price in the 1st band, in $/MW (as `np.float64`)
-            2         bid price in the 2nd band, in $/MW (as `np.float64`)
-            n         bid price in the nth band, in $/MW (as `np.float64`)
-            ========  ===============================================================
+            service   the service being provided, optional,
+                      default 'energy', (as `str`)
+            1         bid price in the 1st band, in $/MW, \n
+                      (as `np.float64`)
+            2         bid price in the 2nd band, in $/MW, optional, \n
+                      (as `np.float64`)
+                :
+            10        bid price in the nth band, in $/MW, optional, \n
+                      (as `np.float64`)
+            ========  ================================================
 
         Returns
         -------
@@ -363,16 +339,18 @@ class SpotMarket:
             BidsNotMonotonicIncreasing
                 If the bids band price for all units are not monotonic increasing.
         """
-        energy_objective_function = objective_function.bids(self.decision_variables['bids'], price_bids, self.unit_info)
-        energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function, self.unit_info)
-        self.objective_function_components['bids'] = \
+        self._check_unit_volume_bids_set()
+        self._validate_price_bids(price_bids)
+        energy_objective_function = objective_function.bids(self._decision_variables['bids'], price_bids, self._unit_info)
+        energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function, self._unit_info)
+        self._objective_function_components['bids'] = \
             energy_objective_function.loc[:, ['variable_id', 'unit', 'service', 'capacity_band', 'cost']]
 
     def _validate_price_bids(self, price_bids):
         schema = dv.DataFrameSchema(name='price_bids', primary_keys=['unit', 'service'],
                                     row_monatonic_increasing=['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'])
-        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self.unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self.allowed_services),
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services),
                           optional=True)
         schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
@@ -382,31 +360,14 @@ class SpotMarket:
         schema.validate(price_bids)
 
     def _check_unit_volume_bids_set(self):
-        if 'bids' not in self.decision_variables:
+        if 'bids' not in self._decision_variables:
             raise ModelBuildError('Price bids cannot be set before setting volume bids.')
 
-    @check.energy_bid_ids_exist
-    @check.required_columns('unit_limits', ['unit', 'capacity'])
-    @check.allowed_columns('unit_limits', ['unit', 'capacity'])
-    @check.repeated_rows('unit_limits', ['unit'])
-    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('unit_limits', ['capacity'])
-    @check.column_values_not_negative('unit_limits', ['capacity'])
     def set_unit_bid_capacity_constraints(self, unit_limits):
-        """Creates constraints that limit unit output based on capacity.
+        """Creates constraints that limit unit output based on their bid in max capacity.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
-
-        Initialise the market instance.
-
-        >>> simple_market = markets.Spot()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -415,9 +376,10 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Add unit information
+        Initialise the market instance.
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -429,7 +391,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of unit capacities.
 
@@ -439,18 +401,20 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_unit_capacity_constraints(unit_limits)
+        >>> market.set_unit_bid_capacity_constraints(unit_limits)
 
         The market should now have a set of constraints.
 
-        >>> print(simple_market.constraints_rhs_and_type['unit_capacity'])
-          unit  constraint_id type    rhs
-        0    A              0   <=   60.0
-        1    B              1   <=  100.0
+        >>> print(market._constraints_rhs_and_type['unit_bid_capacity'])
+          unit service  constraint_id type    rhs
+        0    A  energy              0   <=   60.0
+        1    B  energy              1   <=  100.0
 
         ... and a mapping of those constraints to the variable types on the lhs.
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['unit_capacity'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['unit_bid_capacity'])
            constraint_id unit service  coefficient
         0              0    A  energy          1.0
         1              1    B  energy          1.0
@@ -461,11 +425,12 @@ class SpotMarket:
         unit_limits : pd.DataFrame
             Capacity by unit.
 
-            ========  =====================================================================================
+            ========  ================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
-            capacity  The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
-            ========  =====================================================================================
+            capacity  The maximum output of the unit if unconstrained \n
+                      by ramp rate, in MW (as `np.float64`)
+            ========  ================================================
 
         Returns
         -------
@@ -486,36 +451,24 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-        # 1. Create the constraints
-        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self.next_constraint_id)
-        # 2. Save constraint details.
-        self.constraints_rhs_and_type['unit_bid_capacity'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['unit_bid_capacity'] = variable_map
-        # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        self._check_unit_volume_bids_set()
+        self._validate_unit_limits(unit_limits)
+        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self._next_constraint_id)
+        self._constraints_rhs_and_type['unit_bid_capacity'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['unit_bid_capacity'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.energy_bid_ids_exist
-    @check.required_columns('unit_limits', ['unit', 'capacity'])
-    @check.allowed_columns('unit_limits', ['unit', 'capacity'])
-    @check.repeated_rows('unit_limits', ['unit'])
-    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('unit_limits', ['capacity'])
-    @check.column_values_not_negative('unit_limits', ['capacity'])
-    def set_unit_ugif_capacity(self, unit_limits):
-        """Creates constraints that limit unit output based on capacity.
+    def _validate_unit_limits(self, unit_limits):
+        schema = dv.DataFrameSchema(name='unit_limits', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='capacity', data_type=np.float64))
+        schema.validate(unit_limits)
+
+    def set_unconstrained_intermitent_generation_forecast_constraint(self, unit_limits):
+        """Creates constraints that limit unit output based on their forecast output.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
-
-        Initialise the market instance.
-
-        >>> simple_market = markets.Spot()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -524,9 +477,10 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Add unit information
+        Initialise the market instance.
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -538,9 +492,9 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
-        Define a set of unit capacities.
+        Define a set of unit forecast capacities.
 
         >>> unit_limits = pd.DataFrame({
         ...     'unit': ['A', 'B'],
@@ -548,18 +502,20 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_unit_capacity_constraints(unit_limits)
+        >>> market.set_unconstrained_intermitent_generation_forecast_constraint(unit_limits)
 
         The market should now have a set of constraints.
 
-        >>> print(simple_market.constraints_rhs_and_type['unit_capacity'])
-          unit  constraint_id type    rhs
-        0    A              0   <=   60.0
-        1    B              1   <=  100.0
+        >>> print(market._constraints_rhs_and_type['uigf_capacity'])
+          unit service  constraint_id type    rhs
+        0    A  energy              0   <=   60.0
+        1    B  energy              1   <=  100.0
 
         ... and a mapping of those constraints to the variable types on the lhs.
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['unit_capacity'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['uigf_capacity'])
            constraint_id unit service  coefficient
         0              0    A  energy          1.0
         1              1    B  energy          1.0
@@ -570,11 +526,12 @@ class SpotMarket:
         unit_limits : pd.DataFrame
             Capacity by unit.
 
-            ========  =====================================================================================
+            ========  ================================================
             Columns:  Description:
             unit      unique identifier of a dispatch unit (as `str`)
-            capacity  The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
-            ========  =====================================================================================
+            capacity  The maximum output of the unit if unconstrained \n
+                      by ramp rate, in MW (as `np.float64`)
+            ========  ================================================
 
         Returns
         -------
@@ -595,39 +552,20 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-        # 1. Create the constraints
-        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self.next_constraint_id)
-        # 2. Save constraint details.
-        self.constraints_rhs_and_type['ugif_capacity'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['ugif_capacity'] = variable_map
-        # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        self._check_unit_volume_bids_set()
+        self._validate_unit_limits(unit_limits)
+        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self._next_constraint_id)
+        self._constraints_rhs_and_type['uigf_capacity'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['uigf_capacity'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.energy_bid_ids_exist
-    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
-    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_up_rate'])
-    @check.repeated_rows('unit_limits', ['unit'])
-    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('unit_limits', ['ramp_up_rate'])
-    @check.column_values_not_negative('unit_limits', ['ramp_up_rate'])
-    def set_unit_ramp_up_constraints(self, unit_limits):
+    def set_unit_ramp_up_constraints(self, ramp_details):
         """Creates constraints on unit output based on ramp up rate.
 
-        Will constrain the unit output to be <= initial_output + (ramp_up_rate / (dispatch_interval / 60)).
+        Constrains the unit output to be <= initial_output + ramp_up_rate * (dispatch_interval / 60)
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
-
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
-
-        >>> simple_market = markets.Spot(dispatch_interval=30)
-
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -635,9 +573,11 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Add unit information
+        Initialise the market instance.
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info,
+        ...                     dispatch_interval=30)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -649,44 +589,49 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of unit ramp up rates.
 
-        >>> unit_limits = pd.DataFrame({
+        >>> ramp_details = pd.DataFrame({
         ...     'unit': ['A', 'B'],
         ...     'initial_output': [20.0, 50.0],
         ...     'ramp_up_rate': [30.0, 100.0]})
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_unit_ramp_up_constraints(unit_limits)
+        >>> market.set_unit_ramp_up_constraints(ramp_details)
 
         The market should now have a set of constraints.
 
-        >>> print(simple_market.constraints_rhs_and_type['ramp_up'])
-          unit  constraint_id type    rhs
-        0    A              0   <=   35.0
-        1    B              1   <=  100.0
+        >>> print(market._constraints_rhs_and_type['ramp_up'])
+          unit service  constraint_id type    rhs
+        0    A  energy              0   <=   35.0
+        1    B  energy              1   <=  100.0
 
         ... and a mapping of those constraints to variable type for the lhs.
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['ramp_up'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['ramp_up'])
            constraint_id unit service  coefficient
         0              0    A  energy          1.0
         1              1    B  energy          1.0
 
         Parameters
         ----------
-        unit_limits : pd.DataFrame
-            Capacity by unit.
+        ramp_details : pd.DataFrame
 
-            ==============  =====================================================================================
+            ==============  ==========================================
             Columns:        Description:
-            unit            unique identifier of a dispatch unit (as `str`)
-            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
-            ==============  =====================================================================================
+            unit            unique identifier of a dispatch unit, \n
+                            (as `str`)
+            initial_output  the output of the unit at the start of \n
+                            the dispatch interval, in MW, \n
+                            (as `np.float64`)
+            ramp_up_rate    the maximum rate at which the unit can \n
+                            increase output, in MW/h, (as `np.float64`)
+            ==============  ==========================================
 
         Returns
         -------
@@ -694,8 +639,6 @@ class SpotMarket:
 
         Raises
         ------
-            ModelBuildError
-                If the volume bids have not been set yet.
             RepeatedRowError
                 If there is more than one row for any unit.
             ColumnDataTypeError
@@ -707,39 +650,28 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-        # 1. Create the constraints
-        rhs_and_type, variable_map = unit_constraints.ramp_up(unit_limits, self.next_constraint_id,
+        self._validate_ramp_up_rates(ramp_details)
+        rhs_and_type, variable_map = unit_constraints.ramp_up(ramp_details, self._next_constraint_id,
                                                               self.dispatch_interval)
-        # 2. Save constraint details.
-        self.constraints_rhs_and_type['ramp_up'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['ramp_up'] = variable_map
-        # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        self._constraints_rhs_and_type['ramp_up'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['ramp_up'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
-    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_down_rate'])
-    @check.repeated_rows('unit_limits', ['unit'])
-    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64})
-    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_down_rate'])
-    @check.column_values_not_negative('unit_limits', ['ramp_down_rate'])
-    def set_unit_ramp_down_constraints(self, unit_limits):
+    def _validate_ramp_up_rates(self, ramp_details):
+        schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='initial_output', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='ramp_up_rate', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(ramp_details)
+
+    def set_unit_ramp_down_constraints(self, ramp_details):
         """Creates constraints on unit output based on ramp down rate.
 
-        Will constrain the unit output to be >= initial_output - (ramp_down_rate / (dispatch_interval / 60)).
+        Will constrain the unit output to be >= initial_output - ramp_down_rate * (dispatch_interval / 60).
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
-
-        Initialise the market instance, we set the dispatch interval to 30 min, by default it would be 5 min.
-
-        >>> simple_market = markets.Spot()
-
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
 
@@ -747,9 +679,11 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     'region': ['NSW', 'NSW']})
 
-        Add unit information
+        Initialise the market instance.
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info,
+        ...                     dispatch_interval=30)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -761,45 +695,50 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of unit ramp down rates, also need to provide the initial output of the units at the start of
         dispatch interval.
 
-        >>> unit_limits = pd.DataFrame({
+        >>> ramp_details = pd.DataFrame({
         ...     'unit': ['A', 'B'],
         ...     'initial_output': [20.0, 50.0],
         ...     'ramp_down_rate': [20.0, 10.0]})
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_unit_ramp_down_constraints(unit_limits)
+        >>> market.set_unit_ramp_down_constraints(ramp_details)
 
         The market should now have a set of constraints.
 
-        >>> print(simple_market.constraints_rhs_and_type['ramp_down'])
-          unit  constraint_id type        rhs
-        0    A              0   >=  18.333333
-        1    B              1   >=  49.166667
+        >>> print(market._constraints_rhs_and_type['ramp_down'])
+          unit service  constraint_id type   rhs
+        0    A  energy              0   >=  10.0
+        1    B  energy              1   >=  45.0
 
         ... and a mapping of those constraints to variable type for the lhs.
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['ramp_down'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['ramp_down'])
            constraint_id unit service  coefficient
         0              0    A  energy          1.0
         1              1    B  energy          1.0
 
         Parameters
         ----------
-        unit_limits : pd.DataFrame
-            Capacity by unit.
+        ramp_details : pd.DataFrame
 
-            ==============  =====================================================================================
+            ==============  ==========================================
             Columns:        Description:
-            unit            unique identifier of a dispatch unit (as `str`)
-            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`).
-            ==============  =====================================================================================
+            unit            unique identifier of a dispatch unit, \n
+                            (as `str`)
+            initial_output  the output of the unit at the start of \n
+                            the dispatch interval, in MW, \n
+                            (as `np.float64`)
+            ramp_up_rate    the maximum rate at which the unit can, \n
+                            increase output, in MW/h, (as `np.float64`)
+            ==============  ==========================================
 
         Returns
         -------
@@ -807,8 +746,6 @@ class SpotMarket:
 
         Raises
         ------
-            ModelBuildError
-                If the volume bids have not been set yet.
             RepeatedRowError
                 If there is more than one row for any unit.
             ColumnDataTypeError
@@ -820,44 +757,153 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-        # 1. Create the constraints
-        rhs_and_type, variable_map = unit_constraints.ramp_down(unit_limits, self.next_constraint_id,
+        self._validate_ramp_down_rates(ramp_details)
+        rhs_and_type, variable_map = unit_constraints.ramp_down(ramp_details, self._next_constraint_id,
                                                                 self.dispatch_interval)
-        # 2. Save constraint details.
-        self.constraints_rhs_and_type['ramp_down'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['ramp_down'] = variable_map
-        # 3. Update the constraint and variable id counter
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        self._constraints_rhs_and_type['ramp_down'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['ramp_down'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    def _validate_ramp_down_rates(self, ramp_details):
+        schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='initial_output', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='ramp_down_rate', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(ramp_details)
 
     def set_fast_start_constraints(self, fast_start_profiles):
-        rhs_and_type, variable_map = unit_constraints.create_fast_start_profile_constraints(
-            fast_start_profiles, self.next_constraint_id, self.dispatch_interval)
-        if not rhs_and_type.empty:
-            self.constraints_rhs_and_type['fast_start'] = rhs_and_type
-            self.constraint_to_variable_map['unit_level']['fast_start'] = variable_map
-            self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        """Create the constraints on fast start units dispatch, :download:`see AEMO doc <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`
 
-    @check.required_columns('demand', ['region', 'demand'])
-    @check.allowed_columns('demand', ['region', 'demand'])
-    @check.repeated_rows('demand', ['region'])
-    @check.column_data_types('demand', {'region': str, 'else': np.float64})
-    @check.column_values_must_be_real('demand', ['demand'])
-    @check.column_values_not_negative('demand', ['demand'])
+        Examples
+        --------
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B', 'C', 'D', 'E'],
+        ...     'region': ['NSW', 'NSW', 'NSW', 'NSW', 'NSW']})
+
+        Initialise the market instance.
+
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info,
+        ...                     dispatch_interval=30)
+
+        Define some example fast start conditions.
+
+        >>> fast_start_conditions = pd.DataFrame({
+        ...     'unit': ['A', 'B', 'C', 'D', 'E'],
+        ...     'end_mode': [0, 1, 2, 3, 4],
+        ...     'time_in_end_mode': [4, 5, 5, 12, 10],
+        ...     'mode_two_length': [7, 4, 10, 8, 6],
+        ...     'mode_four_length': [10, 10, 20, 8, 20],
+        ...     'min_loading': [30.0, 40.0, 35.0, 50.0, 60.0]})
+
+        Add fast start constraints.
+
+        >>> market.set_fast_start_constraints(fast_start_conditions)
+
+        The market should now have a set of constraints.
+
+        >>> print(market._constraints_rhs_and_type['fast_start'])
+          unit service  constraint_id type   rhs
+        0    B  energy              0   <=   0.0
+        0    C  energy              1   >=  17.5
+        0    C  energy              2   <=  17.5
+        0    D  energy              3   >=  50.0
+        0    E  energy              4   >=  30.0
+
+        ... and a mapping of those constraints to variable type for the lhs.
+
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['fast_start'])
+           constraint_id unit service  coefficient
+        0              0    B  energy          1.0
+        0              2    C  energy          1.0
+        0              1    C  energy          1.0
+        0              3    D  energy          1.0
+        0              4    E  energy          1.0
+
+        Parameters
+        ----------
+        fast_start_profiles : pd.DataFrame
+            ================  ==========================================
+            Columns:          Description:
+            unit              unique identifier of a dispatch unit, \n
+                              (as `str`)
+            end_mode          the fast start dispatch mode the unit \n
+                              will end the dispatch interval in, \n
+                              in minutes, (as `np.int64`),
+            time_in_end_mode  the time the unit will have spent in the \n
+                              end mode at the end of this dispatch \n
+                              interval, in minutes (as `np.int64`)
+            mode_two_length   the length of dispatch mode 2 for the \n
+                              unit, in minutes, (as `np.int64`)
+            mode_four_length  the length of dispatch mode 4 for the \n
+                              unit, in minutes, (as `np.int64`)
+            min_loading       the minimum stable operating level of \n
+                              unit, in MW, (as `np.float64`)
+            ================  ==========================================
+
+        Returns
+        -------
+
+        Raises
+        ------
+            RepeatedRowError
+                If there is more than one row for any unit.
+            ColumnDataTypeError
+                If columns are not of the require type.
+            MissingColumnError
+                If any columns are missing.
+            UnexpectedColumn
+                If any additional columns are present.
+            ColumnValues
+                If there are inf, null or negative values in any of the numeric columns.
+
+        """
+        if self.validate_inputs:
+            self._validate_fast_start_profiles(fast_start_profiles)
+        rhs_and_type, variable_map = unit_constraints.create_fast_start_profile_constraints(
+            fast_start_profiles, self._next_constraint_id, self.dispatch_interval)
+        if not rhs_and_type.empty:
+            self._constraints_rhs_and_type['fast_start'] = rhs_and_type
+            self._constraint_to_variable_map['unit_level']['fast_start'] = variable_map
+            self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    def _validate_fast_start_profiles(self, fast_start_profiles):
+        schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='end_mode', data_type=np.int64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='time_in_end_mode', data_type=np.int64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='mode_two_length', data_type=np.int64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='mode_four_length', data_type=np.int64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='min_loading', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(fast_start_profiles)
+
     def set_demand_constraints(self, demand):
         """Creates constraints that force supply to equal to demand.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
 
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define a demand level in each region.
 
@@ -867,17 +913,19 @@ class SpotMarket:
 
         Create constraints.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         The market should now have a set of constraints.
 
-        >>> print(simple_market.market_constraints_rhs_and_type['demand'])
+        >>> print(market._market_constraints_rhs_and_type['demand'])
           region  constraint_id type    rhs
         0    NSW              0    =  100.0
 
         ... and a mapping of those constraints to variable type for the lhs.
 
-        >>> print(simple_market.constraint_to_variable_map['regional']['demand'])
+        >>> regional_mapping = market._constraint_to_variable_map['regional']
+
+        >>> print(regional_mapping['demand'])
            constraint_id region service  coefficient
         0              0    NSW  energy          1.0
 
@@ -886,11 +934,12 @@ class SpotMarket:
         demand : pd.DataFrame
             Demand by region.
 
-            ========  =====================================================================================
+            ========  ================================================
             Columns:  Description:
-            region    unique identifier of a region (as `str`)
-            demand    the non dispatchable demand, in MW (as `np.float64`)
-            ========  =====================================================================================
+            region    unique identifier of a region, (as `str`)
+            demand    the non dispatchable demand, in MW, \n
+                      (as `np.float64`)
+            ========  ================================================
 
         Returns
         -------
@@ -909,58 +958,62 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the volume column.
         """
-        # 1. Create the constraints
-        rhs_and_type, variable_map = market_constraints.energy(demand, self.next_constraint_id)
-        # 2. Save constraint details
-        self.market_constraints_rhs_and_type['demand'] = rhs_and_type
-        self.constraint_to_variable_map['regional']['demand'] = variable_map
-        # 3. Update the constraint id
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        if self.validate_inputs:
+            self._validate_demand(demand)
+        rhs_and_type, variable_map = market_constraints.energy(demand, self._next_constraint_id)
+        self._market_constraints_rhs_and_type['demand'] = rhs_and_type
+        self._constraint_to_variable_map['regional']['demand'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('fcas_requirements', ['set', 'service', 'region', 'volume'])
-    @check.allowed_columns('fcas_requirements', ['set', 'service', 'region', 'volume', 'type'])
-    @check.repeated_rows('fcas_requirements', ['set', 'service', 'region'])
-    @check.column_data_types('fcas_requirements', {'set': str, 'service': str, 'region': str, 'type': str,
-                                                   'else': np.float64})
-    @check.column_values_must_be_real('fcas_requirements', ['volume'])
-    @check.column_values_not_negative('fcas_requirements', ['volume'])
+    def _validate_demand(self, demand):
+        schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['region'])
+        schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='demand', data_type=np.float64, must_be_real_number=True))
+        schema.validate(demand)
+
     def set_fcas_requirements_constraints(self, fcas_requirements):
         """Creates constraints that force FCAS supply to equal requirements.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        Define the unit information data set needed to initialise the market, in this example all units are in the same
+        region.
 
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = SpotMarket(market_regions=['QLD', 'NSW', 'VIC', 'SA'],
+        ...                     unit_info=unit_info)
 
         Define a regulation raise FCAS requirement that apply to all mainland states.
 
         >>> fcas_requirements = pd.DataFrame({
-        ...     'set': ['raise_reg_main', 'raise_reg_main', 'raise_reg_main', 'raise_reg_main'],
-        ...     'service': ['raise_reg', 'raise_reg', 'raise_reg', 'raise_reg'],
+        ...     'set': ['raise_reg_main', 'raise_reg_main',
+        ...             'raise_reg_main', 'raise_reg_main'],
+        ...     'service': ['raise_reg', 'raise_reg',
+        ...                 'raise_reg', 'raise_reg'],
         ...     'region': ['QLD', 'NSW', 'VIC', 'SA'],
         ...     'volume': [100.0, 100.0, 100.0, 100.0]})
 
         Create constraints.
 
-        >>> simple_market.set_fcas_requirements_constraints(fcas_requirements)
+        >>> market.set_fcas_requirements_constraints(fcas_requirements)
 
         The market should now have a set of constraints.
 
-        >>> print(simple_market.market_constraints_rhs_and_type['fcas'])
+        >>> print(market._market_constraints_rhs_and_type['fcas'])
                       set  constraint_id type    rhs
         0  raise_reg_main              0    =  100.0
 
         ... and a mapping of those constraints to variable type for the lhs.
 
-        >>> print(simple_market.constraint_to_variable_map['regional']['fcas'])
+        >>> regional_mapping = \
+            market._constraint_to_variable_map['regional']
+
+        >>> print(regional_mapping['fcas'])
            constraint_id    service region  coefficient
         0              0  raise_reg    QLD          1.0
         1              0  raise_reg    NSW          1.0
@@ -972,15 +1025,20 @@ class SpotMarket:
         fcas_requirements : pd.DataFrame
             requirement by set and the regions and service the requirement applies to.
 
-            ========  ===================================================================
+            ========  ================================================
             Columns:  Description:
-            set       unique identifier of the requirement set (as `str`)
-            service   the service or services the requirement set applies to (as `str`)
-            region    unique identifier of a region (as `str`)
-            volume    the amount of service required, in MW (as `np.float64`)
-            type      the direction of the constrain '=', '>=' or '<=', optional, a \n
-                      value of '=' is assumed if the column is missing (as `str`)
-            ========  ===================================================================
+            set       unique identifier of the requirement set, \n
+                      (as `str`)
+            service   the service or services the requirement set \n
+                      applies to (as `str`)
+            region    the regions that can contribute to meeting a \n
+                      requirement, (as `str`)
+            volume    the amount of service required, in MW, \n
+                      (as `np.float64`)
+            type      the direction of the constrain '=', '>=' or \n
+                      '<=', optional, a value of '=' is assumed if
+                      \n the column is missing (as `str`)
+            ========  ================================================
 
         Returns
         -------
@@ -989,7 +1047,7 @@ class SpotMarket:
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any set and region combination.
+                If there is more than one row for any set, region and service combination.
             ColumnDataTypeError
                 If columns are not of the required type.
             MissingColumnError
@@ -999,20 +1057,23 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the volume column.
         """
-        # 1. Create the constraints
-        rhs_and_type, variable_map = market_constraints.fcas(fcas_requirements, self.next_constraint_id)
-        # 2. Save constraint details
-        self.market_constraints_rhs_and_type['fcas'] = rhs_and_type
-        self.constraint_to_variable_map['regional']['fcas'] = variable_map
-        # 3. Update the constraint id
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        if self.validate_inputs:
+            self._validate_fcas_requirements(fcas_requirements)
+        rhs_and_type, variable_map = market_constraints.fcas(fcas_requirements, self._next_constraint_id)
+        self._market_constraints_rhs_and_type['fcas'] = rhs_and_type
+        self._constraint_to_variable_map['regional']['fcas'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('fcas_max_availability', ['unit', 'service', 'max_availability'], arg=1)
-    @check.allowed_columns('fcas_max_availability', ['unit', 'service', 'max_availability'], arg=1)
-    @check.repeated_rows('fcas_max_availability', ['unit', 'service'], arg=1)
-    @check.column_data_types('fcas_max_availability', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
-    @check.column_values_must_be_real('fcas_max_availability', ['max_availability'], arg=1)
-    @check.column_values_not_negative('fcas_max_availability', ['max_availability'], arg=1)
+    def _validate_fcas_requirements(self, fcas_requirements):
+        schema = dv.DataFrameSchema(name='fcas_requirements', primary_keys=['set', 'region', 'service'])
+        schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='set', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services))
+        schema.add_column(dv.SeriesSchema(name='volume', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='type', data_type=str, allowed_values=self._allowed_constraint_types),
+                          optional=True)
+        schema.validate(fcas_requirements)
+
     def set_fcas_max_availability(self, fcas_max_availability):
         """Creates constraints to ensure fcas dispatch is limited to the availability specified in the FCAS trapezium.
 
@@ -1021,13 +1082,16 @@ class SpotMarket:
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot(dispatch_interval=60)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define the FCAS max_availability.
 
@@ -1038,29 +1102,33 @@ class SpotMarket:
 
         Set the joint availability constraints.
 
-        >>> simple_market.set_fcas_max_availability(fcas_max_availability)
+        >>> market.set_fcas_max_availability(fcas_max_availability)
 
         TNow the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(simple_market.constraints_rhs_and_type['fcas_max_availability'])
+        >>> print(market._constraints_rhs_and_type['fcas_max_availability'])
           unit   service  constraint_id type   rhs
         0    A  raise_6s              0   <=  60.0
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['fcas_max_availability'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['fcas_max_availability'])
            constraint_id unit   service  coefficient
         0              0    A  raise_6s          1.0
 
         Parameters
         ----------
         fcas_max_availability : pd.DataFrame
-            The FCAS max_availability for the services being offered.
 
-            ================   ======================================================================
+            ================   =======================================
             Columns:           Description:
-            unit               unique identifier of a dispatch unit (as `str`)
-            service            the contingency service being offered (as `str`)
-            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
-            ================   ======================================================================
+            unit               unique identifier of a dispatch unit, \n
+                               (as `str`)
+            service            the fcas service being offered, \n
+                               (as `str`)
+            max_availability   the maximum volume of the contingency \n
+                                service, in MW, (as `np.float64`)
+            ================   =======================================
 
         Returns
         -------
@@ -1069,25 +1137,31 @@ class SpotMarket:
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any unit and service combination in contingency_trapeziums.
+                If there is more than one row for any unit and service combination.
             ColumnDataTypeError
                 If columns are not of the required type.
             MissingColumnError
-                If the columns 'unit', 'service' or 'max_availability' is missing from fcas_max_availability.
+                If the columns 'unit', 'service' or 'max_availability' is missing.
             UnexpectedColumn
-                If there are columns other than 'unit', 'service' or 'max_availability' in fcas_max_availability.
+                If there are columns other than 'unit', 'service' or 'max_availability'.
             ColumnValues
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
-
+        if self.validate_inputs:
+            self._validate_fcas_max_availability(fcas_max_availability)
         rhs_and_type, variable_map = unit_constraints.fcas_max_availability(fcas_max_availability,
-                                                                            self.next_constraint_id)
+                                                                            self._next_constraint_id)
+        self._constraints_rhs_and_type['fcas_max_availability'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['fcas_max_availability'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-        self.constraints_rhs_and_type['fcas_max_availability'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['fcas_max_availability'] = variable_map
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
-
-    # def minimise_unit_output_differences
+    def _validate_fcas_max_availability(self, fcas_max_availability):
+        schema = dv.DataFrameSchema(name='fcas_max_availability', primary_keys=['unit', 'service'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_fcas_services))
+        schema.add_column(dv.SeriesSchema(name='max_availability', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(fcas_max_availability)
 
     @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
     @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
@@ -1121,7 +1195,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot(dispatch_interval=60)
+        >>> market = markets.Spot(dispatch_interval=60)
 
         Define the set of units providing regulation services.
 
@@ -1139,17 +1213,17 @@ class SpotMarket:
 
         Create the joint ramping constraints.
 
-        >>> simple_market.set_joint_ramping_constraints_raise_reg(regulation_units, unit_limits)
+        >>> market.set_joint_ramping_constraints_raise_reg(regulation_units, unit_limits)
 
         Now the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(simple_market.constraints_rhs_and_type['joint_ramping'])
+        >>> print(market._constraints_rhs_and_type['joint_ramping'])
           unit  constraint_id type    rhs
         0    A              0   <=  120.0
         1    B              1   >=   55.0
         2    B              2   <=   90.0
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['joint_ramping'])
+        >>> print(market._constraint_to_variable_map['unit_level']['joint_ramping'])
            constraint_id unit    service  coefficient
         0              0    A  raise_reg          1.0
         1              1    B  lower_reg         -1.0
@@ -1201,12 +1275,12 @@ class SpotMarket:
         """
 
         rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(
-            regulation_units, unit_limits, self.unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
-            self.next_constraint_id)
+            regulation_units, unit_limits, self._unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
+            self._next_constraint_id)
 
-        self.constraints_rhs_and_type['joint_ramping_raise_reg'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['joint_ramping_raise_reg'] = variable_map
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        self._constraints_rhs_and_type['joint_ramping_raise_reg'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['joint_ramping_raise_reg'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
     @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
@@ -1240,7 +1314,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot(dispatch_interval=60)
+        >>> market = markets.Spot(dispatch_interval=60)
 
         Define the set of units providing regulation services.
 
@@ -1258,17 +1332,17 @@ class SpotMarket:
 
         Create the joint ramping constraints.
 
-        >>> simple_market.set_joint_ramping_constraints_raise_reg(regulation_units, unit_limits)
+        >>> market.set_joint_ramping_constraints_raise_reg(regulation_units, unit_limits)
 
         Now the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(simple_market.constraints_rhs_and_type['joint_ramping'])
+        >>> print(market._constraints_rhs_and_type['joint_ramping'])
           unit  constraint_id type    rhs
         0    A              0   <=  120.0
         1    B              1   >=   55.0
         2    B              2   <=   90.0
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['joint_ramping'])
+        >>> print(market._constraint_to_variable_map['unit_level']['joint_ramping'])
            constraint_id unit    service  coefficient
         0              0    A  raise_reg          1.0
         1              1    B  lower_reg         -1.0
@@ -1320,12 +1394,12 @@ class SpotMarket:
         """
 
         rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(
-            regulation_units, unit_limits, self.unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
-            self.next_constraint_id)
+            regulation_units, unit_limits, self._unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
+            self._next_constraint_id)
 
-        self.constraints_rhs_and_type['joint_ramping_lower_reg'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'] = variable_map
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        self._constraints_rhs_and_type['joint_ramping_lower_reg'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                        'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
@@ -1356,7 +1430,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot(dispatch_interval=60)
+        >>> market = markets.Spot(dispatch_interval=60)
 
         Define the FCAS contingency trapeziums.
 
@@ -1371,16 +1445,16 @@ class SpotMarket:
 
         Set the joint capacity constraints.
 
-        >>> simple_market.set_joint_capacity_constraints(contingency_trapeziums)
+        >>> market.set_joint_capacity_constraints(contingency_trapeziums)
 
         TNow the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(simple_market.constraints_rhs_and_type['joint_capacity'])
+        >>> print(market._constraints_rhs_and_type['joint_capacity'])
           unit   service  constraint_id type   rhs
         0    A  raise_6s              0   <=  80.0
         0    A  raise_6s              1   >=  20.0
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['joint_capacity'])
+        >>> print(market._constraint_to_variable_map['unit_level']['joint_capacity'])
            constraint_id unit    service  coefficient
         0              0    A     energy     1.000000
         0              0    A   raise_6s     0.333333
@@ -1430,10 +1504,10 @@ class SpotMarket:
         """
 
         rhs_and_type, variable_map = fcas_constraints.joint_capacity_constraints(
-            contingency_trapeziums, self.unit_info.loc[:, ['unit', 'dispatch_type']], self.next_constraint_id)
-        self.constraints_rhs_and_type['joint_capacity'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+            contingency_trapeziums, self._unit_info.loc[:, ['unit', 'dispatch_type']], self._next_constraint_id)
+        self._constraints_rhs_and_type['joint_capacity'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
@@ -1464,7 +1538,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot(dispatch_interval=60)
+        >>> market = markets.Spot(dispatch_interval=60)
 
         Define the FCAS regulation trapeziums.
 
@@ -1479,16 +1553,16 @@ class SpotMarket:
 
         Set the joint capacity constraints.
 
-        >>> simple_market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+        >>> market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
 
         TNow the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(simple_market.constraints_rhs_and_type['energy_and_regulation_capacity'])
+        >>> print(market._constraints_rhs_and_type['energy_and_regulation_capacity'])
           unit    service  constraint_id type   rhs
         0    A  raise_reg              0   <=  80.0
         0    A  raise_reg              1   >=  20.0
 
-        >>> print(simple_market.constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'])
+        >>> print(market._constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'])
            constraint_id unit    service  coefficient
         0              0    A     energy     1.000000
         0              0    A  raise_reg     0.333333
@@ -1536,10 +1610,10 @@ class SpotMarket:
         """
 
         rhs_and_type, variable_map = \
-            fcas_constraints.energy_and_regulation_capacity_constraints(regulation_trapeziums, self.next_constraint_id)
-        self.constraints_rhs_and_type['energy_and_regulation_capacity'] = rhs_and_type
-        self.constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
-        self.next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+            fcas_constraints.energy_and_regulation_capacity_constraints(regulation_trapeziums, self._next_constraint_id)
+        self._constraints_rhs_and_type['energy_and_regulation_capacity'] = rhs_and_type
+        self._constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
+        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
     @check.required_columns('interconnector_directions_and_limits',
                             ['interconnector', 'to_region', 'from_region', 'max', 'min'])
@@ -1558,7 +1632,7 @@ class SpotMarket:
         --------
         Initialise the market instance.
 
-        >>> simple_market = markets.SpotMarket()
+        >>> market = markets.SpotMarket()
 
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
@@ -1571,17 +1645,17 @@ class SpotMarket:
 
         Create the interconnector.
 
-        >>> simple_market.set_interconnectors(interconnector)
+        >>> market.set_interconnectors(interconnector)
 
         The market should now have a decision variable defined for each interconnector.
 
-        >>> print(simple_market.decision_variables['interconnectors'])
+        >>> print(market._decision_variables['interconnectors'])
           interconnector  variable_id  lower_bound  upper_bound        type
         0      inter_one            0       -100.0        100.0  continuous
 
         ... and a mapping of those variables to to regional energy constraints.
 
-        >>> print(simple_market.variable_to_constraint_map['regional']['interconnectors'])
+        >>> print(market._variable_to_constraint_map['regional']['interconnectors'])
            variable_id region service  coefficient
         0            0    VIC  energy          1.0
         1            0    NSW  energy         -1.0
@@ -1631,13 +1705,13 @@ class SpotMarket:
         if 'to_region_loss_factor' not in interconnector_directions_and_limits.columns:
             interconnector_directions_and_limits['to_region_loss_factor'] = 1.0
 
-        self.interconnector_directions = \
+        self._interconnector_directions = \
             interconnector_directions_and_limits.loc[:, ['interconnector', 'to_region', 'from_region',
                                                          'from_region_loss_factor', 'to_region_loss_factor']]
-        self.decision_variables['interconnectors'], self.variable_to_constraint_map['regional']['interconnectors'] \
-            = inter.create(interconnector_directions_and_limits, self.next_variable_id)
+        self._decision_variables['interconnectors'], self._variable_to_constraint_map['regional']['interconnectors'] \
+            = inter.create(interconnector_directions_and_limits, self._next_variable_id)
 
-        self.next_variable_id = max(self.decision_variables['interconnectors']['variable_id']) + 1
+        self._next_variable_id = max(self._decision_variables['interconnectors']['variable_id']) + 1
 
     def set_market_interconnectors(self, interconnector_directions_and_limits):
         """Create lossless links between specified regions.
@@ -1646,7 +1720,7 @@ class SpotMarket:
         --------
         Initialise the market instance.
 
-        >>> simple_market = SpotMarket()
+        >>> market = SpotMarket()
 
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
@@ -1663,17 +1737,17 @@ class SpotMarket:
 
         Create the interconnector.
 
-        >>> simple_market.set_interconnectors(interconnector)
+        >>> market.set_interconnectors(interconnector)
 
         The market should now have a decision variable defined for each interconnector.
 
-        >>> print(simple_market.decision_variables['interconnectors'])
+        >>> print(market._decision_variables['interconnectors'])
           interconnector  variable_id  lower_bound  upper_bound        type
         0      inter_one            0       -100.0        100.0  continuous
 
         ... and a mapping of those variables to to regional energy constraints.
 
-        >>> print(simple_market.variable_to_constraint_map['regional']['interconnectors'])
+        >>> print(market._variable_to_constraint_map['regional']['interconnectors'])
            variable_id region service  coefficient
         0            0    VIC  energy          1.0
         1            0    NSW  energy         -1.0
@@ -1714,15 +1788,15 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null values in the max and min columns.
         """
-        self.market_interconnector_directions = \
+        self._market_interconnector_directions = \
             interconnector_directions_and_limits.loc[:, ['interconnector', 'link', 'to_region', 'from_region',
                                                          'from_region_loss_factor', 'to_region_loss_factor']]
 
-        self.decision_variables['market_interconnectors'], \
-        self.variable_to_constraint_map['regional']['market_interconnectors'] \
-            = inter.create_market_interconnector(interconnector_directions_and_limits, self.next_variable_id)
+        self._decision_variables['market_interconnectors'], \
+        self._variable_to_constraint_map['regional']['market_interconnectors'] \
+            = inter.create_market_interconnector(interconnector_directions_and_limits, self._next_variable_id)
 
-        self.next_variable_id = max(self.decision_variables['market_interconnectors']['variable_id']) + 1
+        self._next_variable_id = max(self._decision_variables['market_interconnectors']['variable_id']) + 1
 
     #@check.interconnectors_exist
     @check.required_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=1)
@@ -1775,7 +1849,7 @@ class SpotMarket:
         --------
         Create a market instance.
 
-        >>> simple_market = SpotMarket()
+        >>> market = SpotMarket()
 
         Create the interconnector, this need to be done before a interconnector losses can be set.
 
@@ -1786,7 +1860,7 @@ class SpotMarket:
         ...    'max': [100.0],
         ...    'min': [-120.0]})
 
-        >>> simple_market.set_interconnectors(interconnectors)
+        >>> market.set_interconnectors(interconnectors)
 
         Define the interconnector loss function. In this case losses are always 5 % of line flow.
 
@@ -1810,17 +1884,17 @@ class SpotMarket:
         ...    'loss_segment': [1, 2, 3],
         ...    'break_point': [-120.0, 0.0, 100]})
 
-        >>> simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
+        >>> market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
         The market should now have a decision variable defined for each interconnector's losses.
 
-        >>> print(simple_market.decision_variables['interconnector_losses'])
+        >>> print(market._decision_variables['interconnector_losses'])
           interconnector  variable_id  lower_bound  upper_bound        type
         0    little_link            1       -120.0        120.0  continuous
 
         ... and a mapping of those variables to regional energy constraints.
 
-        >>> print(simple_market.variable_to_constraint_map['regional']['interconnector_losses'])
+        >>> print(market._variable_to_constraint_map['regional']['interconnector_losses'])
            variable_id region service  coefficient
         0            1    VIC  energy         -0.5
         1            1    NSW  energy         -0.5
@@ -1828,14 +1902,14 @@ class SpotMarket:
         The market will also have a special ordered set of weight variables for interpolating the loss function
         between the break points.
 
-        >>> print(simple_market.decision_variables['interpolation_weights'].loc[:,
+        >>> print(market._decision_variables['interpolation_weights'].loc[:,
         ...       ['interconnector', 'loss_segment', 'break_point', 'variable_id']])
           interconnector  loss_segment  break_point  variable_id
         0    little_link             1       -120.0            2
         1    little_link             2          0.0            3
         2    little_link             3        100.0            4
 
-        >>> print(simple_market.decision_variables['interpolation_weights'].loc[:,
+        >>> print(market._decision_variables['interpolation_weights'].loc[:,
         ...       ['variable_id', 'lower_bound', 'upper_bound', 'type']])
            variable_id  lower_bound  upper_bound        type
         0            2          0.0          1.0  continuous
@@ -1844,16 +1918,16 @@ class SpotMarket:
 
         and a set of constraints that implement the interpolation, see above explanation.
 
-        >>> print(simple_market.constraints_rhs_and_type['interpolation_weights'])
+        >>> print(market._constraints_rhs_and_type['interpolation_weights'])
           interconnector  constraint_id type  rhs
         0    little_link              0    =  1.0
 
-        >>> print(simple_market.constraints_dynamic_rhs_and_type['link_loss_to_flow'])
+        >>> print(market._constraints_dynamic_rhs_and_type['link_loss_to_flow'])
           interconnector  constraint_id type  rhs_variable_id
         0    little_link              1    =                0
         0    little_link              2    =                1
 
-        >>> print(simple_market.lhs_coefficients['interconnector_losses'])
+        >>> print(market._lhs_coefficients['interconnector_losses'])
            variable_id  constraint_id  coefficient
         0            2              0          1.0
         1            3              0          1.0
@@ -1909,23 +1983,23 @@ class SpotMarket:
                 If there are inf or null values in the numeric columns of either input DataFrames. Or if
                 from_region_loss_share are outside the range of 0.0 to 1.0
         """
-        self.interconnector_loss_shares = loss_functions.loc[:, ['interconnector', 'from_region_loss_share']]
+        self._interconnector_loss_shares = loss_functions.loc[:, ['interconnector', 'from_region_loss_share']]
 
         # Create loss variables.
         decision_variables = []
         variable_to_constraint_map = []
         for inters in ['market_interconnectors', 'interconnectors']:
-            if inters in self.decision_variables:
-                decision_variables.append(self.decision_variables[inters])
-                variable_to_constraint_map.append(self.variable_to_constraint_map['regional'][inters])
+            if inters in self._decision_variables:
+                decision_variables.append(self._decision_variables[inters])
+                variable_to_constraint_map.append(self._variable_to_constraint_map['regional'][inters])
         decision_variables = pd.concat(decision_variables)
         variable_to_constraint_map = pd.concat(variable_to_constraint_map)
 
         directions = []
-        if 'interconnectors' in self.decision_variables:
-            directions.append(self.interconnector_directions)
-        if 'market_interconnectors' in self.decision_variables:
-            directions.append(self.market_interconnector_directions)
+        if 'interconnectors' in self._decision_variables:
+            directions.append(self._interconnector_directions)
+        if 'market_interconnectors' in self._decision_variables:
+            directions.append(self._market_interconnector_directions)
         directions = pd.concat(directions)
         directions = directions.fillna('one')
 
@@ -1939,7 +2013,7 @@ class SpotMarket:
 
         loss_variables, loss_variables_constraint_map = \
             inter.create_loss_variables(decision_variables, variable_to_constraint_map, loss_functions,
-                                        self.next_variable_id)
+                                        self._next_variable_id)
         next_variable_id = loss_variables['variable_id'].max() + 1
 
         # Create weight variables.
@@ -1965,7 +2039,7 @@ class SpotMarket:
 
         # Creates weights sum constraint.
         weights_sum_lhs, weights_sum_rhs = inter.create_weights_must_sum_to_one(weight_variables,
-                                                                                self.next_constraint_id)
+                                                                                self._next_constraint_id)
         next_constraint_id = weights_sum_rhs['constraint_id'].max() + 1
 
         # Link the losses to the interpolation weights.
@@ -1990,14 +2064,14 @@ class SpotMarket:
         dynamic_rhs = pd.concat([link_to_flow_rhs, link_to_loss_rhs])
 
         # Save results.
-        self.decision_variables['interconnector_losses'] = loss_variables
-        self.variable_to_constraint_map['regional']['interconnector_losses'] = loss_variables_constraint_map
-        self.decision_variables['interpolation_weights'] = weight_variables
-        self.lhs_coefficients['interconnector_losses'] = lhs
-        self.constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
-        self.constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
-        self.next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
-        self.next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
+        self._decision_variables['interconnector_losses'] = loss_variables
+        self._variable_to_constraint_map['regional']['interconnector_losses'] = loss_variables_constraint_map
+        self._decision_variables['interpolation_weights'] = weight_variables
+        self._lhs_coefficients['interconnector_losses'] = lhs
+        self._constraints_rhs_and_type['interpolation_weights'] = weights_sum_rhs
+        self._constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
+        self._next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
+        self._next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
 
     @check.required_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
     @check.allowed_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
@@ -2033,7 +2107,7 @@ class SpotMarket:
 
         Now the market should have a set of generic constraints.
 
-        >>> print(market.constraints_rhs_and_type['generic'])
+        >>> print(market._constraints_rhs_and_type['generic'])
           set  constraint_id type    rhs
         0   A              0   >=   10.0
         1   B              1   <= -100.0
@@ -2066,11 +2140,11 @@ class SpotMarket:
             ColumnValues
                 If there are inf or null values in the rhs column.
         """
-        type_and_rhs = hf.save_index(generic_constraint_parameters, 'constraint_id', self.next_constraint_id)
+        type_and_rhs = hf.save_index(generic_constraint_parameters, 'constraint_id', self._next_constraint_id)
         # self.constraint_to_variable_map['unit_level']['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id']]
         # self.constraint_to_variable_map['unit_level']['generic']['coefficient'] = 1.0
-        self.constraints_rhs_and_type['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
-        self.next_constraint_id = type_and_rhs['constraint_id'].max() + 1
+        self._constraints_rhs_and_type['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
+        self._next_constraint_id = type_and_rhs['constraint_id'].max() + 1
 
     @check.required_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
     @check.allowed_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
@@ -2110,7 +2184,7 @@ class SpotMarket:
         Note all this does is save this information to the market object, linking to specific variable ids and
         constraint id occurs when the dispatch method is called.
 
-        >>> print(market.generic_constraint_lhs['units'])
+        >>> print(market._generic_constraint_lhs['units'])
           set unit    service  coefficient
         0   A    X     energy          1.0
         1   A    Y     energy          1.0
@@ -2142,7 +2216,7 @@ class SpotMarket:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
-        self.generic_constraint_lhs['unit'] = unit_coefficients
+        self._generic_constraint_lhs['unit'] = unit_coefficients
 
     @check.required_columns('region_coefficients', ['set', 'region', 'service', 'coefficient'])
     @check.allowed_columns('region_coefficients', ['set', 'region', 'service', 'coefficient'])
@@ -2185,7 +2259,7 @@ class SpotMarket:
         Note all this does is save this information to the market object, linking to specific variable ids and
         constraint id occurs when the dispatch method is called.
 
-        >>> print(market.generic_constraint_lhs['region'])
+        >>> print(market._generic_constraint_lhs['region'])
           set region    service  coefficient
         0   A      X     energy          1.0
         1   A      Y     energy          1.0
@@ -2217,7 +2291,7 @@ class SpotMarket:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
-        self.generic_constraint_lhs['region'] = region_coefficients
+        self._generic_constraint_lhs['region'] = region_coefficients
 
     @check.required_columns('interconnector_coefficients', ['set', 'interconnector', 'coefficient'])
     @check.allowed_columns('interconnector_coefficients', ['set', 'interconnector', 'coefficient'])
@@ -2256,7 +2330,7 @@ class SpotMarket:
         Note all this does is save this information to the market object, linking to specific variable ids and
         constraint id occurs when the dispatch method is called.
 
-        >>> print(market.generic_constraint_lhs['interconnectors'])
+        >>> print(market._generic_constraint_lhs['interconnectors'])
           set interconnector  coefficient
         0   A              X          1.0
         1   A              Y          1.0
@@ -2287,25 +2361,21 @@ class SpotMarket:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
-        self.generic_constraint_lhs['interconnectors'] = interconnector_coefficients
+        self._generic_constraint_lhs['interconnectors'] = interconnector_coefficients
 
-    def make_constraints_elastic(self, constraints_key, violation_cost='market_ceiling_price'):
+    def make_constraints_elastic(self, constraints_key, violation_cost):
         """Make a set of constraints elastic, so they can be violated at a predefined cost.
 
-        If the string 'market_ceiling_price' is provided then the market_ceiling_price is used to set the
-        violation cost. If an int or float is provided then this directly set the cost. If a pd.DataFrame
+        If an int or float is provided as the violation_cost, then this directly sets the cost. If a pd.DataFrame
         is provided then it must contain the columns 'set' and 'cost', 'set' is used to match the cost to
         the constraints, sets in the constraints that do not appear in the pd.DataFrame will not be made
         elastic.
 
         Examples
         --------
-        >>> import pandas as pd
-        >>> from nempy import markets
-
         Create a market instance.
 
-        >>> market = markets.Spot()
+        >>> market = SpotMarket()
 
         Define a set of generic constraints and add them to the market.
 
@@ -2318,7 +2388,7 @@ class SpotMarket:
 
         Now the market should have a set of generic constraints.
 
-        >>> print(market.constraints_rhs_and_type['generic'])
+        >>> print(market._constraints_rhs_and_type['generic'])
           set  constraint_id type    rhs
         0   A              0   >=   10.0
         1   B              1   <= -100.0
@@ -2330,19 +2400,19 @@ class SpotMarket:
 
         Now the market will contain extra decision variables to capture the cost of violating the constraint.
 
-        >>> print(market.decision_variables['generic_deficit'])
+        >>> print(market._decision_variables['generic_deficit'])
            variable_id  lower_bound  upper_bound        type
         0            0          0.0          inf  continuous
         1            1          0.0          inf  continuous
 
-        >>> print(market.objective_function_components['generic_deficit'])
+        >>> print(market._objective_function_components['generic_deficit'])
            variable_id     cost
         0            0  14000.0
         1            1  14000.0
 
         These will be mapped to the constraints
 
-        >>> print(market.lhs_coefficients['generic_deficit'])
+        >>> print(market._lhs_coefficients['generic_deficit'])
            variable_id  constraint_id  coefficient
         0            0              0          1.0
         1            1              1         -1.0
@@ -2351,7 +2421,7 @@ class SpotMarket:
 
         >>> market.make_constraints_elastic('generic', violation_cost=1000.0)
 
-        >>> print(market.objective_function_components['generic_deficit'])
+        >>> print(market._objective_function_components['generic_deficit'])
            variable_id    cost
         0            2  1000.0
         1            3  1000.0
@@ -2364,7 +2434,7 @@ class SpotMarket:
 
         >>> market.make_constraints_elastic('generic', violation_cost=violation_cost)
 
-        >>> print(market.objective_function_components['generic_deficit'])
+        >>> print(market._objective_function_components['generic_deficit'])
            variable_id    cost
         0            4  1000.0
         1            5  2000.0
@@ -2400,17 +2470,14 @@ class SpotMarket:
             cost is not numeric.
         """
 
-        if constraints_key in self.market_constraints_rhs_and_type.keys():
-            rhs_and_type = self.market_constraints_rhs_and_type[constraints_key].copy()
-        elif constraints_key in self.constraints_rhs_and_type.keys():
-            rhs_and_type = self.constraints_rhs_and_type[constraints_key].copy()
+        if constraints_key in self._market_constraints_rhs_and_type.keys():
+            rhs_and_type = self._market_constraints_rhs_and_type[constraints_key].copy()
+        elif constraints_key in self._constraints_rhs_and_type.keys():
+            rhs_and_type = self._constraints_rhs_and_type[constraints_key].copy()
         else:
             raise check.ModelBuildError('constraints_key does not exist.')
 
-        # Add the column cost to the constraints definitions.
-        if isinstance(violation_cost, str) and violation_cost == 'market_ceiling_price':
-            rhs_and_type['cost'] = self.market_ceiling_price
-        elif isinstance(violation_cost, (int, float)) and not isinstance(violation_cost, bool):
+        if isinstance(violation_cost, (int, float)) and not isinstance(violation_cost, bool):
             rhs_and_type['cost'] = violation_cost
         elif isinstance(violation_cost, pd.DataFrame):
             # Check pd.DataFrame columns needed exist and are of the right type.
@@ -2429,34 +2496,34 @@ class SpotMarket:
                 check.MissingColumnError("Column 'set' not in constraints to make elastic")
             rhs_and_type = pd.merge(rhs_and_type, violation_cost.loc[:, ['set', 'cost']], on='set')
         else:
-            ValueError("Input for violation cost can only be 'market_ceiling_price', numeric or a pd.Dataframe")
+            ValueError("Input for violation cost can only be numeric or a pd.Dataframe")
 
         if not rhs_and_type.empty:
-            deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self.next_variable_id)
-            self.decision_variables[constraints_key + '_deficit'] = \
+            deficit_variables, lhs = elastic_constraints.create_deficit_variables(rhs_and_type, self._next_variable_id)
+            self._decision_variables[constraints_key + '_deficit'] = \
                 deficit_variables.loc[:, ['variable_id', 'lower_bound', 'upper_bound', 'type']]
-            self.objective_function_components[constraints_key + '_deficit'] = \
+            self._objective_function_components[constraints_key + '_deficit'] = \
                 deficit_variables.loc[:, ['variable_id', 'cost']]
-            self.lhs_coefficients[constraints_key + '_deficit'] = lhs
-            self.next_variable_id = max(deficit_variables['variable_id']) + 1
+            self._lhs_coefficients[constraints_key + '_deficit'] = lhs
+            self._next_variable_id = max(deficit_variables['variable_id']) + 1
 
     def get_elastic_constraints_violation_degree(self, constraints_key):
-        if constraints_key + '_deficit' in self.decision_variables:
-            return self.decision_variables[constraints_key + '_deficit']['value'].sum()
+        if constraints_key + '_deficit' in self._decision_variables:
+            return self._decision_variables[constraints_key + '_deficit']['value'].sum()
         else:
             return 0.0
 
     def set_tie_break_constraints(self, cost):
-        price_bids = self.objective_function_components['bids']
+        price_bids = self._objective_function_components['bids']
         energy_price_bids = price_bids[price_bids['service'] == 'energy']
         energy_price_bids = pd.merge(energy_price_bids,
-                                     self.decision_variables['bids'].loc[:, ['variable_id', 'upper_bound']],
+                                     self._decision_variables['bids'].loc[:, ['variable_id', 'upper_bound']],
                                      on='variable_id')
-        energy_price_bids = pd.merge(energy_price_bids, self.unit_info.loc[:, ['unit', 'region']], on='unit')
+        energy_price_bids = pd.merge(energy_price_bids, self._unit_info.loc[:, ['unit', 'region']], on='unit')
         constraints = pd.merge(energy_price_bids, energy_price_bids, on=['cost', 'region'])
         constraints = constraints[constraints['unit_x'] != constraints['unit_y']]
         constraints = constraints.loc[:, ['variable_id_x', 'upper_bound_x', 'variable_id_y', 'upper_bound_y']]
-        constraints = hf.save_index(constraints, 'constraint_id', self.next_constraint_id)
+        constraints = hf.save_index(constraints, 'constraint_id', self._next_constraint_id)
         lhs_one = constraints.loc[:, ['constraint_id', 'variable_id_x', 'upper_bound_x']]
         lhs_one['variable_id'] = lhs_one['variable_id_x']
         lhs_one['coefficient'] = 1 / lhs_one['upper_bound_x']
@@ -2468,27 +2535,21 @@ class SpotMarket:
         rhs = constraints.loc[:, ['constraint_id']]
         rhs['type'] = '='
         rhs['rhs'] = 0.0
-        self.lhs_coefficients['tie_break'] = lhs
-        self.constraints_rhs_and_type['tie_break'] = rhs
-        self.next_variable_id = rhs['constraint_id'].max() + 1
+        self._lhs_coefficients['tie_break'] = lhs
+        self._constraints_rhs_and_type['tie_break'] = rhs
+        self._next_variable_id = rhs['constraint_id'].max() + 1
         self.make_constraints_elastic('tie_break', violation_cost=cost)
 
     # @check.pre_dispatch
-    def dispatch(self, price_market_constraints=True):
+    def dispatch(self, energy_market_ceiling_price=None, energy_market_floor_price=None, fcas_market_ceiling_price=None,
+                 price_market_constraints=True, over_constrained_dispatch_re_run=True):
         """Combines the elements of the linear program and solves to find optimal dispatch.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
-
-        Import required packages.
-
-        >>> import pandas as pd
-        >>> from nempy import markets
-
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = SpotMarket()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -2499,7 +2560,7 @@ class SpotMarket:
 
         Add unit information
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -2511,7 +2572,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -2523,7 +2584,7 @@ class SpotMarket:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region.
 
@@ -2533,22 +2594,22 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         Call the dispatch method.
 
-        >>> simple_market.dispatch()
+        >>> market.dispatch()
 
         Now the market dispatch can be retrieved.
 
-        >>> print(simple_market.get_unit_dispatch())
+        >>> print(market.get_unit_dispatch())
           unit service  dispatch
         0    A  energy      45.0
         1    B  energy      55.0
 
         And the market prices can be retrieved.
 
-        >>> print(simple_market.get_energy_prices())
+        >>> print(market.get_energy_prices())
           region  price
         0    NSW  130.0
 
@@ -2564,47 +2625,47 @@ class SpotMarket:
 
         # Create a data frame containing all fully defined components of the constraint matrix lhs. If there are none
         # then just create a place holder empty pd.DataFrame.
-        if len(self.lhs_coefficients.values()) > 0:
-            constraints_lhs = pd.concat(list(self.lhs_coefficients.values()))
+        if len(self._lhs_coefficients.values()) > 0:
+            constraints_lhs = pd.concat(list(self._lhs_coefficients.values()))
         else:
             constraints_lhs = pd.DataFrame()
 
         # Get a pd.DataFrame mapping the generic constraint sets to their constraint ids.
         generic_constraint_ids = solver_interface.create_mapping_of_generic_constraint_sets_to_constraint_ids(
-            self.constraints_rhs_and_type, self.market_constraints_rhs_and_type)
+            self._constraints_rhs_and_type, self._market_constraints_rhs_and_type)
 
         # If there are any generic constraints create their lhs definitions.
         if generic_constraint_ids is not None:
             generic_lhs = []
             # If units have been added to the generic lhs then find the relevant variable ids and map them to the
             # constraint.
-            if 'unit' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['unit_level']:
-                generic_constraint_units = self.generic_constraint_lhs['unit']
-                unit_bids_to_constraint_map = self.variable_to_constraint_map['unit_level']['bids']
+            if 'unit' in self._generic_constraint_lhs and 'bids' in self._variable_to_constraint_map['unit_level']:
+                generic_constraint_units = self._generic_constraint_lhs['unit']
+                unit_bids_to_constraint_map = self._variable_to_constraint_map['unit_level']['bids']
                 unit_lhs = solver_interface.create_unit_level_generic_constraint_lhs(generic_constraint_units,
                                                                                      generic_constraint_ids,
                                                                                      unit_bids_to_constraint_map)
                 generic_lhs.append(unit_lhs)
             # If regions have been added to the generic lhs then find the relevant variable ids and map them to the
             # constraint.
-            if 'region' in self.generic_constraint_lhs and 'bids' in self.variable_to_constraint_map['regional']:
-                generic_constraint_region = self.generic_constraint_lhs['region']
-                unit_bids_to_constraint_map = self.variable_to_constraint_map['regional']['bids']
+            if 'region' in self._generic_constraint_lhs and 'bids' in self._variable_to_constraint_map['regional']:
+                generic_constraint_region = self._generic_constraint_lhs['region']
+                unit_bids_to_constraint_map = self._variable_to_constraint_map['regional']['bids']
                 regional_lhs = solver_interface.create_region_level_generic_constraint_lhs(generic_constraint_region,
                                                                                            generic_constraint_ids,
                                                                                            unit_bids_to_constraint_map)
                 generic_lhs.append(regional_lhs)
             # If interconnectors have been added to the generic lhs then find the relevant variable ids and map them
             # to the constraint.
-            if 'interconnectors' in self.generic_constraint_lhs and 'interconnectors' in self.decision_variables:
-                generic_constraint_interconnectors = self.generic_constraint_lhs['interconnectors']
-                interconnector_bids_to_constraint_map = self.decision_variables['interconnectors']
+            if 'interconnectors' in self._generic_constraint_lhs and 'interconnectors' in self._decision_variables:
+                generic_constraint_interconnectors = self._generic_constraint_lhs['interconnectors']
+                interconnector_bids_to_constraint_map = self._decision_variables['interconnectors']
                 interconnector_lhs = solver_interface.create_interconnector_generic_constraint_lhs(
                     generic_constraint_interconnectors, generic_constraint_ids, interconnector_bids_to_constraint_map)
                 generic_lhs.append(interconnector_lhs)
-            if 'interconnectors' in self.generic_constraint_lhs and 'market_interconnectors' in self.decision_variables:
-                generic_constraint_interconnectors = self.generic_constraint_lhs['interconnectors']
-                interconnector_bids_to_constraint_map = self.decision_variables['market_interconnectors']
+            if 'interconnectors' in self._generic_constraint_lhs and 'market_interconnectors' in self._decision_variables:
+                generic_constraint_interconnectors = self._generic_constraint_lhs['interconnectors']
+                interconnector_bids_to_constraint_map = self._decision_variables['market_interconnectors']
                 interconnector_lhs = solver_interface.create_market_interconnector_generic_constraint_lhs(
                     generic_constraint_interconnectors, generic_constraint_ids, interconnector_bids_to_constraint_map)
                 generic_lhs.append(interconnector_lhs)
@@ -2613,9 +2674,9 @@ class SpotMarket:
 
         # If there are constraints that have been defined on a regional basis then create the constraints lhs
         # definition by mapping to all the variables that have been defined for the corresponding region and service.
-        if len(self.constraint_to_variable_map['regional']) > 0:
-            constraints = pd.concat(list(self.constraint_to_variable_map['regional'].values()))
-            decision_variables = pd.concat(list(self.variable_to_constraint_map['regional'].values()))
+        if len(self._constraint_to_variable_map['regional']) > 0:
+            constraints = pd.concat(list(self._constraint_to_variable_map['regional'].values()))
+            decision_variables = pd.concat(list(self._variable_to_constraint_map['regional'].values()))
             regional_constraints_lhs = solver_interface.create_lhs(constraints, decision_variables,
                                                                    ['region', 'service'])
             # Add the lhs definitions the cumulative lhs pd.DataFrame.
@@ -2623,9 +2684,9 @@ class SpotMarket:
 
         # If there are constraints that have been defined on a unit basis then create the constraints lhs
         # definition by mapping to all the variables that have been defined for the corresponding unit and service.
-        if len(self.constraint_to_variable_map['unit_level']) > 0:
-            constraints = pd.concat(list(self.constraint_to_variable_map['unit_level'].values()))
-            decision_variables = pd.concat(list(self.variable_to_constraint_map['unit_level'].values()))
+        if len(self._constraint_to_variable_map['unit_level']) > 0:
+            constraints = pd.concat(list(self._constraint_to_variable_map['unit_level'].values()))
+            decision_variables = pd.concat(list(self._variable_to_constraint_map['unit_level'].values()))
             unit_constraints_lhs = solver_interface.create_lhs(constraints, decision_variables, ['unit', 'service'])
             # Add the lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
@@ -2633,39 +2694,39 @@ class SpotMarket:
         # Create the interface to the solver.
         si = solver_interface.InterfaceToSolver()
 
-        if self.decision_variables:
+        if self._decision_variables:
             # Combine dictionary of pd.DataFrames into a single pd.DataFrame for processing by the interface.
-            variable_definitions = pd.concat(self.decision_variables)
+            variable_definitions = pd.concat(self._decision_variables)
             si.add_variables(variable_definitions)
         else:
             raise check.ModelBuildError('The market could not be dispatch because no variables have been created')
 
         # If interconnectors with losses are being used, create special ordered sets for modelling losses.
-        if 'interpolation_weights' in self.decision_variables:
-            special_ordered_sets = self.decision_variables['interpolation_weights']
+        if 'interpolation_weights' in self._decision_variables:
+            special_ordered_sets = self._decision_variables['interpolation_weights']
             special_ordered_sets = \
                 special_ordered_sets.rename(columns={'inter_variable_id': 'sos_id', 'loss_segment': 'position'})
             si.add_sos_type_2(special_ordered_sets)
 
-        if 'market_interconnectors' in self.decision_variables:
-            special_ordered_sets = self.decision_variables['market_interconnectors']
+        if 'market_interconnectors' in self._decision_variables:
+            special_ordered_sets = self._decision_variables['market_interconnectors']
             special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
             si.add_sos_type_1(special_ordered_sets)
 
         # If Costs have been defined for bids or constraints then add an objective function.
-        if self.objective_function_components:
+        if self._objective_function_components:
             # Combine components of objective function into a single pd.DataFrame
-            objective_function_definition = pd.concat(self.objective_function_components)
+            objective_function_definition = pd.concat(self._objective_function_components)
             si.add_objective_function(objective_function_definition)
 
         # Collect all constraint rhs and type definitions into a single pd.DataFrame.
         constraints_rhs_and_type = []
-        if self.constraints_rhs_and_type:
-            constraints_rhs_and_type.append(pd.concat(self.constraints_rhs_and_type))
-        if self.market_constraints_rhs_and_type:
-            constraints_rhs_and_type.append(pd.concat(self.market_constraints_rhs_and_type))
-        if self.constraints_dynamic_rhs_and_type:
-            constraints_dynamic_rhs_and_type = pd.concat(self.constraints_dynamic_rhs_and_type)
+        if self._constraints_rhs_and_type:
+            constraints_rhs_and_type.append(pd.concat(self._constraints_rhs_and_type))
+        if self._market_constraints_rhs_and_type:
+            constraints_rhs_and_type.append(pd.concat(self._market_constraints_rhs_and_type))
+        if self._constraints_dynamic_rhs_and_type:
+            constraints_dynamic_rhs_and_type = pd.concat(self._constraints_dynamic_rhs_and_type)
             # Create the rhs for the dynamic constraints.
             constraints_dynamic_rhs_and_type['rhs'] = constraints_dynamic_rhs_and_type. \
                 apply(lambda x: si.variables[x['rhs_variable_id']], axis=1)
@@ -2677,32 +2738,80 @@ class SpotMarket:
         si.optimize()
 
         # Find the slack in constraints.
-        if self.constraints_rhs_and_type:
-            for constraint_group in self.constraints_rhs_and_type:
-                self.constraints_rhs_and_type[constraint_group]['slack'] = \
-                    si.get_slack_in_constraints(self.constraints_rhs_and_type[constraint_group])
-        if self.market_constraints_rhs_and_type:
-            for constraint_group in self.market_constraints_rhs_and_type:
-                self.market_constraints_rhs_and_type[constraint_group]['slack'] = \
-                    si.get_slack_in_constraints(self.market_constraints_rhs_and_type[constraint_group])
-        if self.constraints_dynamic_rhs_and_type:
-            for constraint_group in self.constraints_dynamic_rhs_and_type:
-                self.constraints_dynamic_rhs_and_type[constraint_group]['slack'] = \
-                    si.get_slack_in_constraints(self.constraints_dynamic_rhs_and_type[constraint_group])
+        if self._constraints_rhs_and_type:
+            for constraint_group in self._constraints_rhs_and_type:
+                self._constraints_rhs_and_type[constraint_group]['slack'] = \
+                    si.get_slack_in_constraints(self._constraints_rhs_and_type[constraint_group])
+        if self._market_constraints_rhs_and_type:
+            for constraint_group in self._market_constraints_rhs_and_type:
+                self._market_constraints_rhs_and_type[constraint_group]['slack'] = \
+                    si.get_slack_in_constraints(self._market_constraints_rhs_and_type[constraint_group])
+        if self._constraints_dynamic_rhs_and_type:
+            for constraint_group in self._constraints_dynamic_rhs_and_type:
+                self._constraints_dynamic_rhs_and_type[constraint_group]['slack'] = \
+                    si.get_slack_in_constraints(self._constraints_dynamic_rhs_and_type[constraint_group])
 
         # Get decision variable optimal values
-        for var_group in self.decision_variables:
-            self.decision_variables[var_group]['value'] = \
-                si.get_optimal_values_of_decision_variables(self.decision_variables[var_group])
+        for var_group in self._decision_variables:
+            self._decision_variables[var_group]['value'] = \
+                si.get_optimal_values_of_decision_variables(self._decision_variables[var_group])
 
         # If there are market constraints then calculate their associated prices.
-        if self.market_constraints_rhs_and_type and price_market_constraints:
-            for constraint_group in self.market_constraints_rhs_and_type:
-                constraints_to_price = list(self.market_constraints_rhs_and_type[constraint_group]['constraint_id'])
-                prices = si.price_constraints(constraints_to_price, self.decision_variables['bids'],
-                                              self.objective_function_components['bids'])
-                self.market_constraints_rhs_and_type[constraint_group]['price'] = \
-                    self.market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
+        if self._market_constraints_rhs_and_type and price_market_constraints:
+            for constraint_group in self._market_constraints_rhs_and_type:
+                constraints_to_price = list(self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
+                prices = si.price_constraints(constraints_to_price, self._decision_variables['bids'],
+                                              self._objective_function_components['bids'])
+                self._market_constraints_rhs_and_type[constraint_group]['price'] = \
+                    self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
+
+        if price_market_constraints and 'generic_deficit' in self._decision_variables and over_constrained_dispatch_re_run:
+            fcas_ceiling_price_violated = False
+            if 'fcas' in self._market_constraints_rhs_and_type:
+                if self._market_constraints_rhs_and_type['fcas']['price'].max() >= fcas_market_ceiling_price:
+                    fcas_ceiling_price_violated = True
+
+            energy_ceiling_price_violated = False
+            if 'demand' in self._market_constraints_rhs_and_type:
+                if self._market_constraints_rhs_and_type['demand']['price'].max() >= energy_market_ceiling_price:
+                    energy_ceiling_price_violated = True
+
+            energy_floor_price_violated = False
+            if 'demand' in self._market_constraints_rhs_and_type:
+                if self._market_constraints_rhs_and_type['demand']['price'].min() <= energy_market_floor_price:
+                    energy_floor_price_violated = True
+
+            generic_cons_violated = False
+            if (self._decision_variables['generic_deficit']['value'].max() > 0.0001 or
+                self._decision_variables['generic_deficit']['value'].min() < -0.0001):
+                generic_cons_violated = True
+
+            fcas_cons_violated = False
+            if (self._decision_variables['fcas_deficit']['value'].max() > 0.0001 or
+                self._decision_variables['fcas_deficit']['value'].min() < -0.0001):
+                fcas_cons_violated = True
+
+            if ((fcas_ceiling_price_violated or energy_ceiling_price_violated or energy_floor_price_violated) and
+                    (generic_cons_violated or fcas_cons_violated)):
+                generic_variables = self._decision_variables['generic_deficit'].copy()
+                fcas_variables = self._decision_variables['fcas_deficit'].copy()
+                variables = pd.concat([generic_variables, fcas_variables])
+                active_violation_variables = variables[(variables['value'] > 0.0001) | (variables['value'] > 0.0001)]
+                lhs = pd.concat([self._lhs_coefficients['generic_deficit'], self._lhs_coefficients['fcas_deficit']])
+                variables_and_cons = pd.merge(active_violation_variables, lhs, on='variable_id')
+                variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.0001) * \
+                                                 variables_and_cons['coefficient'] * -1
+                variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
+                si.optimize()
+                # If there are market constraints then calculate their associated prices.
+                if self._market_constraints_rhs_and_type and price_market_constraints:
+                    for constraint_group in self._market_constraints_rhs_and_type:
+                        constraints_to_price = list(
+                            self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
+                        prices = si.price_constraints(constraints_to_price, self._decision_variables['bids'],
+                                                      self._objective_function_components['bids'])
+                        self._market_constraints_rhs_and_type[constraint_group]['price'] = \
+                            self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.
@@ -2718,7 +2827,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = markets.Spot()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -2729,7 +2838,7 @@ class SpotMarket:
 
         Add unit information
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -2741,7 +2850,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -2753,7 +2862,7 @@ class SpotMarket:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region.
 
@@ -2763,15 +2872,15 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         Call the dispatch method.
 
-        >>> simple_market.dispatch()
+        >>> market.dispatch()
 
         Now the market dispatch can be retrieved.
 
-        >>> print(simple_market.get_unit_dispatch())
+        >>> print(market.get_unit_dispatch())
           unit service  dispatch
         0    A  energy      45.0
         1    B  energy      55.0
@@ -2785,7 +2894,7 @@ class SpotMarket:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        dispatch = self.decision_variables['bids'].loc[:, ['unit', 'service', 'value']]
+        dispatch = self._decision_variables['bids'].loc[:, ['unit', 'service', 'value']]
         dispatch.columns = ['unit', 'service', 'dispatch']
         return dispatch.groupby(['unit', 'service'], as_index=False).sum()
 
@@ -2805,7 +2914,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = markets.Spot()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -2816,7 +2925,7 @@ class SpotMarket:
 
         Add unit information
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have two units called A and B, with three bid bands.
 
@@ -2828,7 +2937,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -2840,7 +2949,7 @@ class SpotMarket:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region.
 
@@ -2850,15 +2959,15 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         Call the dispatch method.
 
-        >>> simple_market.dispatch()
+        >>> market.dispatch()
 
         Now the market prices can be retrieved.
 
-        >>> print(simple_market.get_energy_prices())
+        >>> print(market.get_energy_prices())
           region  price
         0    NSW  130.0
 
@@ -2871,7 +2980,7 @@ class SpotMarket:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        prices = self.market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
+        prices = self._market_constraints_rhs_and_type['demand'].loc[:, ['region', 'price']]
         return prices
 
     def get_fcas_prices(self):
@@ -2882,16 +2991,16 @@ class SpotMarket:
         pd.DateFrame
         """
         prices = pd.merge(
-            self.constraint_to_variable_map['regional']['fcas'].loc[:, ['service', 'region', 'constraint_id']],
-            self.market_constraints_rhs_and_type['fcas'].loc[:, ['set', 'price', 'constraint_id']], on='constraint_id')
-        prices = prices.groupby(['region', 'service'], as_index=False).aggregate({'price': 'max'})
+            self._constraint_to_variable_map['regional']['fcas'].loc[:, ['service', 'region', 'constraint_id']],
+            self._market_constraints_rhs_and_type['fcas'].loc[:, ['set', 'price', 'constraint_id']], on='constraint_id')
+        prices = prices.groupby(['region', 'service'], as_index=False).aggregate({'price': 'sum'})
         return prices
 
     def get_interconnector_flows(self):
         flow = []
-        if 'interconnectors' in self.decision_variables:
+        if 'interconnectors' in self._decision_variables:
             flow.append(self.get_regulated_interconnector_flows())
-        if 'market_interconnectors' in self.decision_variables:
+        if 'market_interconnectors' in self._decision_variables:
             flow.append(self.get_market_interconnector_flow())
         return pd.concat(flow).fillna('one')
 
@@ -2909,7 +3018,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = markets.Spot()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -2920,7 +3029,7 @@ class SpotMarket:
 
         Add unit information
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have just one unit that can provide 100 MW in NSW.
 
@@ -2930,7 +3039,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -2940,7 +3049,7 @@ class SpotMarket:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
 
@@ -2950,7 +3059,7 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
@@ -2963,21 +3072,21 @@ class SpotMarket:
 
         Create the interconnector.
 
-        >>> simple_market.set_interconnectors(interconnector)
+        >>> market.set_interconnectors(interconnector)
 
         Call the dispatch method.
 
-        >>> simple_market.dispatch()
+        >>> market.dispatch()
 
         Now the market dispatch can be retrieved.
 
-        >>> print(simple_market.get_unit_dispatch())
+        >>> print(market.get_unit_dispatch())
           unit service  dispatch
         0    A  energy      90.0
 
         And the interconnector flows can be retrieved.
 
-        >>> print(simple_market.get_interconnector_flows())
+        >>> print(market.get_interconnector_flows())
           interconnector  flow
         0      inter_one  90.0
 
@@ -2986,22 +3095,22 @@ class SpotMarket:
         pd.DataFrame
 
         """
-        flow = self.decision_variables['interconnectors'].loc[:, ['interconnector', 'value']]
+        flow = self._decision_variables['interconnectors'].loc[:, ['interconnector', 'value']]
         flow.columns = ['interconnector', 'flow']
 
-        if 'interconnector_losses' in self.decision_variables:
-            losses = self.decision_variables['interconnector_losses'].loc[:, ['interconnector', 'value']]
+        if 'interconnector_losses' in self._decision_variables:
+            losses = self._decision_variables['interconnector_losses'].loc[:, ['interconnector', 'value']]
             losses.columns = ['interconnector', 'losses']
             flow = pd.merge(flow, losses, 'left', on='interconnector')
 
         return flow.reset_index(drop=True)
 
     def get_market_interconnector_flow(self):
-        flow = self.decision_variables['market_interconnectors'].loc[:, ['interconnector', 'link', 'variable_id', 'value']]
+        flow = self._decision_variables['market_interconnectors'].loc[:, ['interconnector', 'link', 'variable_id', 'value']]
         flow.columns = ['interconnector', 'link', 'variable_id', 'flow']
 
-        if 'interconnector_losses' in self.decision_variables:
-            losses = self.decision_variables['interconnector_losses'].loc[:, ['inter_variable_id', 'value']]
+        if 'interconnector_losses' in self._decision_variables:
+            losses = self._decision_variables['interconnector_losses'].loc[:, ['inter_variable_id', 'value']]
             losses.columns = ['inter_variable_id', 'losses']
             flow = pd.merge(flow, losses, 'left', left_on='variable_id', right_on='inter_variable_id')
 
@@ -3021,7 +3130,7 @@ class SpotMarket:
 
         Initialise the market instance.
 
-        >>> simple_market = markets.Spot()
+        >>> market = markets.Spot()
 
         Define the unit information data set needed to initialise the market, in this example all units are in the same
         region.
@@ -3032,7 +3141,7 @@ class SpotMarket:
 
         Add unit information
 
-        >>> simple_market.set_unit_info(unit_info)
+        >>> market.set_unit_info(unit_info)
 
         Define a set of bids, in this example we have just one unit that can provide 100 MW in NSW.
 
@@ -3042,7 +3151,7 @@ class SpotMarket:
 
         Create energy unit bid decision variables.
 
-        >>> simple_market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define a set of prices for the bids.
 
@@ -3052,7 +3161,7 @@ class SpotMarket:
 
         Create the objective function components corresponding to the the energy bids.
 
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         Define a demand level in each region, no power is required in NSW and 90.0 MW is required in VIC.
 
@@ -3062,7 +3171,7 @@ class SpotMarket:
 
         Create unit capacity based constraints.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
@@ -3075,7 +3184,7 @@ class SpotMarket:
 
         Create the interconnector.
 
-        >>> simple_market.set_interconnectors(interconnector)
+        >>> market.set_interconnectors(interconnector)
 
         Define the interconnector loss function. In this case losses are always 5 % of line flow.
 
@@ -3099,15 +3208,15 @@ class SpotMarket:
         ...    'loss_segment': [1, 2, 3],
         ...    'break_point': [-120.0, 0.0, 100]})
 
-        >>> simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
+        >>> market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
         Call the dispatch method.
 
-        >>> simple_market.dispatch()
+        >>> market.dispatch()
 
         Now the region dispatch summary can be retreived.
 
-        >>> print(simple_market.get_region_dispatch_summary())
+        >>> print(market.get_region_dispatch_summary())
           region   dispatch     inflow  interconnector_losses
         0    NSW  94.615385 -92.307692               2.307692
 
@@ -3140,7 +3249,7 @@ class SpotMarket:
 
         unit_dispatch = self.get_unit_dispatch()
         unit_dispatch = unit_dispatch[unit_dispatch['service'] == 'energy']
-        unit_dispatch_types = self.unit_info.loc[:, ['unit', 'region', 'dispatch_type']]
+        unit_dispatch_types = self._unit_info.loc[:, ['unit', 'region', 'dispatch_type']]
         unit_dispatch = pd.merge(unit_dispatch, unit_dispatch_types, on='unit')
 
         def make_load_dispatch_negative(dispatch_type, dispatch):
@@ -3155,7 +3264,7 @@ class SpotMarket:
         return unit_dispatch
 
     def _interconnectors_in_market(self):
-        return self.interconnector_directions is not None
+        return self._interconnector_directions is not None
 
     def _get_interconnector_inflow_by_region(self):
 
@@ -3195,17 +3304,17 @@ class SpotMarket:
             return outflow_direction
 
         direction_coefficients = []
-        if 'interconnectors' in self.decision_variables:
-            direction_coefficients.append(define_positive_inflows(self.interconnector_directions))
-            direction_coefficients.append(define_negative_inflows(self.interconnector_directions))
-        if 'market_interconnectors' in self.decision_variables:
-            direction_coefficients.append(define_positive_inflows(self.market_interconnector_directions))
-            direction_coefficients.append(define_negative_inflows(self.market_interconnector_directions))
+        if 'interconnectors' in self._decision_variables:
+            direction_coefficients.append(define_positive_inflows(self._interconnector_directions))
+            direction_coefficients.append(define_negative_inflows(self._interconnector_directions))
+        if 'market_interconnectors' in self._decision_variables:
+            direction_coefficients.append(define_positive_inflows(self._market_interconnector_directions))
+            direction_coefficients.append(define_negative_inflows(self._market_interconnector_directions))
 
         return pd.concat(direction_coefficients)
 
     def _interconnectors_have_losses(self):
-        return self.interconnector_loss_shares is not None
+        return self._interconnector_loss_shares is not None
 
     def _get_interconnector_losses_by_region(self):
         from_region_loss_shares = self._get_from_region_loss_shares()
@@ -3229,14 +3338,14 @@ class SpotMarket:
         return to_region_loss_share
 
     def _get_loss_shares(self, region_type):
-        from_region_loss_share = self.interconnector_loss_shares
+        from_region_loss_share = self._interconnector_loss_shares
         regions = []
-        if self.interconnector_directions is not None:
-            reg_regions = self.interconnector_directions.loc[:, ['interconnector', region_type]]
+        if self._interconnector_directions is not None:
+            reg_regions = self._interconnector_directions.loc[:, ['interconnector', region_type]]
             reg_regions['link'] = 'one'
             regions.append(reg_regions)
-        if self.market_interconnector_directions is not None:
-            market_regions = self.market_interconnector_directions.loc[:, ['interconnector', 'link', region_type]]
+        if self._market_interconnector_directions is not None:
+            market_regions = self._market_interconnector_directions.loc[:, ['interconnector', 'link', region_type]]
             regions.append(market_regions)
         regions = pd.concat(regions)
         regions = regions.rename(columns={region_type: 'region'})
@@ -3246,12 +3355,12 @@ class SpotMarket:
 
     def _get_transmission_losses(self):
         interconnector_directions = []
-        if 'interconnectors' in self.decision_variables:
-            reg_interconnector_directions = self.interconnector_directions
+        if 'interconnectors' in self._decision_variables:
+            reg_interconnector_directions = self._interconnector_directions
             reg_interconnector_directions['link'] = 'one'
             interconnector_directions.append(reg_interconnector_directions)
-        if 'market_interconnectors' in self.decision_variables:
-            interconnector_directions.append(self.market_interconnector_directions)
+        if 'market_interconnectors' in self._decision_variables:
+            interconnector_directions.append(self._market_interconnector_directions)
         interconnector_directions = pd.concat(interconnector_directions)
         loss_factors = hf.stack_columns(interconnector_directions, ['interconnector', 'link'],
                                         ['from_region_loss_factor', 'to_region_loss_factor'], 'direction',
@@ -3332,43 +3441,43 @@ class SpotMarket:
 
         Create the market model with unit service bids.
 
-        >>> simple_market = markets.Spot()
-        >>> simple_market.set_unit_info(unit_info)
-        >>> simple_market.set_unit_volume_bids(volume_bids)
-        >>> simple_market.set_unit_price_bids(price_bids)
+        >>> market = markets.Spot()
+        >>> market.set_unit_info(unit_info)
+        >>> market.set_unit_volume_bids(volume_bids)
+        >>> market.set_unit_price_bids(price_bids)
 
         Create constraints that enforce the top of the FCAS trapezium.
 
         >>> fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
-        >>> simple_market.set_fcas_max_availability(fcas_availability)
+        >>> market.set_fcas_max_availability(fcas_availability)
 
         Create constraints the enforce the lower and upper slope of the FCAS regulation service trapeziums.
 
         >>> regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_reg']
-        >>> simple_market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+        >>> market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
 
         Create constraints that enforce the lower and upper slope of the FCAS contingency
         trapezium. These constrains also scale slopes of the trapezium to ensure the
         co-dispatch of contingency and regulation services is technically feasible.
 
         >>> contingency_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_6s']
-        >>> simple_market.set_joint_capacity_constraints(contingency_trapeziums)
+        >>> market.set_joint_capacity_constraints(contingency_trapeziums)
 
         Set the demand for energy.
 
-        >>> simple_market.set_demand_constraints(demand)
+        >>> market.set_demand_constraints(demand)
 
         Set the required volume of FCAS services.
 
-        >>> simple_market.set_fcas_requirements_constraints(fcas_requirements)
+        >>> market.set_fcas_requirements_constraints(fcas_requirements)
 
         Calculate dispatch and pricing
 
-        >>> simple_market.dispatch()
+        >>> market.dispatch()
 
         Return the total dispatch of each unit in MW.
 
-        >>> print(simple_market.get_unit_dispatch())
+        >>> print(market.get_unit_dispatch())
           unit    service  dispatch
         0    A     energy     100.0
         1    A   raise_6s       5.0
@@ -3378,7 +3487,7 @@ class SpotMarket:
 
         Return the constrained availability of each units fcas service.
 
-        >>> print(simple_market.get_fcas_availability())
+        >>> print(market.get_fcas_availability())
           unit    service  availability
         0    A   raise_6s          10.0
         1    B   raise_6s           5.0
@@ -3391,10 +3500,10 @@ class SpotMarket:
         fcas_variable_slack = []
         for constraint_type in ['fcas_max_availability', 'joint_ramping_raise_reg', 'joint_ramping_lower_reg',
                                 'joint_capacity', 'energy_and_regulation_capacity']:
-            if constraint_type in self.constraints_rhs_and_type.keys():
-                service_coefficients = self.constraint_to_variable_map['unit_level'][constraint_type]
+            if constraint_type in self._constraints_rhs_and_type.keys():
+                service_coefficients = self._constraint_to_variable_map['unit_level'][constraint_type]
                 service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit', 'service', 'coefficient']]
-                constraint_slack = self.constraints_rhs_and_type[constraint_type].loc[:,
+                constraint_slack = self._constraints_rhs_and_type[constraint_type].loc[:,
                                    ['constraint_id', 'slack', 'type']]
                 slack_temp = pd.merge(service_coefficients, constraint_slack, on='constraint_id')
                 fcas_variable_slack.append(slack_temp)

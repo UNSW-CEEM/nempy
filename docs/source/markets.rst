@@ -23,34 +23,34 @@ dispatch and pricing. The examples below give an overview of how method calls bu
 
 .. code-block:: python
 
-    simple_market = markets.Spot(unit_info=unit_info)
+    market = markets.Spot(unit_info=unit_info)
 
 *   Providing volume bids creates a set of n decision variables, where n is the number of bids with a volume greater
     than zero.
 
 .. code-block:: python
 
-    simple_market.set_unit_energy_volume_bids(volume_bids)
+    market.set_unit_energy_volume_bids(volume_bids)
 
 *   Providing price bids creates the objective function, i.e. units will be dispatch to minimise cost, as determined
     by the bid prices.
 
 .. code-block:: python
 
-    simple_market.set_unit_energy_price_bids(price_bids)
+    market.set_unit_energy_price_bids(price_bids)
 
 *   Providing unit capacities creates a constraint for each unit that caps its total dispatch at a set capacity
 
 .. code-block:: python
 
-    simple_market.set_unit_capacity_constraints(unit_limits)
+    market.set_unit_capacity_constraints(unit_limits)
 
 *   Providing regional energy demand creates a constraint for each region that forces supply from units and
     interconnectors to equal demand
 
 .. code-block:: python
 
-    simple_market.set_demand_constraints(demand)
+    market.set_demand_constraints(demand)
 
 Reference
 ---------

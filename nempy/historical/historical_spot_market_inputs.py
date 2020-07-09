@@ -160,9 +160,9 @@ class _MMSTable:
             'RAISE5MINACTUALAVAILABILITY': 'REAL', 'RAISEREGACTUALAVAILABILITY': 'REAL',
             'LOWER6SECACTUALAVAILABILITY': 'REAL', 'LOWER60SECACTUALAVAILABILITY': 'REAL',
             'LOWER5MINACTUALAVAILABILITY': 'REAL', 'LOWERREGACTUALAVAILABILITY': 'REAL', 'LHS': 'REAL',
-            'VIOLATIONDEGREE': 'REAL', 'MARGINALVALUE': 'REAL', 'RAISE6SECRRP': 'REAL',
-            'RAISE60SECRRP': 'REAL', 'RAISE5MINRRP': 'REAL', 'RAISEREGRRP': 'REAL', 'LOWER6SECRRP': 'REAL',
-            'LOWER60SECRRP': 'REAL', 'LOWER5MINRRP': 'REAL', 'LOWERREGRRP': 'REAL', 'FROM_REGION_TLF': 'REAL',
+            'VIOLATIONDEGREE': 'REAL', 'MARGINALVALUE': 'REAL', 'RAISE6SECROP': 'REAL',
+            'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER6SECROP': 'REAL',
+            'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL', 'FROM_REGION_TLF': 'REAL',
             'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT', 'TOREGION': 'TEXT',
             'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
         }
@@ -1243,10 +1243,10 @@ class DBManager:
                                                       'LOWERREGACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
-            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECRRP',
-                                                       'RAISE60SECRRP', 'RAISE5MINRRP', 'RAISEREGRRP',
-                                                       'LOWER6SECRRP', 'LOWER60SECRRP', 'LOWER5MINRRP',
-                                                       'LOWERREGRRP'],
+            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
+                                                       'RAISE60SECROP', 'RAISE5MINROP', 'RAISEREGROP',
+                                                       'LOWER6SECROP', 'LOWER60SECROP', 'LOWER5MINROP',
+                                                       'LOWERREGROP'],
             table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',

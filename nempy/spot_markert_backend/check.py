@@ -14,7 +14,7 @@ def keep_details(fn):
 def energy_bid_ids_exist(func):
     @keep_details(func)
     def wrapper(*args):
-        if 'bids' not in args[0].decision_variables:
+        if 'bids' not in args[0]._decision_variables:
             raise ModelBuildError('This cannot be performed before energy volume bids are set.')
         func(*args)
 
@@ -24,7 +24,7 @@ def energy_bid_ids_exist(func):
 def all_units_have_info(func):
     @keep_details(func)
     def wrapper(*args):
-        if not set(args[1]['unit'].unique()) <= set(args[0].unit_info['unit']):
+        if not set(args[1]['unit'].unique()) <= set(args[0]._unit_info['unit']):
             raise ModelBuildError('Not all unit with bids are present in the unit_info input.')
         func(*args)
     return wrapper
@@ -33,9 +33,9 @@ def all_units_have_info(func):
 def interconnectors_exist(func):
     @keep_details(func)
     def wrapper(*args):
-        if 'interconnectors' not in args[0].decision_variables:
+        if 'interconnectors' not in args[0]._decision_variables:
             raise ModelBuildError('Losses cannot be added to interconnectors because they do not exist yet.')
-        existing_inters = args[0].decision_variables['interconnectors']['interconnector'].unique()
+        existing_inters = args[0]._decision_variables['interconnectors']['interconnector'].unique()
         new_inters = args[1]['interconnector'].unique()
         if not all(inter in existing_inters for inter in new_inters):
             raise ModelBuildError('Losses cannot be added to interconnectors because they do not exist yet.')
@@ -65,8 +65,8 @@ def bid_prices_monotonic_increasing(func, arg=1):
 def pre_dispatch(func):
     @keep_details(func)
     def wrapper(*args):
-        if 'energy_bids' in args[0].decision_variables and 'energy_bids' not in \
-                args[0].objective_function_components:
+        if 'energy_bids' in args[0]._decision_variables and 'energy_bids' not in \
+                args[0]._objective_function_components:
             raise ModelBuildError('No unit energy bids provided.')
         func(*args)
 

@@ -87,37 +87,37 @@ print(fcas_requirements)
 # 1    nsw_raise_6s_requirement    NSW   raise_6s    10.0
 
 # Create the market model with unit service bids.
-simple_market = markets.SpotMarket()
-simple_market.set_unit_info(unit_info)
-simple_market.set_unit_energy_volume_bids(volume_bids)
-simple_market.set_unit_energy_price_bids(price_bids)
+market = markets.SpotMarket()
+market.set_unit_info(unit_info)
+market.set_unit_energy_volume_bids(volume_bids)
+market.set_unit_energy_price_bids(price_bids)
 
 # Create constraints that enforce the top of the FCAS trapezium.
 fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
-simple_market.set_fcas_max_availability(fcas_availability)
+market.set_fcas_max_availability(fcas_availability)
 
 # Create constraints the enforce the lower and upper slope of the FCAS regulation
 # service trapeziums.
 regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_reg']
-simple_market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
 
 # Create constraints that enforce the lower and upper slope of the FCAS contingency
 # trapezium. These constrains also scale slopes of the trapezium to ensure the
 # co-dispatch of contingency and regulation services is technically feasible.
 contingency_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_6s']
-simple_market.set_joint_capacity_constraints(contingency_trapeziums)
+market.set_joint_capacity_constraints(contingency_trapeziums)
 
 # Set the demand for energy.
-simple_market.set_demand_constraints(demand)
+market.set_demand_constraints(demand)
 
 # Set the required volume of FCAS services.
-simple_market.set_fcas_requirements_constraints(fcas_requirements)
+market.set_fcas_requirements_constraints(fcas_requirements)
 
 # Calculate dispatch and pricing
-simple_market.dispatch()
+market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_unit_dispatch())
+print(market.get_unit_dispatch())
 #   unit    service  dispatch
 # 0    A     energy     100.0
 # 1    A   raise_6s       5.0
@@ -126,7 +126,7 @@ print(simple_market.get_unit_dispatch())
 # 4    B  raise_reg      10.0
 
 # Return the price of energy.
-print(simple_market.get_energy_prices())
+print(market.get_energy_prices())
 #   region  price
 # 0    NSW   75.0
 
@@ -138,7 +138,7 @@ print(simple_market.get_energy_prices())
 #  Therefore the marginal cost of energy is 60 - 20 + 35 = 75 $/MW/h
 
 # Return the price of regulation FCAS.
-print(simple_market.get_fcas_prices())
+print(market.get_fcas_prices())
 #                           set  price
 # 0  nsw_regulation_requirement   45.0
 # 1    nsw_raise_6s_requirement   35.0

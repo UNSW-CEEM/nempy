@@ -3,7 +3,7 @@ from nempy import markets
 from nempy.historical import historical_spot_market_inputs
 
 # Create a market instance.
-simple_market = markets.SpotMarket()
+market = markets.SpotMarket()
 
 # The only generator is located in NSW.
 unit_info = pd.DataFrame({
@@ -11,7 +11,7 @@ unit_info = pd.DataFrame({
     'region': ['NSW']  # MW
 })
 
-simple_market.set_unit_info(unit_info)
+market.set_unit_info(unit_info)
 
 # Volume of each bids.
 volume_bids = pd.DataFrame({
@@ -19,7 +19,7 @@ volume_bids = pd.DataFrame({
     '1': [1000.0]  # MW
 })
 
-simple_market.set_unit_volume_bids(volume_bids)
+market.set_unit_volume_bids(volume_bids)
 
 # Price of each bid.
 price_bids = pd.DataFrame({
@@ -27,7 +27,7 @@ price_bids = pd.DataFrame({
     '1': [50.0]  # $/MW
 })
 
-simple_market.set_unit_price_bids(price_bids)
+market.set_unit_price_bids(price_bids)
 
 # NSW has no demand but VIC has 800 MW.
 demand = pd.DataFrame({
@@ -36,7 +36,7 @@ demand = pd.DataFrame({
     'loss_function_demand': [0.0, 800.0]  # MW
 })
 
-simple_market.set_demand_constraints(demand.loc[:, ['region', 'demand']])
+market.set_demand_constraints(demand.loc[:, ['region', 'demand']])
 
 # There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
 interconnectors = pd.DataFrame({
@@ -47,7 +47,7 @@ interconnectors = pd.DataFrame({
     'min': [-1200.0]
 })
 
-simple_market.set_interconnectors(interconnectors)
+market.set_interconnectors(interconnectors)
 
 # Create a demand dependent loss function.
 # Specify the demand dependency
@@ -75,23 +75,23 @@ interpolation_break_points = pd.DataFrame({
                     0.0, 200.0, 400.0, 600.0, 800.0, 1000]
 })
 
-simple_market.set_interconnector_losses(loss_functions, interpolation_break_points)
+market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
 # Calculate dispatch.
-simple_market.dispatch()
+market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_unit_dispatch())
+print(market.get_unit_dispatch())
 #   unit service    dispatch
 # 0    A  energy  920.205473
 
 # Return interconnector flow and losses.
-print(simple_market.get_interconnector_flows())
+print(market.get_interconnector_flows())
 #   interconnector        flow      losses
 # 0      VIC1-NSW1  860.102737  120.205473
 
 # Return the price of energy in each region.
-print(simple_market.get_energy_prices())
+print(market.get_energy_prices())
 #   region      price
 # 0    NSW  50.000000
 # 1    VIC  62.292869
