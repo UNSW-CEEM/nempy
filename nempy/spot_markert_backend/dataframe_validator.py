@@ -64,8 +64,8 @@ class SeriesSchema:
         if self.data_type == str:
             if not all(series.apply(lambda x: type(x) == str)):
                 raise ColumnDataTypeError('All elements of column {} should have type str'.format(self.name))
-        elif self.data_type == 'callable':
-            if not all(series.apply(lambda x: callable(x) == str)):
+        elif self.data_type == callable:
+            if not all(series.apply(lambda x: callable(x))):
                 raise ColumnDataTypeError('All elements of column {} should have type callable'.format(self.name))
         elif self.data_type != series.dtype:
             raise ColumnDataTypeError('Column {} should have type {}'.format(self.name, self.data_type))

@@ -431,11 +431,10 @@ class HistoricalSpotMarket:
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
                                      'ENERGY': 'energy'}
         self.unit_inputs = self.inputs.get_unit_inputs(self.interval)
-        self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'])
+        unit_info = self.unit_inputs.get_unit_info()
+        self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
 
     def add_unit_bids_to_market(self):
-        unit_info = self.unit_inputs.get_unit_info()
-        self.market.set_unit_info(unit_info)
         volume_bids, price_bids = self.unit_inputs.get_processed_bids()
         self.market.set_unit_volume_bids(volume_bids)
         self.market.set_unit_price_bids(price_bids)
@@ -449,12 +448,6 @@ class HistoricalSpotMarket:
         self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_ugif_limit)
         cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['ugif']
         self.market.make_constraints_elastic('ugif_capacity', violation_cost=cost)
-
-        
-
-    # def set_unit_ugif_limits(self):
-    #     unit_availability_limit = self.unit_inputs.get_unit_availability()
-    #     self.market.set_unit_capacity_constraints(unit_availability_limit)
 
     def set_ramp_rate_limits(self):
         ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
@@ -527,8 +520,36 @@ class HistoricalSpotMarket:
         interconnectors = interconnector_inputs.get_interconnector_definitions()
         market_interconnectors = interconnector_inputs.get_market_interconnector_links()
         loss_functions, interpolation_break_points = interconnector_inputs.get_interconnector_loss_model()
+
+        interconnectors['link'] = interconnectors['interconnector']
+        interconnectors['from_region_loss_factor'] = 1.0
+        interconnectors['to_region_loss_factor'] = 1.0
+        interconnectors['generic_constraint_factor'] = 1
+
+        interconnectors = pd.concat([interconnectors, market_interconnectors])
+        interconnectors['generic_constraint_factor'] = interconnectors['generic_constraint_factor'].astype(np.int64)
+
+        interpolation_break_points = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
+                                              interpolation_break_points, on='interconnector')
+        interpolation_break_points['break_point'] = interpolation_break_points['break_point'] * interpolation_break_points['generic_constraint_factor']
+        interpolation_break_points['loss_segment'] = interpolation_break_points['loss_segment'] * \
+                                                    interpolation_break_points['generic_constraint_factor']
+        interpolation_break_points = interpolation_break_points.drop('generic_constraint_factor', axis=1)
+
+        loss_functions = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
+                                  loss_functions, on='interconnector')
+
+        def loss_function_adjuster(loss_function, generic_constraint_factor):
+            def wrapper(flow):
+                return loss_function(flow * generic_constraint_factor)
+            return wrapper
+
+        loss_functions['loss_function'] = \
+            loss_functions.apply(lambda x: loss_function_adjuster(x['loss_function'], x['generic_constraint_factor']), axis=1)
+
+        loss_functions = loss_functions.drop('generic_constraint_factor', axis=1)
+
         self.market.set_interconnectors(interconnectors)
-        self.market.set_market_interconnectors(market_interconnectors)
         self.market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
     def add_generic_constraints(self):
@@ -677,24 +698,19 @@ class HistoricalSpotMarket:
         DISPATCHINTERCONNECTORRES = self.inputs_manager.DISPATCHINTERCONNECTORRES.get_data(self.interval)
         interconnector_flow = DISPATCHINTERCONNECTORRES.loc[:, ['INTERCONNECTORID', 'MWFLOW']]
         interconnector_flow.columns = ['interconnector', 'flow']
+        interconnector_flow['link'] = interconnector_flow['interconnector']
+        interconnector_flow['link'] = np.where(interconnector_flow['interconnector'] == 'T-V-MNSP1',
+            np.where(interconnector_flow['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC'), interconnector_flow['link'])
 
         flow_variables = self.market._decision_variables['interconnectors']
-        interconnector_flow_reg = interconnector_flow[interconnector_flow['interconnector'] != 'T-V-MNSP1']
-        flow_variables = pd.merge(flow_variables, interconnector_flow_reg, 'inner', on=['interconnector'])
+        flow_variables = pd.merge(flow_variables, interconnector_flow, 'left', on=['interconnector', 'link'])
+        flow_variables = flow_variables.fillna(0.0)
+        flow_variables['flow'] = np.where(flow_variables['link'] != flow_variables['interconnector'],
+                                          flow_variables['flow'].abs(), flow_variables['flow'])
         flow_variables['lower_bound'] = flow_variables['flow'] - wiggle_room
         flow_variables['upper_bound'] = flow_variables['flow'] + wiggle_room
         flow_variables = flow_variables.drop(['flow'], axis=1)
         self.market._decision_variables['interconnectors'] = flow_variables
-
-        flow_variables = self.market._decision_variables['market_interconnectors']
-        interconnector_flow_market = interconnector_flow[interconnector_flow['interconnector'] == 'T-V-MNSP1']
-        interconnector_flow_market['link'] = np.where(interconnector_flow_market['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC')
-        flow_variables = pd.merge(flow_variables, interconnector_flow_market, 'left', on=['interconnector', 'link'])
-        flow_variables['lower_bound'] = flow_variables['flow'].abs() - wiggle_room
-        flow_variables['upper_bound'] = flow_variables['flow'].abs() + wiggle_room
-        flow_variables = flow_variables.drop(['flow'], axis=1)
-        flow_variables = flow_variables.fillna(0.0)
-        self.market._decision_variables['market_interconnectors'] = flow_variables
 
     @staticmethod
     def _split_out_bass_link(interconnectors):

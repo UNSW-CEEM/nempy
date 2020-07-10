@@ -79,7 +79,7 @@ class InterfaceToSolver:
                                                                  var_type=variable_types[variable_type],
                                                                  name=str(variable_id))
 
-    def add_sos_type_2(self, sos_variables):
+    def add_sos_type_2(self, sos_variables, sos_id_columns, position_column):
         """Add groups of special ordered sets of type 2 two the mip model.
 
         Examples
@@ -122,11 +122,11 @@ class InterfaceToSolver:
 
         # Function that adds sets to mip model.
         def add_sos_vars(sos_group):
-            self.mip_model.add_sos(list(zip(sos_group['vars'], sos_group['position'])), 2)
+            self.mip_model.add_sos(list(zip(sos_group['vars'], sos_group[position_column])), 2)
         # For each variable_id get the variable object from the mip model
         sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: self.variables[x])
         # Break up the sets based on their id and add them to the model separately.
-        sos_variables.groupby('sos_id').apply(add_sos_vars)
+        sos_variables.groupby(sos_id_columns).apply(add_sos_vars)
         # This is a hack to make mip knows there are binary constraints.
         k = self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
@@ -873,7 +873,8 @@ def create_interconnector_generic_constraint_lhs(generic_constraint_interconnect
 
     >>> interconnector_variables = pd.DataFrame({
     ...   'variable_id': [0, 1],
-    ...   'interconnector': ['X', 'X']})
+    ...   'interconnector': ['X', 'X'],
+    ...   'generic_constraint_factor': [1, 1]})
 
     >>> lhs = create_interconnector_generic_constraint_lhs(generic_constraint_interconnectors, generic_constraint_ids,
     ...   interconnector_variables)
@@ -882,59 +883,11 @@ def create_interconnector_generic_constraint_lhs(generic_constraint_interconnect
        constraint_id  variable_id  coefficient
     0              1            0          0.9
     1              1            1          0.9
-
-    Parameters
-    ----------
-    generic_constraint_interconnectors : pd.DataFrame
-
-        ==============  ==============================================================
-        Columns:        Description:
-        set             the unique identifier of the constraint set to map the
-                        lhs coefficients to (as `str`)
-        interconnector  the interconnector whose variables will be mapped to the lhs (as `str`)
-        coefficient     the lhs coefficient (as `np.float64`)
-        ==============  ==============================================================
-
-    generic_constraint_ids : pd.DataFrame
-
-        =============  ===============================================================
-        Columns:       Description:
-        constraint_id  the unique identifier of the constraint (as `np.int64`)
-        set            the constraint set that the id refers to (as `str`)
-        =============  ===============================================================
-
-    interconnector_variables : pd.DataFrame
-
-        ==============  =============================================================================
-        Columns:        Description:
-        variable_id     the id of the variable (as `np.int64`)
-        interconnector  the interconnector level constraints the variable should map to (as `str`)
-        ==============  =============================================================================
-
-    Returns
-    -------
-    lhs : pd.DataFrame
-
-        =============  ===============================================================
-        Columns:       Description:
-        constraint_id  the unique identifier of the constraint (as `np.int64`)
-        variable_id    the unique identifier of the variable (as `np.int64`)
-        coefficient    the constraint level contribution to the lhs coefficient (as `np.float64`)
-        =============  ===============================================================
     """
     interconnector_lhs = pd.merge(generic_constraint_interconnectors,
-                                  interconnector_variables.loc[:, ['interconnector', 'variable_id']],
-                                  on=['interconnector'])
-    interconnector_lhs = pd.merge(interconnector_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
-    return interconnector_lhs.loc[:, ['constraint_id', 'variable_id', 'coefficient']]
-
-
-def create_market_interconnector_generic_constraint_lhs(generic_constraint_interconnectors, generic_constraint_ids,
-                                                 interconnector_variables):
-    interconnector_lhs = pd.merge(generic_constraint_interconnectors,
-                                  interconnector_variables.loc[:, ['interconnector', 'variable_id',
-                                                                   'generic_constraint_factor']],
+                                  interconnector_variables.loc[:, ['interconnector', 'variable_id', 'generic_constraint_factor']],
                                   on=['interconnector'])
     interconnector_lhs = pd.merge(interconnector_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
     interconnector_lhs['coefficient'] = interconnector_lhs['coefficient'] * interconnector_lhs['generic_constraint_factor']
     return interconnector_lhs.loc[:, ['constraint_id', 'variable_id', 'coefficient']]
+

@@ -81,7 +81,6 @@ class SpotMarket:
         self._market_constraints_rhs_and_type = {}
         self._objective_function_components = {}
         self._interconnector_directions = None
-        self._market_interconnector_directions = None
         self._interconnector_loss_shares = None
         self._next_variable_id = 0
         self._next_constraint_id = 0
@@ -1704,151 +1703,26 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null values in the max and min columns.
         """
+        if 'link' not in interconnector_directions_and_limits.columns:
+            interconnector_directions_and_limits['link'] = interconnector_directions_and_limits['interconnector']
         if 'from_region_loss_factor' not in interconnector_directions_and_limits.columns:
             interconnector_directions_and_limits['from_region_loss_factor'] = 1.0
         if 'to_region_loss_factor' not in interconnector_directions_and_limits.columns:
             interconnector_directions_and_limits['to_region_loss_factor'] = 1.0
+        if 'generic_constraint_factor' not in interconnector_directions_and_limits.columns:
+            interconnector_directions_and_limits['generic_constraint_factor'] = 1
+
         if self.validate_inputs:
             self._validate_interconnector_definitions(interconnector_directions_and_limits)
-        self._interconnector_directions = \
-            interconnector_directions_and_limits.loc[:, ['interconnector', 'to_region', 'from_region',
-                                                         'from_region_loss_factor', 'to_region_loss_factor']]
+
+        self._interconnector_directions = interconnector_directions_and_limits
+
         self._decision_variables['interconnectors'], self._variable_to_constraint_map['regional']['interconnectors'] \
             = inter.create(interconnector_directions_and_limits, self._next_variable_id)
 
         self._next_variable_id = max(self._decision_variables['interconnectors']['variable_id']) + 1
 
     def _validate_interconnector_definitions(self, interconnector_directions_and_limits):
-        schema = dv.DataFrameSchema(name='interconnector_directions_and_limits', primary_keys=['interconnector'])
-        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
-        schema.add_column(dv.SeriesSchema(name='to_region', data_type=str, allowed_values=self._market_regions))
-        schema.add_column(dv.SeriesSchema(name='from_region', data_type=str, allowed_values=self._market_regions))
-        schema.add_column(dv.SeriesSchema(name='max', data_type=np.float64, must_be_real_number=True))
-        schema.add_column(dv.SeriesSchema(name='min', data_type=np.float64, must_be_real_number=True))
-        schema.add_column(dv.SeriesSchema(name='from_region_loss_factor', data_type=np.float64,
-                                          must_be_real_number=True, not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='to_region_loss_factor', data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True))
-        schema.validate(interconnector_directions_and_limits)
-
-    def set_market_interconnectors(self, interconnector_directions_and_limits):
-        """Create lossless links between specified regions.
-
-        Examples
-        --------
-        Define the unit information data set needed to initialise the market.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A'],
-        ...     'region': ['NSW']})
-
-        Initialise the market instance.
-
-        >>> market = SpotMarket(market_regions=['NSW', 'VIC'],
-        ...                     unit_info=unit_info)
-
-        Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
-
-        >>> interconnector = pd.DataFrame({
-        ...     'link': ['A', 'B'],
-        ...     'interconnector': ['inter_one', 'inter_one'],
-        ...     'to_region': ['VIC', 'NSW'],
-        ...     'from_region': ['NSW', 'VIC'],
-        ...     'min': [0.0, 0.0],
-        ...     'max': [100.0, 110.0],
-        ...     'generic_constraint_factor': [1.0, -1.0],
-        ...     'from_region_loss_factor': [1.0, 0.9],
-        ...     'to_region_loss_factor': [0.9, 1.0]})
-
-        Create the interconnector.
-
-        >>> market.set_market_interconnectors(interconnector)
-
-        The market should now have a decision variable defined for each interconnector.
-
-        >>> print(market._decision_variables['market_interconnectors'])
-          link interconnector  ...        type  generic_constraint_factor
-        0    A      inter_one  ...  continuous                        1.0
-        1    B      inter_one  ...  continuous                       -1.0
-
-        ... and a mapping of those variables to to regional energy constraints.
-
-        >>> regional = market._variable_to_constraint_map['regional']
-
-        >>> print(regional['market_interconnectors'])
-           variable_id region service  coefficient
-        0            0    VIC  energy          0.9
-        1            1    NSW  energy          1.0
-        2            0    NSW  energy         -1.0
-        3            1    VIC  energy         -0.9
-
-        Parameters
-        ----------
-        interconnector_directions_and_limits : pd.DataFrame
-            Interconnector definition.
-
-            ==========================  ==============================
-            Columns:                    Description:
-            interconnector              unique identifier of a \n
-                                        interconnector, (as `str`)
-            to_region                   the region that receives power \n
-                                        when flow is in the positive \n
-                                        direction, (as `str`)
-            from_region                 the region that power is drawn \n
-                                        from when flow is in the \n
-                                        positive direction, (as `str`)
-            max                         the maximum power flow in the \n
-                                        positive direction, in MW, \n
-                                        (as `np.float64`)
-            min                         the maximum power flow in the \n
-                                        negative direction, in MW, \n
-                                        (as `np.float64`)
-            generic_constraint_factor   the sign of the links \n
-                                        contribution to generic \n
-                                        constraints, 1.0 or -1.0, \n
-                                        (`np.float64`)
-            from_region_loss_factor     the loss factor at the from \n
-                                        region end of the interconnector, \n
-                                        refers the the from region end \n
-                                        to the regional reference node, \n
-                                        (as `np.float`)
-            to_region_loss_factor       the loss factor at the to region \n
-                                        end of the interconnector, \n
-                                        refers the the to region end to \n
-                                        the regional reference node, \n
-                                        (as `np.float`).
-            ==========================  ==============================
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-            RepeatedRowError
-                If there is more than one row for any interconnector.
-            ColumnDataTypeError
-                If columns are not of the require type.
-            MissingColumnError
-                If any columns are missing.
-            UnexpectedColumn
-                If there are any additional columns in the input DataFrame.
-            ColumnValues
-                If there are inf, null values in the max and min columns.
-        """
-        if self.validate_inputs:
-            self._validate_market_interconnector_definitions(interconnector_directions_and_limits)
-
-        self._market_interconnector_directions = \
-            interconnector_directions_and_limits.loc[:, ['interconnector', 'link', 'to_region', 'from_region',
-                                                         'from_region_loss_factor', 'to_region_loss_factor']]
-        self._decision_variables['market_interconnectors'], \
-        self._variable_to_constraint_map['regional']['market_interconnectors'] \
-            = inter.create_market_interconnector(interconnector_directions_and_limits, self._next_variable_id)
-
-        self._next_variable_id = max(self._decision_variables['market_interconnectors']['variable_id']) + 1
-
-    def _validate_market_interconnector_definitions(self, interconnector_directions_and_limits):
         schema = dv.DataFrameSchema(name='interconnector_directions_and_limits', primary_keys=['interconnector', 'link'])
         schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
         schema.add_column(dv.SeriesSchema(name='link', data_type=str))
@@ -1856,26 +1730,13 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='from_region', data_type=str, allowed_values=self._market_regions))
         schema.add_column(dv.SeriesSchema(name='max', data_type=np.float64, must_be_real_number=True))
         schema.add_column(dv.SeriesSchema(name='min', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='generic_constraint_factor', data_type=np.int64, allowed_values=[1, -1]))
         schema.add_column(dv.SeriesSchema(name='from_region_loss_factor', data_type=np.float64,
-                                          must_be_real_number=True, not_negative=True), optional=True)
+                                          must_be_real_number=True, not_negative=True))
         schema.add_column(dv.SeriesSchema(name='to_region_loss_factor', data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True), optional=True)
+                                          not_negative=True))
         schema.validate(interconnector_directions_and_limits)
 
-    #@check.interconnectors_exist
-    @check.required_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=1)
-    @check.allowed_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=1)
-    @check.repeated_rows('loss_functions', ['interconnector'], arg=1)
-    @check.column_data_types('loss_functions', {'interconnector': str, 'from_region_loss_share': np.float64,
-                                                'loss_function': 'callable', 'from_region': str}, arg=1)
-    @check.column_values_must_be_real('loss_functions', ['break_point'], arg=1)
-    @check.column_values_outside_range('loss_functions', {'from_region_loss_share': [0.0, 1.0]}, arg=1)
-    @check.required_columns('interpolation_break_point', ['interconnector', 'loss_segment', 'break_point'], arg=2)
-    @check.allowed_columns('interpolation_break_point', ['interconnector', 'loss_segment', 'break_point'], arg=2)
-    @check.repeated_rows('interpolation_break_point', ['interconnector', 'loss_segment', 'break_point'], arg=2)
-    @check.column_data_types('interpolation_break_point', {'interconnector': str, 'loss_segment': np.int64,
-                                                           'break_point': np.float64}, arg=2)
-    @check.column_values_must_be_real('interpolation_break_point', ['break_point'], arg=2)
     def set_interconnector_losses(self, loss_functions, interpolation_break_points):
         """Creates linearised loss functions for interconnectors.
 
@@ -1901,7 +1762,7 @@ class SpotMarket:
 
             w1 + w2 + w3 = 1
 
-        Constrain the weight variables give the relative weighting of adjacent breakpoint:
+        Constrain the weight variables to give the relative weighting of adjacent breakpoint:
 
             w1 * -100.0 + w2 * 0.0 + w3 * 100.0 = interconnector flow
 
@@ -1911,9 +1772,16 @@ class SpotMarket:
 
         Examples
         --------
-        Create a market instance.
+        Define the unit information data set needed to initialise the market.
 
-        >>> market = SpotMarket()
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
+
+        Initialise the market instance.
+
+        >>> market = SpotMarket(market_regions=['NSW', 'VIC'],
+        ...                     unit_info=unit_info)
 
         Create the interconnector, this need to be done before a interconnector losses can be set.
 
@@ -1928,7 +1796,7 @@ class SpotMarket:
 
         Define the interconnector loss function. In this case losses are always 5 % of line flow.
 
-        >>> def constant_losses(flow=None):
+        >>> def constant_losses(flow):
         ...     return abs(flow) * 0.05
 
         Define the function on a per interconnector basis. Also details how the losses should be proportioned to the
@@ -1953,8 +1821,10 @@ class SpotMarket:
         The market should now have a decision variable defined for each interconnector's losses.
 
         >>> print(market._decision_variables['interconnector_losses'])
-          interconnector  variable_id  lower_bound  upper_bound        type
-        0    little_link            1       -120.0        120.0  continuous
+          interconnector         link  ...  upper_bound        type
+        0    little_link  little_link  ...        120.0  continuous
+        <BLANKLINE>
+        [1 rows x 6 columns]
 
         ... and a mapping of those variables to regional energy constraints.
 
@@ -1983,25 +1853,25 @@ class SpotMarket:
         and a set of constraints that implement the interpolation, see above explanation.
 
         >>> print(market._constraints_rhs_and_type['interpolation_weights'])
-          interconnector  constraint_id type  rhs
-        0    little_link              0    =  1.0
+          interconnector         link  constraint_id type  rhs
+        0    little_link  little_link              0    =  1.0
 
         >>> print(market._constraints_dynamic_rhs_and_type['link_loss_to_flow'])
-          interconnector  constraint_id type  rhs_variable_id
-        0    little_link              1    =                0
-        0    little_link              2    =                1
+          interconnector         link  constraint_id type  rhs_variable_id
+        0    little_link  little_link              2    =                0
+        0    little_link  little_link              1    =                1
 
         >>> print(market._lhs_coefficients['interconnector_losses'])
            variable_id  constraint_id  coefficient
         0            2              0          1.0
         1            3              0          1.0
         2            4              0          1.0
-        0            2              1       -120.0
-        1            3              1          0.0
-        2            4              1        100.0
-        0            2              2          6.0
+        0            2              2       -120.0
         1            3              2          0.0
-        2            4              2          5.0
+        2            4              2        100.0
+        0            2              1          6.0
+        1            3              1          0.0
+        2            4              1          5.0
 
 
         Parameters
@@ -2047,59 +1917,34 @@ class SpotMarket:
                 If there are inf or null values in the numeric columns of either input DataFrames. Or if
                 from_region_loss_share are outside the range of 0.0 to 1.0
         """
-        self._interconnector_loss_shares = loss_functions.loc[:, ['interconnector', 'from_region_loss_share']]
+        if 'interconnectors' not in self._decision_variables:
+            ModelBuildError('Interconnector losses cannot be set before interconnectors have been added to the model.')
 
-        # Create loss variables.
-        decision_variables = []
-        variable_to_constraint_map = []
-        for inters in ['market_interconnectors', 'interconnectors']:
-            if inters in self._decision_variables:
-                decision_variables.append(self._decision_variables[inters])
-                variable_to_constraint_map.append(self._variable_to_constraint_map['regional'][inters])
-        decision_variables = pd.concat(decision_variables)
-        variable_to_constraint_map = pd.concat(variable_to_constraint_map)
+        if 'link' not in loss_functions.columns:
+            loss_functions['link'] = loss_functions['interconnector']
 
-        directions = []
-        if 'interconnectors' in self._decision_variables:
-            directions.append(self._interconnector_directions)
-        if 'market_interconnectors' in self._decision_variables:
-            directions.append(self._market_interconnector_directions)
-        directions = pd.concat(directions)
-        directions = directions.fillna('one')
+        if 'link' not in interpolation_break_points.columns:
+            interpolation_break_points['link'] = interpolation_break_points['interconnector']
 
-        loss_functions = pd.merge(loss_functions, directions, on='interconnector')
-        decision_variables_temp = decision_variables
-        decision_variables_temp = decision_variables_temp.fillna('one')
-        decision_variables_temp = decision_variables_temp.rename(columns={'variable_id': 'inter_variable_id'})
+        if self.validate_inputs:
+            self._validate_loss_functions(loss_functions)
+            self._validate_interpolation_break_points(interpolation_break_points)
+
+        self._interconnector_loss_shares = loss_functions.loc[:, ['interconnector', 'link', 'from_region_loss_share']]
+
         loss_functions = pd.merge(loss_functions,
-                                  decision_variables_temp.loc[:, ['interconnector', 'inter_variable_id', 'link']],
+                                  self._interconnector_directions.loc[:, ['interconnector', 'link', 'from_region']],
                                   on=['interconnector', 'link'])
 
         loss_variables, loss_variables_constraint_map = \
-            inter.create_loss_variables(decision_variables, variable_to_constraint_map, loss_functions,
+            inter.create_loss_variables(self._decision_variables['interconnectors'],
+                                        self._variable_to_constraint_map['regional']['interconnectors'],
+                                        loss_functions,
                                         self._next_variable_id)
+
         next_variable_id = loss_variables['variable_id'].max() + 1
 
-        # Create weight variables.
-        loss_variables_by_id = loss_variables.loc[:, ['interconnector', 'variable_id', 'inter_variable_id']]
-        loss_variables_by_id.columns = ['interconnector', 'loss_variable_id', 'inter_variable_id']
-        interpolation_break_points = pd.merge(interpolation_break_points, loss_variables_by_id, on='interconnector')
-        interpolation_break_points = pd.merge(interpolation_break_points,
-                                              decision_variables.loc[:, ['variable_id', 'generic_constraint_factor']],
-                                              left_on='inter_variable_id', right_on='variable_id')
-        interpolation_break_points['loss_segment'] = \
-            np.where(~interpolation_break_points['generic_constraint_factor'].isna(),
-                     interpolation_break_points['loss_segment'] * interpolation_break_points['generic_constraint_factor'],
-                     interpolation_break_points['loss_segment'])
-        interpolation_break_points = \
-            interpolation_break_points.loc[:, ['interconnector', 'inter_variable_id', 'loss_segment', 'break_point',
-                                               'generic_constraint_factor']]
-        decision_variables = pd.merge(decision_variables, loss_variables_by_id.loc[:, ['inter_variable_id']],
-                                      left_on='variable_id', right_on='inter_variable_id')
-
         weight_variables = inter.create_weights(interpolation_break_points, next_variable_id)
-
-        next_variable_id = weight_variables['variable_id'].max() + 1
 
         # Creates weights sum constraint.
         weights_sum_lhs, weights_sum_rhs = inter.create_weights_must_sum_to_one(weight_variables,
@@ -2112,13 +1957,9 @@ class SpotMarket:
                                                            next_constraint_id)
         next_constraint_id = link_to_loss_rhs['constraint_id'].max() + 1
 
-        weight_variables['break_point'] = \
-            np.where(~weight_variables['generic_constraint_factor'].isna(),
-                     weight_variables['break_point'] * weight_variables['generic_constraint_factor'],
-                     weight_variables['break_point'])
-
         # Link weights to interconnector flow.
-        link_to_flow_lhs, link_to_flow_rhs = inter.link_weights_to_inter_flow(weight_variables, decision_variables,
+        link_to_flow_lhs, link_to_flow_rhs = inter.link_weights_to_inter_flow(weight_variables,
+                                                                              self._decision_variables['interconnectors'],
                                                                               next_constraint_id)
 
         # Combine lhs sides, note these are complete lhs and don't need to be mapped to constraints.
@@ -2136,6 +1977,23 @@ class SpotMarket:
         self._constraints_dynamic_rhs_and_type['link_loss_to_flow'] = dynamic_rhs
         self._next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
         self._next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
+
+    def _validate_loss_functions(self, loss_functions):
+        schema = dv.DataFrameSchema(name='loss_functions', primary_keys=['interconnector', 'link'])
+        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='link', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='loss_function', data_type=callable))
+        schema.add_column(dv.SeriesSchema(name='from_region_loss_share', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(loss_functions)
+
+    def _validate_interpolation_break_points(self, interpolation_break_points):
+        schema = dv.DataFrameSchema(name='interpolation_break_points', primary_keys=['interconnector', 'link', 'loss_segment'])
+        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='link', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='loss_segment', data_type=np.int64))
+        schema.add_column(dv.SeriesSchema(name='break_point', data_type=np.float64, must_be_real_number=True))
+        schema.validate(interpolation_break_points)
 
     @check.required_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
     @check.allowed_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
@@ -2727,12 +2585,6 @@ class SpotMarket:
                 interconnector_lhs = solver_interface.create_interconnector_generic_constraint_lhs(
                     generic_constraint_interconnectors, generic_constraint_ids, interconnector_bids_to_constraint_map)
                 generic_lhs.append(interconnector_lhs)
-            if 'interconnectors' in self._generic_constraint_lhs and 'market_interconnectors' in self._decision_variables:
-                generic_constraint_interconnectors = self._generic_constraint_lhs['interconnectors']
-                interconnector_bids_to_constraint_map = self._decision_variables['market_interconnectors']
-                interconnector_lhs = solver_interface.create_market_interconnector_generic_constraint_lhs(
-                    generic_constraint_interconnectors, generic_constraint_ids, interconnector_bids_to_constraint_map)
-                generic_lhs.append(interconnector_lhs)
             # Add the generic lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs] + generic_lhs)
 
@@ -2768,14 +2620,15 @@ class SpotMarket:
         # If interconnectors with losses are being used, create special ordered sets for modelling losses.
         if 'interpolation_weights' in self._decision_variables:
             special_ordered_sets = self._decision_variables['interpolation_weights']
-            special_ordered_sets = \
-                special_ordered_sets.rename(columns={'inter_variable_id': 'sos_id', 'loss_segment': 'position'})
-            si.add_sos_type_2(special_ordered_sets)
+            si.add_sos_type_2(special_ordered_sets, sos_id_columns = ['interconnector', 'link'],
+                              position_column='loss_segment')
 
-        if 'market_interconnectors' in self._decision_variables:
-            special_ordered_sets = self._decision_variables['market_interconnectors']
-            special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
-            si.add_sos_type_1(special_ordered_sets)
+        if 'interconnectors' in self._decision_variables:
+            special_ordered_sets = self._decision_variables['interconnectors']
+            special_ordered_sets = special_ordered_sets[special_ordered_sets['interconnector'] != special_ordered_sets['link']]
+            if not special_ordered_sets.empty:
+                special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
+                si.add_sos_type_1(special_ordered_sets)
 
         # If Costs have been defined for bids or constraints then add an objective function.
         if self._objective_function_components:
@@ -3061,14 +2914,6 @@ class SpotMarket:
         return prices
 
     def get_interconnector_flows(self):
-        flow = []
-        if 'interconnectors' in self._decision_variables:
-            flow.append(self.get_regulated_interconnector_flows())
-        if 'market_interconnectors' in self._decision_variables:
-            flow.append(self.get_market_interconnector_flow())
-        return pd.concat(flow).fillna('one')
-
-    def get_regulated_interconnector_flows(self):
         """Retrieves the  flows for each interconnector.
 
         Examples
@@ -3159,26 +3004,15 @@ class SpotMarket:
         pd.DataFrame
 
         """
-        flow = self._decision_variables['interconnectors'].loc[:, ['interconnector', 'value']]
-        flow.columns = ['interconnector', 'flow']
+        flow = self._decision_variables['interconnectors'].loc[:, ['interconnector', 'link', 'value']]
+        flow.columns = ['interconnector', 'link', 'flow']
 
         if 'interconnector_losses' in self._decision_variables:
-            losses = self._decision_variables['interconnector_losses'].loc[:, ['interconnector', 'value']]
-            losses.columns = ['interconnector', 'losses']
-            flow = pd.merge(flow, losses, 'left', on='interconnector')
+            losses = self._decision_variables['interconnector_losses'].loc[:, ['interconnector', 'link', 'value']]
+            losses.columns = ['interconnector', 'link', 'losses']
+            flow = pd.merge(flow, losses, 'left', on=['interconnector', 'link'])
 
         return flow.reset_index(drop=True)
-
-    def get_market_interconnector_flow(self):
-        flow = self._decision_variables['market_interconnectors'].loc[:, ['interconnector', 'link', 'variable_id', 'value']]
-        flow.columns = ['interconnector', 'link', 'variable_id', 'flow']
-
-        if 'interconnector_losses' in self._decision_variables:
-            losses = self._decision_variables['interconnector_losses'].loc[:, ['inter_variable_id', 'value']]
-            losses.columns = ['inter_variable_id', 'losses']
-            flow = pd.merge(flow, losses, 'left', left_on='variable_id', right_on='inter_variable_id')
-
-        return flow.reset_index(drop=True).loc[:, ['interconnector', 'link', 'flow', 'losses']]
 
     def get_region_dispatch_summary(self):
         """Calculates a dispatch summary at the regional level.
@@ -3352,30 +3186,21 @@ class SpotMarket:
     def _get_interconnector_inflow_coefficients(self):
 
         def define_positive_inflows(interconnectors):
-            if 'link' not in interconnectors.columns:
-                interconnectors['link'] = 'one'
             inflow_direction = interconnectors.loc[:, ['interconnector', 'link', 'to_region']]
             inflow_direction['direction_coefficient'] = 1.0
             inflow_direction.columns = ['interconnector', 'link', 'region', 'direction_coefficient']
             return inflow_direction
 
         def define_negative_inflows(interconnectors):
-            if 'link' not in interconnectors.columns:
-                interconnectors['link'] = 'one'
             outflow_direction = interconnectors.loc[:, ['interconnector', 'link', 'from_region']]
             outflow_direction['direction_coefficient'] = -1.0
             outflow_direction.columns = ['interconnector', 'link', 'region', 'direction_coefficient']
             return outflow_direction
 
-        direction_coefficients = []
-        if 'interconnectors' in self._decision_variables:
-            direction_coefficients.append(define_positive_inflows(self._interconnector_directions))
-            direction_coefficients.append(define_negative_inflows(self._interconnector_directions))
-        if 'market_interconnectors' in self._decision_variables:
-            direction_coefficients.append(define_positive_inflows(self._market_interconnector_directions))
-            direction_coefficients.append(define_negative_inflows(self._market_interconnector_directions))
+        positive = define_positive_inflows(self._interconnector_directions)
+        negative = define_negative_inflows(self._interconnector_directions)
 
-        return pd.concat(direction_coefficients)
+        return pd.concat([positive, negative])
 
     def _interconnectors_have_losses(self):
         return self._interconnector_loss_shares is not None
@@ -3403,29 +3228,14 @@ class SpotMarket:
 
     def _get_loss_shares(self, region_type):
         from_region_loss_share = self._interconnector_loss_shares
-        regions = []
-        if self._interconnector_directions is not None:
-            reg_regions = self._interconnector_directions.loc[:, ['interconnector', region_type]]
-            reg_regions['link'] = 'one'
-            regions.append(reg_regions)
-        if self._market_interconnector_directions is not None:
-            market_regions = self._market_interconnector_directions.loc[:, ['interconnector', 'link', region_type]]
-            regions.append(market_regions)
-        regions = pd.concat(regions)
+        regions = self._interconnector_directions.loc[:, ['interconnector', 'link', region_type]]
         regions = regions.rename(columns={region_type: 'region'})
-        from_region_loss_share = pd.merge(from_region_loss_share, regions, on='interconnector')
+        from_region_loss_share = pd.merge(from_region_loss_share, regions, on=['interconnector', 'link'])
         from_region_loss_share = from_region_loss_share.loc[:, ['interconnector', 'link', 'region', 'from_region_loss_share']]
         return from_region_loss_share
 
     def _get_transmission_losses(self):
-        interconnector_directions = []
-        if 'interconnectors' in self._decision_variables:
-            reg_interconnector_directions = self._interconnector_directions
-            reg_interconnector_directions['link'] = 'one'
-            interconnector_directions.append(reg_interconnector_directions)
-        if 'market_interconnectors' in self._decision_variables:
-            interconnector_directions.append(self._market_interconnector_directions)
-        interconnector_directions = pd.concat(interconnector_directions)
+        interconnector_directions = self._interconnector_directions
         loss_factors = hf.stack_columns(interconnector_directions, ['interconnector', 'link'],
                                         ['from_region_loss_factor', 'to_region_loss_factor'], 'direction',
                                         'loss_factor')
@@ -3434,7 +3244,6 @@ class SpotMarket:
         loss_factors['direction'] = loss_factors['direction'].apply(lambda x: x.replace('_loss_factor', ''))
         loss_factors = pd.merge(loss_factors, interconnector_directions, on=['interconnector', 'link', 'direction'])
         flows_and_losses = self.get_interconnector_flows()
-        flows_and_losses['link'] = flows_and_losses['link'].fillna('one')
         flows_and_losses = pd.merge(flows_and_losses, loss_factors, on=['interconnector', 'link'])
 
         def calc_losses(direction, flow, loss_factor):
