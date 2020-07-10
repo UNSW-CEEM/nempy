@@ -3,165 +3,63 @@ import numpy as np
 from nempy.help_functions import helper_functions as hf
 
 
-def joint_ramping_constraints(regulation_units, unit_limits, unit_info, dispatch_interval, next_constraint_id):
-    """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
+def joint_ramping_constraints_raise_reg(unit_limits, unit_info, dispatch_interval, next_constraint_id):
+    constraint_settings = {'generator':
+                               {'type': '<=', 'reg_lhs_coefficient': 1.0, 'ramp_direction': 1.0,
+                                'reg_service': 'raise_reg'},
+                           'load':
+                               {'type': '>=', 'reg_lhs_coefficient': -1.0, 'ramp_direction': -1.0,
+                                'reg_service': 'raise_reg'}
+                           }
+    rhs_and_type, variable_mapping = \
+        joint_ramping_constraints_load_and_generator_constructor(unit_limits, unit_info, dispatch_interval,
+                                                                 next_constraint_id, constraint_settings)
+    return rhs_and_type, variable_mapping
 
-    The constraints are described in the
-    :download:`FCAS MODEL IN NEMDE documentation section 6.1  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
-    On a unit basis they take the form of:
+def joint_ramping_constraints_lower_reg(unit_limits, unit_info, dispatch_interval, next_constraint_id):
+    constraint_settings = {'generator':
+                               {'type': '>=', 'reg_lhs_coefficient': -1.0, 'ramp_direction': -1.0,
+                                'reg_service': 'lower_reg'},
+                           'load':
+                               {'type': '<=', 'reg_lhs_coefficient': 1.0, 'ramp_direction': 1.0,
+                                'reg_service': 'lower_reg'}
+                           }
+    rhs_and_type, variable_mapping = \
+        joint_ramping_constraints_load_and_generator_constructor(unit_limits, unit_info, dispatch_interval,
+                                                                 next_constraint_id, constraint_settings)
+    return rhs_and_type, variable_mapping
 
-        Energy dispatch + Regulation raise target <= initial output + ramp up rate / (dispatch interval / 60)
 
-    and
-
-        Energy dispatch + Regulation lower target <= initial output - ramp down rate / (dispatch interval / 60)
-
-    Examples
-    --------
-
-    >>> import pandas as pd
-
-    >>> regulation_units = pd.DataFrame({
-    ...   'unit': ['A', 'B', 'B'],
-    ...   'service': ['raise_reg', 'lower_reg', 'raise_reg']})
-
-    >>> unit_limits = pd.DataFrame({
-    ...   'unit': ['A', 'B'],
-    ...   'initial_output': [100.0, 80.0],
-    ...   'ramp_up_rate': [20.0, 10.0],
-    ...   'ramp_down_rate': [15.0, 25.0]})
-
-    >>> unit_info = pd.DataFrame({
-    ... 'unit': ['A', 'B'],
-    ... 'dispatch_type': ['generator', 'generator']})
-
-    >>> dispatch_interval = 60
-
-    >>> next_constraint_id = 1
-
-    >>> type_and_rhs, variable_mapping = joint_ramping_constraints(regulation_units, unit_limits, unit_info,
-    ...                                                            dispatch_interval, next_constraint_id)
-
-    >>> print(type_and_rhs)
-      unit    service  constraint_id type    rhs
-    0    A  raise_reg              1   <=  120.0
-    1    B  lower_reg              2   >=   55.0
-    2    B  raise_reg              3   <=   90.0
-
-    >>> print(variable_mapping)
-       constraint_id unit    service  coefficient
-    0              1    A  raise_reg          1.0
-    1              2    B  lower_reg         -1.0
-    2              3    B  raise_reg          1.0
-    0              1    A     energy          1.0
-    1              2    B     energy          1.0
-    2              3    B     energy          1.0
-
-    Parameters
-    ----------
-    regulation_units : pd.DataFrame
-        The units with bids submitted to provide regulation FCAS
-
-        ========  =======================================================================
-        Columns:  Description:
-        unit      unique identifier of a dispatch unit (as `str`)
-        service   the regulation service being bid for raise_reg or lower_reg  (as `str`)
-        ========  =======================================================================
-
-    unit_limits : pd.DataFrame
-        The initial output and ramp rates of units
-        ==============  =====================================================================================
-        Columns:        Description:
-        unit            unique identifier of a dispatch unit (as `str`)
-        initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-        ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
-        ramp_down_rate  the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
-        ==============  =====================================================================================
-
-    unit_info : pd.DataFrame
-
-        ================   ======================================================================
-        Columns:           Description:
-        unit               unique identifier of a dispatch unit (as `str`)
-        dispatch_type      "load" or "generator" (as `str`)
-        ================   ======================================================================
-
-    dispatch_interval : int
-        The length of the dispatch interval in minutes
-
-    next_constraint_id : int
-        The next integer to start using for constraint ids
-
-    Returns
-    -------
-    type_and_rhs : pd.DataFrame
-        The type and rhs of each constraint.
-
-        =============  ====================================================================
-        Columns:       Description:
-        unit           unique identifier of a dispatch unit (as `str`)
-        service        the regulation service the constraint is associated with (as `str`)
-        constraint_id  the id of the constraint (as `int`)
-        type           the type of the constraint, e.g. "=" (as `str`)
-        rhs            the rhs of the constraint (as `np.float64`)
-        =============  ====================================================================
-
-    variable_map : pd.DataFrame
-        The type of variables that should appear on the lhs of the constraint.
-
-        =============  ==========================================================================
-        Columns:       Description:
-        constraint_id  the id of the constraint (as `np.int64`)
-        unit           the unit variables the constraint should map too (as `str`)
-        service        the service type of the variables the constraint should map to (as `str`)
-        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
-        =============  ==========================================================================
-    """
-
-    # Create a constraint for each regulation service being offered by a unit.
-    constraints = hf.save_index(regulation_units, 'constraint_id', next_constraint_id)
-    # Map the unit limit information to the constraints so the rhs values can be calculated.
-    constraints = pd.merge(constraints, unit_limits, 'left', on='unit')
-
+def joint_ramping_constraints_load_and_generator_constructor(unit_limits, unit_info, dispatch_interval,
+                                                             next_constraint_id, settings):
+    constraints = hf.save_index(unit_limits, 'constraint_id', next_constraint_id)
     constraints = pd.merge(constraints, unit_info, 'left', on='unit')
+    constraints_generators = constraints[constraints['dispatch_type'] == 'generator']
+    constraints_loads = constraints[constraints['dispatch_type'] == 'load']
+    gen_rhs_and_type, gen_variable_mapping = \
+        joint_ramping_constraints_generic_constructor(constraints_generators, settings['generator'],
+                                                      dispatch_interval)
+    load_rhs_and_type, load_variable_mapping = \
+        joint_ramping_constraints_generic_constructor(constraints_loads, settings['load'],
+                                                      dispatch_interval)
+    rhs_and_type = pd.concat([gen_rhs_and_type, load_rhs_and_type])
+    variable_mapping = pd.concat([gen_variable_mapping, load_variable_mapping])
+    return rhs_and_type, variable_mapping
 
-    def calc_rhs(initial, ramp_rate, dispatch_interval, dispatch_type, service):
-        if dispatch_type == 'generator':
-            if service == 'raise_reg':
-                rhs = initial + ramp_rate * dispatch_interval / 60
-            elif service == 'lower_reg':
-                rhs = initial - ramp_rate * dispatch_interval / 60
-        elif dispatch_type == 'load':
-            if service == 'raise_reg':
-                rhs = initial - ramp_rate * dispatch_interval / 60
-            elif service == 'lower_reg':
-                rhs = initial + ramp_rate * dispatch_interval / 60
-        return rhs
 
-    constraints['rhs'] = constraints.apply(lambda x: calc_rhs(x['initial_output'], x['ramp_rate'], dispatch_interval,
-                                                              x['dispatch_type'], x['service']), axis=1)
-
-    # Set the inequality type based on the regulation service being provided.
-    type_map = {'generator': {'raise_reg': '<=', 'lower_reg': '>='},
-                'load': {'raise_reg': '>=', 'lower_reg': '<='}}
-    constraints['type'] = constraints.apply(lambda x: type_map[x['dispatch_type']][x['service']], axis=1)
-    rhs_and_type = constraints.loc[:, ['unit', 'service', 'constraint_id', 'type', 'rhs']]
-
-    # Map each constraint to it corresponding unit and regulation service.
-    variable_mapping_reg = constraints.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type']]
-    # Also map to the energy service being provided by the unit.
-    variable_mapping_energy = constraints.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type']]
+def joint_ramping_constraints_generic_constructor(constraints, settings, dispatch_interval):
+    constraints['rhs'] = constraints['initial_output'] + settings['ramp_direction'] * \
+                         (constraints['ramp_rate'] * dispatch_interval / 60)
+    constraints['service'] = settings['reg_service']
+    constraints['type'] = settings['type']
+    rhs_and_type = constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+    variable_mapping_reg = constraints.loc[:, ['constraint_id', 'unit', 'service']]
+    variable_mapping_reg['coefficient'] = settings['reg_lhs_coefficient']
+    variable_mapping_energy = constraints.loc[:, ['constraint_id', 'unit', 'service']]
     variable_mapping_energy['service'] = 'energy'
-    # Combine mappings.
+    variable_mapping_energy['coefficient'] = 1.0
     variable_mapping = pd.concat([variable_mapping_reg, variable_mapping_energy])
-    type_map = {'generator': {'raise_reg': 1.0, 'lower_reg': -1.0, 'energy': 1.0},
-                'load': {'raise_reg': -1.0, 'lower_reg': 1.0, 'energy': 1.0}}
-    variable_mapping['coefficient'] = variable_mapping.apply(lambda x: type_map[x['dispatch_type']][x['service']],
-                                                             axis=1)
-
-    variable_mapping = variable_mapping.drop('dispatch_type', axis=1)
-
     return rhs_and_type, variable_mapping
 
 
@@ -278,11 +176,11 @@ def joint_capacity_constraints(contingency_trapeziums, unit_info, next_constrain
 
     # Calculate the slope coefficients for the constraints.
     constraints_upper_slope['upper_slope_coefficient'] = ((constraints_upper_slope['enablement_max'] -
-                                                          constraints_upper_slope['high_break_point']) /
-                                                         constraints_upper_slope['max_availability'])
+                                                           constraints_upper_slope['high_break_point']) /
+                                                          constraints_upper_slope['max_availability'])
     constraints_lower_slope['lower_slope_coefficient'] = ((constraints_lower_slope['low_break_point'] -
-                                                          constraints_lower_slope['enablement_min']) /
-                                                         constraints_lower_slope['max_availability'])
+                                                           constraints_lower_slope['enablement_min']) /
+                                                          constraints_lower_slope['max_availability'])
 
     # Define the direction of the upper slope constraints and the rhs value.
     constraints_upper_slope['type'] = '<='
@@ -431,11 +329,11 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
 
     # Calculate the slope coefficients for the constraints.
     constraints_upper_slope['upper_slope_coefficient'] = ((constraints_upper_slope['enablement_max'] -
-                                                          constraints_upper_slope['high_break_point']) /
-                                                         constraints_upper_slope['max_availability'])
+                                                           constraints_upper_slope['high_break_point']) /
+                                                          constraints_upper_slope['max_availability'])
     constraints_lower_slope['lower_slope_coefficient'] = ((constraints_lower_slope['low_break_point'] -
-                                                          constraints_lower_slope['enablement_min']) /
-                                                         constraints_lower_slope['max_availability'])
+                                                           constraints_lower_slope['enablement_min']) /
+                                                          constraints_lower_slope['max_availability'])
 
     # Define the direction of the upper slope constraints and the rhs value.
     constraints_upper_slope['type'] = '<='
@@ -454,7 +352,7 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     energy_mapping_upper_slope['service'] = 'energy'
     energy_mapping_upper_slope['coefficient'] = 1.0
     regulation_mapping_upper_slope = constraints_upper_slope.loc[:, ['constraint_id', 'unit', 'service',
-                                                                      'upper_slope_coefficient']]
+                                                                     'upper_slope_coefficient']]
     regulation_mapping_upper_slope = \
         regulation_mapping_upper_slope.rename(columns={"upper_slope_coefficient": "coefficient"})
 
@@ -473,5 +371,3 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     variable_mapping = pd.concat([energy_mapping_upper_slope, regulation_mapping_upper_slope,
                                   energy_mapping_lower_slope, regulation_mapping_lower_slope])
     return type_and_rhs, variable_mapping
-
-

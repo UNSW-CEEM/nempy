@@ -93,6 +93,10 @@ class SpotMarket:
                                   'lower_60s', 'raise_6s', 'lower_6s']
         self._allowed_fcas_services = self._allowed_services[:]
         self._allowed_fcas_services.remove('energy')
+        self._allowed_contingency_fcas_services = self._allowed_fcas_services[:]
+        self._allowed_contingency_fcas_services.remove('raise_reg')
+        self._allowed_contingency_fcas_services.remove('lower_reg')
+        self._allowed_regulation_fcas_services = ['raise_reg', 'lower_reg']
         self._allowed_constraint_types = ['<=', '=', '>=']
 
         if 'dispatch_type' not in unit_info.columns:
@@ -1163,95 +1167,72 @@ class SpotMarket:
                                           not_negative=True))
         schema.validate(fcas_max_availability)
 
-    @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
-    @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
-    @check.repeated_rows('regulation_units', ['unit', 'service'], arg=1)
-    @check.column_data_types('regulation_units', {'unit': str, 'service': str}, arg=1)
-    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_rate'], arg=2)
-    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_rate'], arg=2)
-    @check.repeated_rows('unit_limits', ['unit'], arg=2)
-    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64}, arg=2)
-    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_rate'], arg=2)
-    @check.column_values_not_negative('unit_limits', ['ramp_rate'], arg=2)
-    def set_joint_ramping_constraints_raise_reg(self, regulation_units, unit_limits):
-        """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
+    def set_joint_ramping_constraints_raise_reg(self, ramp_details):
+        """Create constraints that ensure the provision of energy and fcas raise are within unit ramping capabilities.
 
         The constraints are described in the
         :download:`FCAS MODEL IN NEMDE documentation section 6.1  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
-        On a unit basis they take the form of:
+        On a unit basis for generators they take the form of:
 
-            Energy dispatch + Regulation raise target <= initial output + ramp up rate / (dispatch interval / 60)
-
-        and
-
-            Energy dispatch + Regulation lower target <= initial output - ramp down rate / (dispatch interval / 60)
+            Energy dispatch + Regulation raise target <= initial output + ramp up rate * (dispatch_interval / 60)
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
 
         Initialise the market instance.
 
-        >>> market = markets.Spot(dispatch_interval=60)
-
-        Define the set of units providing regulation services.
-
-        >>> regulation_units = pd.DataFrame({
-        ...   'unit': ['A', 'B', 'B'],
-        ...   'service': ['raise_reg', 'lower_reg', 'raise_reg']})
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info,
+        ...                     dispatch_interval=60)
 
         Define unit initial outputs and ramping capabilities.
 
-        >>> unit_limits = pd.DataFrame({
+        >>> ramp_details = pd.DataFrame({
         ...   'unit': ['A', 'B'],
         ...   'initial_output': [100.0, 80.0],
-        ...   'ramp_up_rate': [20.0, 10.0],
-        ...   'ramp_down_rate': [15.0, 25.0]})
+        ...   'ramp_up_rate': [20.0, 10.0]})
 
         Create the joint ramping constraints.
 
-        >>> market.set_joint_ramping_constraints_raise_reg(regulation_units, unit_limits)
+        >>> market.set_joint_ramping_constraints_raise_reg(ramp_details)
 
         Now the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(market._constraints_rhs_and_type['joint_ramping'])
+        >>> print(market._constraints_rhs_and_type['joint_ramping_raise_reg'])
           unit  constraint_id type    rhs
         0    A              0   <=  120.0
-        1    B              1   >=   55.0
-        2    B              2   <=   90.0
+        1    B              1   <=   90.0
 
-        >>> print(market._constraint_to_variable_map['unit_level']['joint_ramping'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['joint_ramping_raise_reg'])
            constraint_id unit    service  coefficient
         0              0    A  raise_reg          1.0
-        1              1    B  lower_reg         -1.0
-        2              2    B  raise_reg          1.0
+        1              1    B  raise_reg          1.0
         0              0    A     energy          1.0
         1              1    B     energy          1.0
-        2              2    B     energy          1.0
 
         Parameters
         ----------
-        regulation_units : pd.DataFrame
-            The units with bids submitted to provide regulation FCAS
+        ramp_details : pd.DataFrame
 
-            ========  =======================================================================
-            Columns:  Description:
-            unit      unique identifier of a dispatch unit (as `str`)
-            service   the regulation service being bid for raise_reg or lower_reg  (as `str`)
-            ========  =======================================================================
-
-        unit_limits : pd.DataFrame
-            The initial output and ramp rates of units
-
-            ==============  =====================================================================================
+            ==============  ==========================================
             Columns:        Description:
-            unit            unique identifier of a dispatch unit (as `str`)
-            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
-            ==============  =====================================================================================
+            unit            unique identifier of a dispatch unit, \n
+                            (as `str`)
+            initial_output  the output of the unit at the start of \n
+                            the dispatch interval, in MW, \n
+                            (as `np.float64`)
+            ramp_up_rate    the maximum rate at which the unit can \n,
+                            increase output, in MW/h, \n
+                            (as `np.float64`)
+            ==============  ==========================================
 
         Returns
         -------
@@ -1260,117 +1241,91 @@ class SpotMarket:
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any unit and service combination in regulation_units, or if there is
-                more than one row for any unit in unit_limits.
+                If there is more than one row for any unit in unit_limits.
             ColumnDataTypeError
                 If columns are not of the required type.
             MissingColumnError
-                If the columns 'unit' or 'service' are missing from regulations_units, or if the columns 'unit',
-                'initial_output' or 'ramp_up_rate' are missing from unit_limits.
+                If the columns 'unit', 'initial_output' or 'ramp_up_rate' are missing from unit_limits.
             UnexpectedColumn
-                If there are columns other than 'unit' or 'service' in regulations_units, or if there are columns other
-                than 'unit', 'initial_output' or 'ramp_up_rate' in unit_limits.
+                If there are columns other than 'unit', 'initial_output' or 'ramp_up_rate' in unit_limits.
             ColumnValues
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
-
-        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(
-            regulation_units, unit_limits, self._unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
-            self._next_constraint_id)
-
+        if self.validate_inputs:
+            self._validate_ramp_up_rates(ramp_details)
+        ramp_details = ramp_details.rename(columns={'ramp_up_rate': 'ramp_rate'})
+        rhs_and_type, variable_map = \
+            fcas_constraints.joint_ramping_constraints_raise_reg(ramp_details,
+                                                                 self._unit_info.loc[:, ['unit', 'dispatch_type']],
+                                                                 self.dispatch_interval, self._next_constraint_id)
         self._constraints_rhs_and_type['joint_ramping_raise_reg'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['joint_ramping_raise_reg'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('regulation_units', ['unit', 'service'], arg=1)
-    @check.allowed_columns('regulation_units', ['unit', 'service'], arg=1)
-    @check.repeated_rows('regulation_units', ['unit', 'service'], arg=1)
-    @check.column_data_types('regulation_units', {'unit': str, 'service': str}, arg=1)
-    @check.required_columns('unit_limits', ['unit', 'initial_output', 'ramp_rate'], arg=2)
-    @check.allowed_columns('unit_limits', ['unit', 'initial_output', 'ramp_rate'], arg=2)
-    @check.repeated_rows('unit_limits', ['unit'], arg=2)
-    @check.column_data_types('unit_limits', {'unit': str, 'else': np.float64}, arg=2)
-    @check.column_values_must_be_real('unit_limits', ['initial_output', 'ramp_rate'], arg=2)
-    @check.column_values_not_negative('unit_limits', ['ramp_rate'], arg=2)
-    def set_joint_ramping_constraints_lower_reg(self, regulation_units, unit_limits):
+    def set_joint_ramping_constraints_lower_reg(self, ramp_details):
         """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
 
         The constraints are described in the
         :download:`FCAS MODEL IN NEMDE documentation section 6.1  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
-        On a unit basis they take the form of:
+        On a unit basis for generators they take the form of:
 
-            Energy dispatch + Regulation raise target <= initial output + ramp up rate / (dispatch interval / 60)
-
-        and
-
-            Energy dispatch + Regulation lower target <= initial output - ramp down rate / (dispatch interval / 60)
+            Energy dispatch + Regulation lower target <= initial output - ramp down rate * (dispatch interval / 60)
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['NSW', 'NSW']})
 
         Initialise the market instance.
 
-        >>> market = markets.Spot(dispatch_interval=60)
-
-        Define the set of units providing regulation services.
-
-        >>> regulation_units = pd.DataFrame({
-        ...   'unit': ['A', 'B', 'B'],
-        ...   'service': ['raise_reg', 'lower_reg', 'raise_reg']})
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info,
+        ...                     dispatch_interval=60)
 
         Define unit initial outputs and ramping capabilities.
 
-        >>> unit_limits = pd.DataFrame({
+        >>> ramp_details = pd.DataFrame({
         ...   'unit': ['A', 'B'],
         ...   'initial_output': [100.0, 80.0],
-        ...   'ramp_up_rate': [20.0, 10.0],
         ...   'ramp_down_rate': [15.0, 25.0]})
 
         Create the joint ramping constraints.
 
-        >>> market.set_joint_ramping_constraints_raise_reg(regulation_units, unit_limits)
+        >>> market.set_joint_ramping_constraints_lower_reg(ramp_details)
 
         Now the market should have the constraints and their mapping to decision varibales.
 
-        >>> print(market._constraints_rhs_and_type['joint_ramping'])
-          unit  constraint_id type    rhs
-        0    A              0   <=  120.0
-        1    B              1   >=   55.0
-        2    B              2   <=   90.0
+        >>> print(market._constraints_rhs_and_type['joint_ramping_lower_reg'])
+          unit  constraint_id type   rhs
+        0    A              0   >=  85.0
+        1    B              1   >=  55.0
 
-        >>> print(market._constraint_to_variable_map['unit_level']['joint_ramping'])
+        >>> print(market._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'])
            constraint_id unit    service  coefficient
-        0              0    A  raise_reg          1.0
+        0              0    A  lower_reg         -1.0
         1              1    B  lower_reg         -1.0
-        2              2    B  raise_reg          1.0
         0              0    A     energy          1.0
         1              1    B     energy          1.0
-        2              2    B     energy          1.0
 
         Parameters
         ----------
-        regulation_units : pd.DataFrame
-            The units with bids submitted to provide regulation FCAS
+        ramp_details : pd.DataFrame
 
-            ========  =======================================================================
-            Columns:  Description:
-            unit      unique identifier of a dispatch unit (as `str`)
-            service   the regulation service being bid for raise_reg or lower_reg  (as `str`)
-            ========  =======================================================================
-
-        unit_limits : pd.DataFrame
-            The initial output and ramp rates of units
-
-            ==============  =====================================================================================
+            ==============  ==========================================
             Columns:        Description:
-            unit            unique identifier of a dispatch unit (as `str`)
-            initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-            ramp_down_rate  the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
-            ==============  =====================================================================================
+            unit            unique identifier of a dispatch unit, \n
+                            (as `str`)
+            initial_output  the output of the unit at the start of, \n
+                            the dispatch interval, in MW, \n
+                            (as `np.float64`)
+            ramp_down_rate  the maximum rate at which the unit can, \n
+                            decrease output, in MW/h, \n
+                            (as `np.float64`)
+            ==============  ==========================================
 
         Returns
         -------
@@ -1379,39 +1334,28 @@ class SpotMarket:
         Raises
         ------
             RepeatedRowError
-                If there is more than one row for any unit and service combination in regulation_units, or if there is
-                more than one row for any unit in unit_limits.
+                If there is more than one row for any unit in unit_limits.
             ColumnDataTypeError
                 If columns are not of the required type.
             MissingColumnError
-                If the columns 'unit' or 'service' are missing from regulations_units, or if the columns 'unit',
-                'initial_output' or 'ramp_down_rate' are missing from unit_limits.
+                If the columns 'unit', 'initial_output' or 'ramp_down_rate' are missing from unit_limits.
             UnexpectedColumn
-                If there are columns other than 'unit' or 'service' in regulations_units, or if there are columns other
-                than 'unit', 'initial_output' or 'ramp_down_rate' in unit_limits.
+                If there are columns other than 'unit', 'initial_output' or 'ramp_down_rate' in unit_limits.
             ColumnValues
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
 
-        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints(
-            regulation_units, unit_limits, self._unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
+        if self.validate_inputs:
+            self._validate_ramp_down_rates(ramp_details)
+        ramp_details = ramp_details.rename(columns={'ramp_down_rate': 'ramp_rate'})
+        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints_lower_reg(
+            ramp_details, self._unit_info.loc[:, ['unit', 'dispatch_type']], self.dispatch_interval,
             self._next_constraint_id)
 
         self._constraints_rhs_and_type['joint_ramping_lower_reg'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
-                                                       'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
-    @check.allowed_columns('contingency_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
-                                                      'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
-    @check.repeated_rows('contingency_trapeziums', ['unit', 'service'], arg=1)
-    @check.column_data_types('contingency_trapeziums', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
-    @check.column_values_must_be_real('contingency_trapeziums', ['max_availability', 'enablement_min',
-                                                                 'low_break_point', 'high_break_point',
-                                                                 'enablement_max'], arg=1)
-    @check.column_values_not_negative('contingency_trapeziums', ['max_availability', 'enablement_min',
-                                                                 'low_break_point', 'enablement_max'], arg=1)
     def set_joint_capacity_constraints(self, contingency_trapeziums):
         """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch.
 
@@ -1424,13 +1368,16 @@ class SpotMarket:
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
 
         Initialise the market instance.
 
-        >>> market = markets.Spot(dispatch_interval=60)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define the FCAS contingency trapeziums.
 
@@ -1454,7 +1401,9 @@ class SpotMarket:
         0    A  raise_6s              0   <=  80.0
         0    A  raise_6s              1   >=  20.0
 
-        >>> print(market._constraint_to_variable_map['unit_level']['joint_capacity'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['joint_capacity'])
            constraint_id unit    service  coefficient
         0              0    A     energy     1.000000
         0              0    A   raise_6s     0.333333
@@ -1466,22 +1415,32 @@ class SpotMarket:
         Parameters
         ----------
         contingency_trapeziums : pd.DataFrame
-            The FCAS trapeziums for the contingency services being offered.
 
-            ================   ======================================================================
+            ================   =======================================
             Columns:           Description:
-            unit               unique identifier of a dispatch unit (as `str`)
-            service            the contingency service being offered (as `str`)
-            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
-            enablement_min     the energy dispatch level at which the unit can begin to provide the
-                               contingency service, in MW (as `np.float64`)
-            low_break_point    the energy dispatch level at which the unit can provide the full
-                               contingency service offered, in MW (as `np.float64`)
-            high_break_point   the energy dispatch level at which the unit can no longer provide the
-                               full contingency service offered, in MW (as `np.float64`)
-            enablement_max     the energy dispatch level at which the unit can no longer begin
-                               the contingency service, in MW (as `np.float64`)
-            ================   ======================================================================
+            unit               unique identifier of a dispatch unit, \n
+                               (as `str`)
+            service            the contingency service being offered, \n
+                               (as `str`)
+            max_availability   the maximum volume of the contingency \n
+                               service, in MW, (as `np.float64`)
+            enablement_min     the energy dispatch level at which the \n
+                               unit can begin to provide the, \n
+                               contingency service, in MW, \n
+                               (as `np.float64`)
+            low_break_point    the energy dispatch level at which \n
+                               the unit can provide the full
+                               contingency service offered, in MW, \n
+                               (as `np.float64`)
+            high_break_point   the energy dispatch level at which \n
+                               the unit can no longer provide the \n
+                               full contingency service offered, \n
+                               in MW, (as `np.float64`)
+            enablement_max     the energy dispatch level at which \n
+                               the unit can no longer provide
+                               the contingency service, in MW, \n
+                               (as `np.float64`)
+            ================   =======================================
 
         Returns
         -------
@@ -1502,24 +1461,27 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
-
+        if self.validate_inputs:
+            self._validate_contingency_trapeziums(contingency_trapeziums)
         rhs_and_type, variable_map = fcas_constraints.joint_capacity_constraints(
             contingency_trapeziums, self._unit_info.loc[:, ['unit', 'dispatch_type']], self._next_constraint_id)
         self._constraints_rhs_and_type['joint_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
-                                                      'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
-    @check.allowed_columns('regulation_trapeziums', ['unit', 'service', 'max_availability', 'enablement_min',
-                                                     'low_break_point', 'high_break_point', 'enablement_max'], arg=1)
-    @check.repeated_rows('regulation_trapeziums', ['unit', 'service'], arg=1)
-    @check.column_data_types('regulation_trapeziums', {'unit': str, 'service': str, 'else': np.float64}, arg=1)
-    @check.column_values_must_be_real('regulation_trapeziums', ['max_availability', 'enablement_min',
-                                                                'low_break_point', 'high_break_point',
-                                                                'enablement_max'], arg=1)
-    @check.column_values_not_negative('regulation_trapeziums', ['max_availability', 'enablement_min',
-                                                                'low_break_point', 'enablement_max'], arg=1)
+    def _validate_contingency_trapeziums(self, contingency_trapeziums):
+        schema = dv.DataFrameSchema(name='contingency_trapeziums', primary_keys=['unit', 'service'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str,
+                                          allowed_values=self._allowed_contingency_fcas_services))
+        schema.add_column(dv.SeriesSchema(name='max_availability', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='enablement_min', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='low_break_point', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='high_break_point', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='enablement_max', data_type=np.float64, must_be_real_number=True))
+        schema.validate(contingency_trapeziums)
+
     def set_energy_and_regulation_capacity_constraints(self, regulation_trapeziums):
         """Creates constraints to ensure there is adequate capacity for regulation and energy dispatch targets.
 
@@ -1532,13 +1494,16 @@ class SpotMarket:
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
 
         Initialise the market instance.
 
-        >>> market = markets.Spot(dispatch_interval=60)
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define the FCAS regulation trapeziums.
 
@@ -1562,7 +1527,9 @@ class SpotMarket:
         0    A  raise_reg              0   <=  80.0
         0    A  raise_reg              1   >=  20.0
 
-        >>> print(market._constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'])
+        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
+
+        >>> print(unit_mapping['energy_and_regulation_capacity'])
            constraint_id unit    service  coefficient
         0              0    A     energy     1.000000
         0              0    A  raise_reg     0.333333
@@ -1574,20 +1541,31 @@ class SpotMarket:
         regulation_trapeziums : pd.DataFrame
             The FCAS trapeziums for the regulation services being offered.
 
-            ================   ======================================================================
+            ================   =======================================
             Columns:           Description:
-            unit               unique identifier of a dispatch unit (as `str`)
-            service            the regulation service being offered (as `str`)
-            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
-            enablement_min     the energy dispatch level at which the unit can begin to provide
-                               the contingency service, in MW (as `np.float64`)
-            low_break_point    the energy dispatch level at which the unit can provide the full
-                               contingency service offered, in MW (as `np.float64`)
-            high_break_point   the energy dispatch level at which the unit can no longer provide the
-                               full contingency service offered, in MW (as `np.float64`)
-            enablement_max     the energy dispatch level at which the unit can no longer provide any
-                               contingency service, in MW (as `np.float64`)
-            ================   ======================================================================
+            unit               unique identifier of a dispatch unit, \n
+                               (as `str`)
+            service            the regulation service being offered, \n
+                               (as `str`)
+            max_availability   the maximum volume of the contingency \n
+                               service, in MW, (as `np.float64`)
+            enablement_min     the energy dispatch level at which \n
+                               the unit can begin to provide \n
+                               the regulation service, in MW, \n
+                               (as `np.float64`)
+            low_break_point    the energy dispatch level at which \n
+                               the unit can provide the full \n
+                               regulation service offered, in MW, \n
+                               (as `np.float64`)
+            high_break_point   the energy dispatch level at which the \n
+                               unit can no longer provide the \n
+                               full regulation service offered, in MW, \n
+                               (as `np.float64`)
+            enablement_max     the energy dispatch level at which the \n
+                               unit can no longer provide any \n
+                               regulation service, in MW, \n
+                               (as `np.float64`)
+            ================   =======================================
 
         Returns
         -------
@@ -1608,31 +1586,42 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
-
+        if variable_ids:
+            self._validate_regulation_trapeziums(regulation_trapeziums)
         rhs_and_type, variable_map = \
             fcas_constraints.energy_and_regulation_capacity_constraints(regulation_trapeziums, self._next_constraint_id)
         self._constraints_rhs_and_type['energy_and_regulation_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    @check.required_columns('interconnector_directions_and_limits',
-                            ['interconnector', 'to_region', 'from_region', 'max', 'min'])
-    @check.allowed_columns('interconnector_directions_and_limits',
-                           ['interconnector', 'to_region', 'from_region', 'max', 'min', 'from_region_loss_factor',
-                            'to_region_loss_factor'])
-    @check.repeated_rows('interconnector_directions_and_limits', ['interconnector'])
-    @check.column_data_types('interconnector_directions_and_limits',
-                             {'interconnector': str, 'to_region': str, 'from_region': str, 'else': np.float64})
-    @check.column_values_must_be_real('interconnector_directions_and_limits', ['min', 'max', 'from_region_loss_factor',
-                                                                               'to_region_loss_factor'])
+    def _validate_regulation_trapeziums(self, contingency_trapeziums):
+        schema = dv.DataFrameSchema(name='contingency_trapeziums', primary_keys=['unit', 'service'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str,
+                                          allowed_values=self._allowed_regulation_fcas_services))
+        schema.add_column(dv.SeriesSchema(name='max_availability', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='enablement_min', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='low_break_point', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='high_break_point', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='enablement_max', data_type=np.float64, must_be_real_number=True))
+        schema.validate(contingency_trapeziums)
+
     def set_interconnectors(self, interconnector_directions_and_limits):
         """Create lossless links between specified regions.
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
+
         Initialise the market instance.
 
-        >>> market = markets.SpotMarket()
+        >>> market = SpotMarket(market_regions=['NSW', 'VIC'],
+        ...                     unit_info=unit_info)
 
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
@@ -1655,7 +1644,9 @@ class SpotMarket:
 
         ... and a mapping of those variables to to regional energy constraints.
 
-        >>> print(market._variable_to_constraint_map['regional']['interconnectors'])
+        >>> regional = market._variable_to_constraint_map['regional']
+
+        >>> print(regional['interconnectors'])
            variable_id region service  coefficient
         0            0    VIC  energy          1.0
         1            0    NSW  energy         -1.0
@@ -1663,25 +1654,38 @@ class SpotMarket:
         Parameters
         ----------
         interconnector_directions_and_limits : pd.DataFrame
-            Interconnector definition.
 
-            ========================  ==================================================================================
+            ========================  ================================
             Columns:                  Description:
-            interconnector            unique identifier of a interconnector (as `str`)
-            to_region                 the region that receives power when flow is in the positive direction (as `str`)
-            from_region               the region that power is drawn from when flow is in the positive direction
-                                      (as `str`)
-            max                       the maximum power flow in the positive direction, in MW (as `np.float64`)
-            min                       the maximum power flow in the negative direction, in MW (as `np.float64`)
-            from_region_loss_factor   the loss factor at the from region end of the interconnector, refers the the from
-                                      region end to the regional reference node, optional, assumed to equal 1.0, i.e. that
-                                      the from end is at the regional reference node if the column is not provided
+            interconnector            unique identifier of a  \n
+                                      interconnector, (as `str`)
+            to_region                 the region that receives power \n
+                                      when flow is in the positive \n
+                                      direction, (as `str`)
+            from_region               the region that power is drawn \n
+                                      from when flow is in the \n
+                                      positive direction, (as `str`)
+            max                       the maximum power flow in the \n
+                                      positive direction, in MW, \n
+                                      (as `np.float64`)
+            min                       the maximum power flow in the \n
+                                      negative direction, in MW, \n
+                                      (as `np.float64`)
+            from_region_loss_factor   the loss factor at the from \n
+                                      region end of the interconnector, \n
+                                      refers the the from region end \n
+                                      to the regional reference node, \n
+                                      optional, assumed to equal 1.0, \n
+                                      if the column is not provided, \n
                                       (as `np.float`)
-            to_region_loss_factor     the loss factor at the to region end of the interconnector, refers the the to
-                                      region end to the regional reference node, optional, assumed equal to 1.0, i.e. that
-                                      the to end is at the regional reference node if the column is not provided
+            to_region_loss_factor     the loss factor at the to region \n
+                                      end of the interconnector, \n
+                                      refers the to region end to the \n
+                                      regional reference node, \n
+                                      optional, assumed equal to 1.0 \n
+                                      if the column is not provided, \n
                                       (as `np.float`)
-            ========================  ==================================================================================
+            ========================  ================================
 
         Returns
         -------
@@ -1704,7 +1708,8 @@ class SpotMarket:
             interconnector_directions_and_limits['from_region_loss_factor'] = 1.0
         if 'to_region_loss_factor' not in interconnector_directions_and_limits.columns:
             interconnector_directions_and_limits['to_region_loss_factor'] = 1.0
-
+        if self.validate_inputs:
+            self._validate_interconnector_definitions(interconnector_directions_and_limits)
         self._interconnector_directions = \
             interconnector_directions_and_limits.loc[:, ['interconnector', 'to_region', 'from_region',
                                                          'from_region_loss_factor', 'to_region_loss_factor']]
@@ -1713,14 +1718,34 @@ class SpotMarket:
 
         self._next_variable_id = max(self._decision_variables['interconnectors']['variable_id']) + 1
 
+    def _validate_interconnector_definitions(self, interconnector_directions_and_limits):
+        schema = dv.DataFrameSchema(name='interconnector_directions_and_limits', primary_keys=['interconnector'])
+        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='to_region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='from_region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='max', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='min', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='from_region_loss_factor', data_type=np.float64,
+                                          must_be_real_number=True, not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='to_region_loss_factor', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.validate(interconnector_directions_and_limits)
+
     def set_market_interconnectors(self, interconnector_directions_and_limits):
         """Create lossless links between specified regions.
 
         Examples
         --------
+        Define the unit information data set needed to initialise the market.
+
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
+
         Initialise the market instance.
 
-        >>> market = SpotMarket()
+        >>> market = SpotMarket(market_regions=['NSW', 'VIC'],
+        ...                     unit_info=unit_info)
 
         Define a an interconnector between NSW and VIC so generator can A can be used to meet demand in VIC.
 
@@ -1737,39 +1762,62 @@ class SpotMarket:
 
         Create the interconnector.
 
-        >>> market.set_interconnectors(interconnector)
+        >>> market.set_market_interconnectors(interconnector)
 
         The market should now have a decision variable defined for each interconnector.
 
-        >>> print(market._decision_variables['interconnectors'])
-          interconnector  variable_id  lower_bound  upper_bound        type
-        0      inter_one            0       -100.0        100.0  continuous
+        >>> print(market._decision_variables['market_interconnectors'])
+          link interconnector  ...        type  generic_constraint_factor
+        0    A      inter_one  ...  continuous                        1.0
+        1    B      inter_one  ...  continuous                       -1.0
 
         ... and a mapping of those variables to to regional energy constraints.
 
-        >>> print(market._variable_to_constraint_map['regional']['interconnectors'])
+        >>> regional = market._variable_to_constraint_map['regional']
+
+        >>> print(regional['market_interconnectors'])
            variable_id region service  coefficient
-        0            0    VIC  energy          1.0
-        1            0    NSW  energy         -1.0
+        0            0    VIC  energy          0.9
+        1            1    NSW  energy          1.0
+        2            0    NSW  energy         -1.0
+        3            1    VIC  energy         -0.9
 
         Parameters
         ----------
         interconnector_directions_and_limits : pd.DataFrame
             Interconnector definition.
 
-            ========================  ==================================================================================
-            Columns:                  Description:
-            interconnector            unique identifier of a interconnector (as `str`)
-            to_region                 the region that receives power when flow is in the positive direction (as `str`)
-            from_region               the region that power is drawn from when flow is in the positive direction
-                                      (as `str`)
-            max                       the maximum power flow in the positive direction, in MW (as `np.float64`)
-            min                       the maximum power flow in the negative direction, in MW (as `np.float64`)
-            from_region_loss_factor   the loss factor at the from region end of the interconnector, refers the the from
-                                      region end to the regional reference node (as `np.float`).
-            to_region_loss_factor     the loss factor at the to region end of the interconnector, refers the the to
-                                      region end to the regional reference node (as `np.float`).
-            ========================  ==================================================================================
+            ==========================  ==============================
+            Columns:                    Description:
+            interconnector              unique identifier of a \n
+                                        interconnector, (as `str`)
+            to_region                   the region that receives power \n
+                                        when flow is in the positive \n
+                                        direction, (as `str`)
+            from_region                 the region that power is drawn \n
+                                        from when flow is in the \n
+                                        positive direction, (as `str`)
+            max                         the maximum power flow in the \n
+                                        positive direction, in MW, \n
+                                        (as `np.float64`)
+            min                         the maximum power flow in the \n
+                                        negative direction, in MW, \n
+                                        (as `np.float64`)
+            generic_constraint_factor   the sign of the links \n
+                                        contribution to generic \n
+                                        constraints, 1.0 or -1.0, \n
+                                        (`np.float64`)
+            from_region_loss_factor     the loss factor at the from \n
+                                        region end of the interconnector, \n
+                                        refers the the from region end \n
+                                        to the regional reference node, \n
+                                        (as `np.float`)
+            to_region_loss_factor       the loss factor at the to region \n
+                                        end of the interconnector, \n
+                                        refers the the to region end to \n
+                                        the regional reference node, \n
+                                        (as `np.float`).
+            ==========================  ==============================
 
         Returns
         -------
@@ -1788,15 +1836,31 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null values in the max and min columns.
         """
+        if self.validate_inputs:
+            self._validate_market_interconnector_definitions(interconnector_directions_and_limits)
+
         self._market_interconnector_directions = \
             interconnector_directions_and_limits.loc[:, ['interconnector', 'link', 'to_region', 'from_region',
                                                          'from_region_loss_factor', 'to_region_loss_factor']]
-
         self._decision_variables['market_interconnectors'], \
         self._variable_to_constraint_map['regional']['market_interconnectors'] \
             = inter.create_market_interconnector(interconnector_directions_and_limits, self._next_variable_id)
 
         self._next_variable_id = max(self._decision_variables['market_interconnectors']['variable_id']) + 1
+
+    def _validate_market_interconnector_definitions(self, interconnector_directions_and_limits):
+        schema = dv.DataFrameSchema(name='interconnector_directions_and_limits', primary_keys=['interconnector', 'link'])
+        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='link', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='to_region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='from_region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='max', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='min', data_type=np.float64, must_be_real_number=True))
+        schema.add_column(dv.SeriesSchema(name='from_region_loss_factor', data_type=np.float64,
+                                          must_be_real_number=True, not_negative=True), optional=True)
+        schema.add_column(dv.SeriesSchema(name='to_region_loss_factor', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True), optional=True)
+        schema.validate(interconnector_directions_and_limits)
 
     #@check.interconnectors_exist
     @check.required_columns('loss_functions', ['interconnector', 'from_region_loss_share', 'loss_function'], arg=1)

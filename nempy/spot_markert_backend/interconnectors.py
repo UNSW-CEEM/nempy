@@ -149,7 +149,7 @@ def create_market_interconnector(definitions, next_variable_id):
 
     Run the function and print results.
 
-    >>> decision_variables, constraint_map = create_msnp(interconnector, next_variable_id)
+    >>> decision_variables, constraint_map = create_market_interconnector(interconnector, next_variable_id)
 
     >>> print(decision_variables)
       link interconnector  ...        type  generic_constraint_factor
