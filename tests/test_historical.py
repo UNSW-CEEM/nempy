@@ -338,9 +338,9 @@ def test_slack_in_generic_constraints_with_all_features():
         market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
         market.set_interconnector_flow_to_historical_values()
         market.dispatch(calc_prices=False)
-        # assert market.is_generic_constraint_slack_correct()
-        # assert market.is_fcas_constraint_slack_correct()
-        # assert market.is_regional_demand_meet()
+        assert market.is_generic_constraint_slack_correct()
+        assert market.is_fcas_constraint_slack_correct()
+        assert market.is_regional_demand_meet()
 
 
 def test_hist_dispatch_values_meet_demand():
@@ -447,7 +447,7 @@ class HistoricalSpotMarket:
         unit_ugif_limit = self.unit_inputs.get_unit_uigf_limits()
         self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_ugif_limit)
         cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['ugif']
-        self.market.make_constraints_elastic('ugif_capacity', violation_cost=cost)
+        self.market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     def set_ramp_rate_limits(self):
         ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
@@ -493,12 +493,14 @@ class HistoricalSpotMarket:
 
         scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates()
         lower_reg_units = self.unit_inputs.get_lower_reg_units_with_scada_ramp_rates()
-        self.market.set_joint_ramping_constraints_lower_reg(lower_reg_units, scada_ramp_down_rates)
+        scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['unit'].isin(lower_reg_units['unit'])]
+        self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
         self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
 
         scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates()
         raise_reg_units = self.unit_inputs.get_raise_reg_units_with_scada_ramp_rates()
-        self.market.set_joint_ramping_constraints_raise_reg(raise_reg_units, scada_ramp_up_rates)
+        scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['unit'].isin(raise_reg_units['unit'])]
+        self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
         self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
 
         contingency_trapeziums = self.unit_inputs.get_contingency_services()

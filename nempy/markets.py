@@ -355,11 +355,10 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
         schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services),
                           optional=True)
-        schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True))
         for bid_band in range(2, 11):
-            schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True,
-                                              not_negative=True), optional=True)
+            schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True)
+                              , optional=True)
         schema.validate(price_bids)
 
     def _check_unit_volume_bids_set(self):
@@ -739,8 +738,8 @@ class SpotMarket:
             initial_output  the output of the unit at the start of \n
                             the dispatch interval, in MW, \n
                             (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can, \n
-                            increase output, in MW/h, (as `np.float64`)
+            ramp_down_rate  the maximum rate at which the unit can, \n
+                            decrease output, in MW/h, (as `np.float64`)
             ==============  ==========================================
 
         Returns
@@ -1878,23 +1877,30 @@ class SpotMarket:
         ----------
         loss_functions : pd.DataFrame
 
-            ======================  ==============================================================================
+            ======================  ==================================
             Columns:                Description:
-            interconnector          unique identifier of a interconnector (as `str`)
-            from_region_loss_share  The fraction of loss occuring in the from region, 0.0 to 1.0 (as `np.float64`)
-            loss_function           A function that takes a flow, in MW as a float and returns the losses in MW
-                                    (as `callable`)
-            ======================  ==============================================================================
+            interconnector          unique identifier of a \n
+                                    interconnector, (as `str`)
+            from_region_loss_share  The fraction of loss occuring in \n
+                                    the from region, 0.0 to 1.0, \n
+                                    (as `np.float64`)
+            loss_function           A function that takes a flow, \n
+                                    in MW as a float and returns the \n
+                                    losses in MW, (as `callable`)
+            ======================  ==================================
 
         interpolation_break_points : pd.DataFrame
 
-            ==============  ============================================================================================
+            ==============  ==========================================
             Columns:        Description:
-            interconnector  unique identifier of a interconnector (as `str`)
-            loss_segment    unique identifier of a loss segment on an interconnector basis (as `np.float64`)
-            break_point     points between which the loss function will be linearly interpolated, in MW
+            interconnector  unique identifier of a interconnector, \n
+                            (as `str`)
+            loss_segment    unique identifier of a loss segment on \n
+                            an interconnector basis, (as `np.float64`)
+            break_point     points between which the loss function
+                            will be linearly interpolated, in MW, \n
                             (as `np.float64`)
-            ==============  ============================================================================================
+            ==============  ==========================================
 
         Returns
         -------
@@ -1978,7 +1984,8 @@ class SpotMarket:
         self._next_variable_id = pd.concat([loss_variables, weight_variables])['variable_id'].max() + 1
         self._next_constraint_id = pd.concat([weights_sum_rhs, dynamic_rhs])['constraint_id'].max() + 1
 
-    def _validate_loss_functions(self, loss_functions):
+    @staticmethod
+    def _validate_loss_functions(loss_functions):
         schema = dv.DataFrameSchema(name='loss_functions', primary_keys=['interconnector', 'link'])
         schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
         schema.add_column(dv.SeriesSchema(name='link', data_type=str))
@@ -1987,19 +1994,16 @@ class SpotMarket:
                                           not_negative=True))
         schema.validate(loss_functions)
 
-    def _validate_interpolation_break_points(self, interpolation_break_points):
-        schema = dv.DataFrameSchema(name='interpolation_break_points', primary_keys=['interconnector', 'link', 'loss_segment'])
+    @staticmethod
+    def _validate_interpolation_break_points(interpolation_break_points):
+        schema = dv.DataFrameSchema(name='interpolation_break_points', primary_keys=['interconnector', 'link',
+                                                                                     'loss_segment'])
         schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
         schema.add_column(dv.SeriesSchema(name='link', data_type=str))
         schema.add_column(dv.SeriesSchema(name='loss_segment', data_type=np.int64))
         schema.add_column(dv.SeriesSchema(name='break_point', data_type=np.float64, must_be_real_number=True))
         schema.validate(interpolation_break_points)
 
-    @check.required_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
-    @check.allowed_columns('generic_constraint_parameters', ['set', 'type', 'rhs'])
-    @check.repeated_rows('generic_constraint_parameters', ['set'])
-    @check.column_data_types('generic_constraint_parameters', {'set': str, 'type': str, 'rhs': np.float64})
-    @check.column_values_must_be_real('generic_constraint_parameters', ['rhs'])
     def set_generic_constraints(self, generic_constraint_parameters):
         """Creates a set of generic constraints, adding the constraint type, rhs.
 
@@ -2009,14 +2013,16 @@ class SpotMarket:
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
 
-        Create a market instance.
+        Initialise the market instance.
 
-        >>> market = markets.Spot()
+        >>> market = SpotMarket(market_regions=['NSW'],
+        ...                     unit_info=unit_info)
 
         Define a set of generic constraints and add them to the market.
 
@@ -2062,17 +2068,20 @@ class SpotMarket:
             ColumnValues
                 If there are inf or null values in the rhs column.
         """
+        if self.validate_inputs:
+            self._validate_generic_constraint_parameters(generic_constraint_parameters)
         type_and_rhs = hf.save_index(generic_constraint_parameters, 'constraint_id', self._next_constraint_id)
-        # self.constraint_to_variable_map['unit_level']['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id']]
-        # self.constraint_to_variable_map['unit_level']['generic']['coefficient'] = 1.0
         self._constraints_rhs_and_type['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
         self._next_constraint_id = type_and_rhs['constraint_id'].max() + 1
 
-    @check.required_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
-    @check.allowed_columns('unit_coefficients', ['set', 'unit', 'service', 'coefficient'])
-    @check.repeated_rows('unit_coefficients', ['set', 'unit', 'service'])
-    @check.column_data_types('unit_coefficients', {'set': str, 'unit': str, 'service': str, 'coefficient': np.float64})
-    @check.column_values_must_be_real('unit_coefficients', ['coefficient'])
+    @staticmethod
+    def _validate_generic_constraint_parameters(generic_constraint_parameters):
+        schema = dv.DataFrameSchema(name='generic_constraint_parameters', primary_keys=['set'])
+        schema.add_column(dv.SeriesSchema(name='set', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='type', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='rhs', data_type=np.float64, must_be_real_number=True))
+        schema.validate(generic_constraint_parameters)
+
     def link_units_to_generic_constraints(self, unit_coefficients):
         """Set the lhs coefficients of generic constraints on unit basis.
 
@@ -2084,14 +2093,16 @@ class SpotMarket:
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A'],
+        ...     'region': ['NSW']})
 
-        Create a market instance.
+        Initialise the market instance.
 
-        >>> market = markets.Spot()
+        >>> market = SpotMarket(market_regions=['NSW', 'VIC'],
+        ...                     unit_info=unit_info)
 
         Define unit lhs coefficients for generic constraints.
 
@@ -2106,7 +2117,7 @@ class SpotMarket:
         Note all this does is save this information to the market object, linking to specific variable ids and
         constraint id occurs when the dispatch method is called.
 
-        >>> print(market._generic_constraint_lhs['units'])
+        >>> print(market._generic_constraint_lhs['unit'])
           set unit    service  coefficient
         0   A    X     energy          1.0
         1   A    Y     energy          1.0
@@ -2138,35 +2149,44 @@ class SpotMarket:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
+        if self.validate_inputs:
+            self._validate_generic_unit_coefficients(unit_coefficients)
         self._generic_constraint_lhs['unit'] = unit_coefficients
 
-    @check.required_columns('region_coefficients', ['set', 'region', 'service', 'coefficient'])
-    @check.allowed_columns('region_coefficients', ['set', 'region', 'service', 'coefficient'])
-    @check.repeated_rows('region_coefficients', ['set', 'region', 'service'])
-    @check.column_data_types('region_coefficients', {'set': str, 'region': str, 'service': str,
-                                                     'coefficient': np.float64})
-    @check.column_values_must_be_real('region_coefficients', ['coefficient'])
+    def _validate_generic_unit_coefficients(self, unit_coefficients):
+        schema = dv.DataFrameSchema(name='unit_coefficients', primary_keys=['set', 'unit', 'service'])
+        schema.add_column(dv.SeriesSchema(name='set', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services))
+        schema.add_column(dv.SeriesSchema(name='coefficient', data_type=np.float64, must_be_real_number=True))
+        schema.validate(unit_coefficients)
+
     def link_regions_to_generic_constraints(self, region_coefficients):
         """Set the lhs coefficients of generic constraints on region basis.
 
         This effectively acts as short cut for mapping unit variables to a generic constraint. If a particular
         service in a particular region is included here then all units in this region will have their variables
-        of this service included on the lhs of this constraint set.
+        of this service included on the lhs of this constraint set. If a particular unit needs to be excluded
+        from an otherwise region wide constraint it can be given a coefficient with opposite sign to the region
+        wide sign in the generic unit constraints, the coefficients from the two lhs set will be summed and cancel
+        each other out.
 
         Notes
         -----
-        These sets also map to the set in the fcas market constraints.
+        These sets also map to the sets in the fcas market constraints.
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'region': ['X', 'X']})
 
-        Create a market instance.
+        Initialise the market instance.
 
-        >>> market = markets.Spot()
+        >>> market = SpotMarket(market_regions=['X', 'Y'],
+        ...                     unit_info=unit_info)
 
         Define region lhs coefficients for generic constraints.
 
@@ -2189,7 +2209,7 @@ class SpotMarket:
 
         Parameters
         ----------
-        unit_coefficients : pd.DataFrame
+        region_coefficients : pd.DataFrame
 
             =============  ==============================================================
             Columns:       Description:
@@ -2213,16 +2233,20 @@ class SpotMarket:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
+        if self.validate_inputs:
+            self._validate_generic_region_coefficients(region_coefficients)
         self._generic_constraint_lhs['region'] = region_coefficients
 
-    @check.required_columns('interconnector_coefficients', ['set', 'interconnector', 'coefficient'])
-    @check.allowed_columns('interconnector_coefficients', ['set', 'interconnector', 'coefficient'])
-    @check.repeated_rows('interconnector_coefficients', ['set', 'interconnector'])
-    @check.column_data_types('interconnector_coefficients', {'set': str, 'interconnector': str,
-                                                             'coefficient': np.float64})
-    @check.column_values_must_be_real('interconnector_coefficients', ['coefficient'])
+    def _validate_generic_region_coefficients(self, region_coefficients):
+        schema = dv.DataFrameSchema(name='region_coefficients', primary_keys=['set', 'region', 'service'])
+        schema.add_column(dv.SeriesSchema(name='set', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services))
+        schema.add_column(dv.SeriesSchema(name='coefficient', data_type=np.float64, must_be_real_number=True))
+        schema.validate(region_coefficients)
+
     def link_interconnectors_to_generic_constraints(self, interconnector_coefficients):
-        """Set the lhs coefficients of generic constraints on interconnector basis.
+        """Set the lhs coefficients of generic constraints on an interconnector basis.
 
         Notes
         -----
@@ -2230,14 +2254,16 @@ class SpotMarket:
 
         Examples
         --------
-        This is an example of the minimal set of steps for using this method.
+        Define the unit information data set needed to initialise the market.
 
-        >>> import pandas as pd
-        >>> from nempy import markets
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['C', 'D'],
+        ...     'region': ['X', 'X']})
 
-        Create a market instance.
+        Initialise the market instance.
 
-        >>> market = markets.Spot()
+        >>> market = SpotMarket(market_regions=['X', 'Y'],
+        ...                     unit_info=unit_info)
 
         Define region lhs coefficients for generic constraints. All interconnector variables are for the energy service
         so no 'service' can be specified.
@@ -2283,7 +2309,16 @@ class SpotMarket:
         ColumnValues
             If there are inf or null values in the rhs coefficient.
         """
+        if self.validate_inputs:
+            self._validate_generic_interconnector_coefficients(interconnector_coefficients)
         self._generic_constraint_lhs['interconnectors'] = interconnector_coefficients
+
+    def _validate_generic_interconnector_coefficients(self, interconnector_coefficients):
+        schema = dv.DataFrameSchema(name='interconnector_coefficients', primary_keys=['set', 'interconnector'])
+        schema.add_column(dv.SeriesSchema(name='set', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='coefficient', data_type=np.float64, must_be_real_number=True))
+        schema.validate(interconnector_coefficients)
 
     def make_constraints_elastic(self, constraints_key, violation_cost):
         """Make a set of constraints elastic, so they can be violated at a predefined cost.
@@ -2295,9 +2330,16 @@ class SpotMarket:
 
         Examples
         --------
-        Create a market instance.
+        Define the unit information data set needed to initialise the market.
 
-        >>> market = SpotMarket()
+        >>> unit_info = pd.DataFrame({
+        ...     'unit': ['C', 'D'],
+        ...     'region': ['X', 'X']})
+
+        Initialise the market instance.
+
+        >>> market = SpotMarket(market_regions=['X', 'Y'],
+        ...                     unit_info=unit_info)
 
         Define a set of generic constraints and add them to the market.
 
@@ -2315,10 +2357,9 @@ class SpotMarket:
         0   A              0   >=   10.0
         1   B              1   <= -100.0
 
-        Now these constraints can be made elastic. Leaving the key word argument at its default value means
-        the market_ceiling_price will be used to set the violation cost.
+        Now these constraints can be made elastic.
 
-        >>> market.make_constraints_elastic('generic')
+        >>> market.make_constraints_elastic('generic', violation_cost=1000.0)
 
         Now the market will contain extra decision variables to capture the cost of violating the constraint.
 
@@ -2328,9 +2369,9 @@ class SpotMarket:
         1            1          0.0          inf  continuous
 
         >>> print(market._objective_function_components['generic_deficit'])
-           variable_id     cost
-        0            0  14000.0
-        1            1  14000.0
+           variable_id    cost
+        0            0  1000.0
+        1            1  1000.0
 
         These will be mapped to the constraints
 
@@ -2338,15 +2379,6 @@ class SpotMarket:
            variable_id  constraint_id  coefficient
         0            0              0          1.0
         1            1              1         -1.0
-
-        If we provided a specific violation cost then this is used instead of the market_ceiling_price.
-
-        >>> market.make_constraints_elastic('generic', violation_cost=1000.0)
-
-        >>> print(market._objective_function_components['generic_deficit'])
-           variable_id    cost
-        0            2  1000.0
-        1            3  1000.0
 
         If a pd.DataFrame is provided then we can set cost on a constraint basis.
 
@@ -2358,8 +2390,8 @@ class SpotMarket:
 
         >>> print(market._objective_function_components['generic_deficit'])
            variable_id    cost
-        0            4  1000.0
-        1            5  2000.0
+        0            2  1000.0
+        1            3  2000.0
 
         Note will the variable id get incremented with every use of the method only the latest set of variables are
         used.
@@ -2402,20 +2434,7 @@ class SpotMarket:
         if isinstance(violation_cost, (int, float)) and not isinstance(violation_cost, bool):
             rhs_and_type['cost'] = violation_cost
         elif isinstance(violation_cost, pd.DataFrame):
-            # Check pd.DataFrame columns needed exist and are of the right type.
-            if 'set' in violation_cost.columns and 'cost' in violation_cost.columns:
-                if not all(violation_cost.apply(lambda x: type(x['set']) == str, axis=1)):
-                    raise check.ColumnDataTypeError("Column 'set' in violation should have type str")
-                if np.float64 != violation_cost['cost'].dtype:
-                    raise check.ColumnDataTypeError("Column 'cost' in violation_cost should have type np.float64")
-            else:
-                check.MissingColumnError("Column 'set' or 'cost' missing from violation_cost")
-            # Check only one row per set.
-            if len(violation_cost.index) != len(violation_cost.drop_duplicates('set')):
-                raise check.RepeatedRowError("violation_cost should only have one row for each set")
-            # Check the constraints being made elastic have column set.
-            if 'set' not in violation_cost.columns:
-                check.MissingColumnError("Column 'set' not in constraints to make elastic")
+            self._validate_violation_cost(violation_cost)
             rhs_and_type = pd.merge(rhs_and_type, violation_cost.loc[:, ['set', 'cost']], on='set')
         else:
             ValueError("Input for violation cost can only be numeric or a pd.Dataframe")
@@ -2428,6 +2447,13 @@ class SpotMarket:
                 deficit_variables.loc[:, ['variable_id', 'cost']]
             self._lhs_coefficients[constraints_key + '_deficit'] = lhs
             self._next_variable_id = max(deficit_variables['variable_id']) + 1
+
+    @staticmethod
+    def _validate_violation_cost(violation_cost):
+        schema = dv.DataFrameSchema(name='violation_cost', primary_keys=['set', 'cost'])
+        schema.add_column(dv.SeriesSchema(name='set', data_type=str))
+        schema.add_column(dv.SeriesSchema(name='cost', data_type=np.float64, must_be_real_number=True))
+        schema.validate(violation_cost)
 
     def get_elastic_constraints_violation_degree(self, constraints_key):
         if constraints_key + '_deficit' in self._decision_variables:

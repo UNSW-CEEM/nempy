@@ -49,16 +49,22 @@ class DataFrameSchema:
 
 
 class SeriesSchema:
-    def __init__(self, name, data_type, allowed_values=None, must_be_real_number=False, not_negative=False):
+    def __init__(self, name, data_type, allowed_values=None, must_be_real_number=False, not_negative=False,
+                 minimum=None, maximum=None):
         self.name = name
         self.data_type = data_type
         self.allowed_values = allowed_values
         self.must_be_real_number = must_be_real_number
+        self.not_negative = not_negative
+        self.min = minimum
+        self.max = maximum
 
     def validate(self, series):
         self._check_data_type(series)
         self._check_allowed_values(series)
         self._check_is_real_number(series)
+        self._check_is_not_negtaive(series)
+        #self._check_greater_than_or_equal_to_min
 
     def _check_data_type(self, series):
         if self.data_type == str:
@@ -85,8 +91,9 @@ class SeriesSchema:
                 raise ColumnValues("Null values not allowed in column {}.".format(self.name))
 
     def _check_is_not_negtaive(self, series):
-        if series.min() < 0.0:
-            raise ColumnValues("Negative values not allowed in column '{}'.".format(self.name))
+        if self.not_negative:
+            if series.min() < 0.0:
+                raise ColumnValues("Negative values not allowed in column '{}'.".format(self.name))
 
 
 class RepeatedRowError(Exception):

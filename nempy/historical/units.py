@@ -137,31 +137,31 @@ class HistoricalUnits:
 
     def get_scada_ramp_up_rates(self):
         initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
-        initial_cons.columns = ['unit', 'initial_output', 'ramp_rate']
+        initial_cons.columns = ['unit', 'initial_output', 'ramp_up_rate']
         units_with_scada_ramp_rates = list(
-            initial_cons[(~initial_cons['ramp_rate'].isna()) & initial_cons['ramp_rate'] != 0]['unit'])
+            initial_cons[(~initial_cons['ramp_up_rate'].isna()) & initial_cons['ramp_up_rate'] != 0]['unit'])
         initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
         return initial_cons
 
     def get_scada_ramp_down_rates(self):
         initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
-        initial_cons.columns = ['unit', 'initial_output', 'ramp_rate']
+        initial_cons.columns = ['unit', 'initial_output', 'ramp_down_rate']
         units_with_scada_ramp_rates = list(
-            initial_cons[(~initial_cons['ramp_rate'].isna()) & initial_cons['ramp_rate'] != 0]['unit'])
+            initial_cons[(~initial_cons['ramp_down_rate'].isna()) & initial_cons['ramp_down_rate'] != 0]['unit'])
         initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
         return initial_cons
 
     def get_raise_reg_units_with_scada_ramp_rates(self):
         reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
         reg_units = pd.merge(self.get_scada_ramp_up_rates(), reg_units, 'inner', on='unit')
-        reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_rate'].isna())]
+        reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_up_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
     def get_lower_reg_units_with_scada_ramp_rates(self):
         reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
         reg_units = pd.merge(self.get_scada_ramp_down_rates(), reg_units, 'inner', on='unit')
-        reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_rate'].isna())]
+        reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_down_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
