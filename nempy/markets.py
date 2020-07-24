@@ -880,11 +880,11 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
         schema.add_column(dv.SeriesSchema(name='end_mode', data_type=np.int64, must_be_real_number=True,
                                           not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='time_in_end_mode', data_type=np.int64, must_be_real_number=True,
+        schema.add_column(dv.SeriesSchema(name='time_in_end_mode', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='mode_two_length', data_type=np.int64, must_be_real_number=True,
+        schema.add_column(dv.SeriesSchema(name='mode_two_length', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='mode_four_length', data_type=np.int64, must_be_real_number=True,
+        schema.add_column(dv.SeriesSchema(name='mode_four_length', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
         schema.add_column(dv.SeriesSchema(name='min_loading', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
@@ -2316,7 +2316,7 @@ class SpotMarket:
     def _validate_generic_interconnector_coefficients(self, interconnector_coefficients):
         schema = dv.DataFrameSchema(name='interconnector_coefficients', primary_keys=['set', 'interconnector'])
         schema.add_column(dv.SeriesSchema(name='set', data_type=str))
-        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str, allowed_values=self._market_regions))
+        schema.add_column(dv.SeriesSchema(name='interconnector', data_type=str))
         schema.add_column(dv.SeriesSchema(name='coefficient', data_type=np.float64, must_be_real_number=True))
         schema.validate(interconnector_coefficients)
 
@@ -2643,19 +2643,6 @@ class SpotMarket:
         else:
             raise check.ModelBuildError('The market could not be dispatch because no variables have been created')
 
-        # If interconnectors with losses are being used, create special ordered sets for modelling losses.
-        if 'interpolation_weights' in self._decision_variables:
-            special_ordered_sets = self._decision_variables['interpolation_weights']
-            si.add_sos_type_2(special_ordered_sets, sos_id_columns = ['interconnector', 'link'],
-                              position_column='loss_segment')
-
-        if 'interconnectors' in self._decision_variables:
-            special_ordered_sets = self._decision_variables['interconnectors']
-            special_ordered_sets = special_ordered_sets[special_ordered_sets['interconnector'] != special_ordered_sets['link']]
-            if not special_ordered_sets.empty:
-                special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
-                si.add_sos_type_1(special_ordered_sets)
-
         # If Costs have been defined for bids or constraints then add an objective function.
         if self._objective_function_components:
             # Combine components of objective function into a single pd.DataFrame
@@ -2678,6 +2665,21 @@ class SpotMarket:
             constraints_rhs_and_type = pd.concat(constraints_rhs_and_type)
             si.add_constraints(constraints_lhs, constraints_rhs_and_type)
 
+        model_with_no_sos = si.copy()
+
+        # If interconnectors with losses are being used, create special ordered sets for modelling losses.
+        if 'interpolation_weights' in self._decision_variables:
+            special_ordered_sets = self._decision_variables['interpolation_weights']
+            si.add_sos_type_2(special_ordered_sets, sos_id_columns = ['interconnector', 'link'],
+                              position_column='loss_segment')
+
+        if 'interconnectors' in self._decision_variables:
+            special_ordered_sets = self._decision_variables['interconnectors']
+            special_ordered_sets = special_ordered_sets[special_ordered_sets['interconnector'] != special_ordered_sets['link']]
+            if not special_ordered_sets.empty:
+                special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
+                si.add_sos_type_1(special_ordered_sets)
+
         si.optimize()
 
         # Find the slack in constraints.
@@ -2699,12 +2701,14 @@ class SpotMarket:
             self._decision_variables[var_group]['value'] = \
                 si.get_optimal_values_of_decision_variables(self._decision_variables[var_group])
 
+        linear_model = self.get_linear_model(model_with_no_sos)
+        linear_model.optimize()
+
         # If there are market constraints then calculate their associated prices.
         if self._market_constraints_rhs_and_type and price_market_constraints:
             for constraint_group in self._market_constraints_rhs_and_type:
                 constraints_to_price = list(self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
-                prices = si.price_constraints(constraints_to_price, self._decision_variables['bids'],
-                                              self._objective_function_components['bids'])
+                prices = linear_model.price_constraints(constraints_to_price)
                 self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                     self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
@@ -2744,17 +2748,64 @@ class SpotMarket:
                 variables_and_cons = pd.merge(active_violation_variables, lhs, on='variable_id')
                 variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.0001) * \
                                                  variables_and_cons['coefficient'] * -1
-                variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
-                si.optimize()
+                variables_and_cons.apply(lambda x: linear_model.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
+                linear_model.optimize()
                 # If there are market constraints then calculate their associated prices.
                 if self._market_constraints_rhs_and_type and price_market_constraints:
                     for constraint_group in self._market_constraints_rhs_and_type:
                         constraints_to_price = list(
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
-                        prices = si.price_constraints(constraints_to_price, self._decision_variables['bids'],
+                        prices = model_with_no_sos.price_constraints(constraints_to_price, self._decision_variables['bids'],
                                                       self._objective_function_components['bids'])
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
+
+    def get_linear_model(self, si):
+        self._remove_interconnector_loss_constraint_components(si)
+        self._constrain_interconnectors_to_current_actual_losses(si)
+        self._disable_unused_link_pair(si)
+        return si
+
+    def _disable_unused_link_pair(self, si):
+        special_ordered_sets = self._decision_variables['interconnectors']
+        special_ordered_sets = special_ordered_sets[special_ordered_sets['interconnector'] != special_ordered_sets['link']]
+        special_ordered_sets_unused = special_ordered_sets[special_ordered_sets['value'] == 0.0]
+        si.disable_variables(special_ordered_sets_unused)
+
+    def _get_interconnector_loss_factors(self):
+        interconnector_loss_factors = self.get_interconnector_flows()
+        interconnector_loss_factors['loss_factor'] = (interconnector_loss_factors['losses'] /
+                                                     interconnector_loss_factors['flow']).abs()
+        return interconnector_loss_factors.loc[:, ['interconnector', 'link', 'loss_factor']]
+
+    def _remove_interconnector_loss_constraint_components(self, si):
+        si.remove_constraints(self._constraints_rhs_and_type['interpolation_weights'])
+        si.remove_constraints(self._constraints_dynamic_rhs_and_type['link_loss_to_flow'])
+        si.remove_variables(self._decision_variables['interpolation_weights'])
+
+    def _constrain_interconnectors_to_current_actual_losses(self, si):
+        loss_factors = self._get_interconnector_loss_factors()
+        loss_factors = hf.save_index(loss_factors, 'constraint_id', self._next_constraint_id)
+
+        flow_coefficients = self._decision_variables['interconnectors']
+        flow_coefficients = flow_coefficients.loc[:, ['interconnector', 'link', 'variable_id']]
+        flow_coefficients = pd.merge(flow_coefficients,
+                                     loss_factors.loc[:, ['interconnector', 'link', 'loss_factor', 'constraint_id']])
+        flow_coefficients = flow_coefficients.rename(columns={'loss_factor': 'coefficient'})
+
+        loss_coefficients = self._decision_variables['interconnector_losses']
+        loss_coefficients = loss_coefficients.loc[:, ['interconnector', 'link', 'variable_id']]
+        loss_coefficients = pd.merge(loss_coefficients,
+                                     loss_factors.loc[:, ['interconnector', 'link', 'constraint_id']])
+        loss_coefficients['coefficient'] = -1.0
+
+        lhs_coefficients = pd.concat([flow_coefficients, loss_coefficients])
+
+        rhs_and_type = loss_factors.loc[:, ['interconnector', 'link', 'constraint_id']]
+        rhs_and_type['type'] = '='
+        rhs_and_type['rhs'] = 0.0
+
+        si.add_constraints(lhs_coefficients, rhs_and_type)
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.

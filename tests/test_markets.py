@@ -116,16 +116,14 @@ def test_two_region_energy_market():
 
 
 def test_one_interconnector():
-    # Create a market instance.
-    market = markets.SpotMarket()
-
     # The only generator is located in NSW.
     unit_info = pd.DataFrame({
         'unit': ['A'],
         'region': ['NSW']  # MW
     })
 
-    market.set_unit_info(unit_info)
+    # Create a market instance.
+    market = markets.SpotMarket(unit_info=unit_info, market_regions=['NSW', 'VIC'])
 
     # Volume of each bids.
     volume_bids = pd.DataFrame({
@@ -200,6 +198,7 @@ def test_one_interconnector():
 
     expected_interconnector_flow = pd.DataFrame({
         'interconnector': ['little_link'],
+        'link': ['little_link'],
         'flow': [90.0/0.975],
         'losses': [(90.0/0.975) * 0.05]
     })
@@ -207,6 +206,84 @@ def test_one_interconnector():
     assert_frame_equal(market.get_energy_prices(), expected_prices)
     assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
     assert_frame_equal(market.get_interconnector_flows(), expected_interconnector_flow)
+
+
+def test_get_interconnector_loss_factors():
+    # The only generator is located in NSW.
+    unit_info = pd.DataFrame({
+        'unit': ['A'],
+        'region': ['NSW']  # MW
+    })
+
+    # Create a market instance.
+    market = markets.SpotMarket(unit_info=unit_info, market_regions=['NSW', 'VIC'])
+
+    # Volume of each bids.
+    volume_bids = pd.DataFrame({
+        'unit': ['A'],
+        '1': [100.0]  # MW
+    })
+
+    market.set_unit_volume_bids(volume_bids)
+
+    # Price of each bid.
+    price_bids = pd.DataFrame({
+        'unit': ['A'],
+        '1': [50.0]  # $/MW
+    })
+
+    market.set_unit_price_bids(price_bids)
+
+    # NSW has no demand but VIC has 90 MW.
+    demand = pd.DataFrame({
+        'region': ['NSW', 'VIC'],
+        'demand': [0.0, 90.0]  # MW
+    })
+
+    market.set_demand_constraints(demand)
+
+    # There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
+    interconnectors = pd.DataFrame({
+        'interconnector': ['little_link'],
+        'to_region': ['VIC'],
+        'from_region': ['NSW'],
+        'max': [100.0],
+        'min': [-120.0]
+    })
+
+    market.set_interconnectors(interconnectors)
+
+    # The interconnector loss function. In this case losses are always 5 % of line flow.
+    def constant_losses(flow):
+        return abs(flow) * 0.05
+
+    # The loss function on a per interconnector basis. Also details how the losses should be proportioned to the
+    # connected regions.
+    loss_functions = pd.DataFrame({
+        'interconnector': ['little_link'],
+        'from_region_loss_share': [0.5],  # losses are shared equally.
+        'loss_function': [constant_losses]
+    })
+
+    # The points to linearly interpolate the loss function bewteen. In this example the loss function is linear so only
+    # three points are needed, but if a non linear loss function was used then more points would be better.
+    interpolation_break_points = pd.DataFrame({
+        'interconnector': ['little_link', 'little_link', 'little_link'],
+        'loss_segment': [1, 2, 3],
+        'break_point': [-120.0, 0.0, 100]
+    })
+
+    market.set_interconnector_losses(loss_functions, interpolation_break_points)
+
+    # Calculate dispatch.
+    market.dispatch()
+
+    expected_interconnector_loss_factors = pd.DataFrame({
+        'interconnector': ['little_link'],
+        'loss_factor': [0.05]
+    })
+
+    assert_frame_equal(market._get_interconnector_loss_factors(), expected_interconnector_loss_factors)
 
 
 def test_one_region_energy_and_raise_regulation_markets():

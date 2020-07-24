@@ -9,6 +9,56 @@ class InterfaceToSolver:
         self.variables = {}
         self.mip_model = Model("market")
         self.mip_model.verbose = 0
+        self.dummy_binary_1 = None
+        self.dummy_binary_2 = None
+
+    def copy(self):
+        """Add decision variables to the model.
+
+        Examples
+        --------
+        >>> decision_variables = pd.DataFrame({
+        ...   'variable_id': [0, 1],
+        ...   'lower_bound': [0.0, 0.0],
+        ...   'upper_bound': [6.0, 1.0],
+        ...   'type': ['continuous', 'binary']})
+
+        >>> si = InterfaceToSolver()
+
+        >>> si.add_variables(decision_variables)
+
+        >>> si_copy = si.copy()
+
+        >>> print(si_copy.mip_model.num_cols)
+        2
+
+        The first one should have the following properties.
+
+        >>> print(si_copy.mip_model.var_by_name('0').var_type)
+        C
+
+        >>> print(si_copy.mip_model.var_by_name('0').lb)
+        0.0
+
+        >>> print(si_copy.mip_model.var_by_name('0').ub)
+        6.0
+
+        The second one should have the following properties.
+
+        >>> print(si_copy.mip_model.var_by_name('1').var_type)
+        B
+
+        >>> print(si_copy.mip_model.var_by_name('1').lb)
+        0.0
+
+        >>> print(si_copy.mip_model.var_by_name('1').ub)
+        1.0
+        """
+        model_copy = InterfaceToSolver()
+        model_copy.mip_model = self.mip_model.copy()
+        for var in model_copy.mip_model.vars:
+            model_copy.variables[int(var.name)] = var
+        return model_copy
 
     def add_variables(self, decision_variables):
         """Add decision variables to the model.
@@ -79,6 +129,59 @@ class InterfaceToSolver:
                                                                  var_type=variable_types[variable_type],
                                                                  name=str(variable_id))
 
+    def remove_variables(self, variables_to_remove):
+        """Add decision variables to the model.
+
+        Examples
+        --------
+        >>> decision_variables = pd.DataFrame({
+        ...   'variable_id': [0, 1],
+        ...   'lower_bound': [0.0, 0.0],
+        ...   'upper_bound': [6.0, 1.0],
+        ...   'type': ['continuous', 'binary']})
+
+        >>> variables_to_remove = pd.DataFrame({
+        ...   'variable_id': [1]})
+
+        >>> si = InterfaceToSolver()
+
+        >>> si.add_variables(decision_variables)
+
+        >>> print(si.mip_model.num_cols)
+        2
+
+        >>> si.remove_variables(variables_to_remove)
+
+        >>> print(si.mip_model.num_cols)
+        1
+
+        >>> print(si.mip_model.var_by_name('0').var_type)
+        C
+
+        >>> print(si.mip_model.var_by_name('0').lb)
+        0.0
+
+        >>> print(si.mip_model.var_by_name('0').ub)
+        6.0
+
+        Parameters
+        ----------
+        decision_variables : pd.DataFrame
+
+            =============  ===============================================================
+            Columns:       Description:
+            variable_id    the id of the variable (as `int`)
+            lower_bound    the lower bound of the variable, is zero for bids (as `np.float64`)
+            upper_bound    the upper bound of the variable, the volume bid (as `np.float64`)
+            type           the type of variable, 'continuous' or 'binary'  (as `str`)
+            =============  ===============================================================
+
+        Returns
+        -------
+
+        """
+        variables_to_remove['variable_id'].apply(lambda x: self.mip_model.remove(self.variables[x]))
+
     def add_sos_type_2(self, sos_variables, sos_id_columns, position_column):
         """Add groups of special ordered sets of type 2 two the mip model.
 
@@ -128,7 +231,7 @@ class InterfaceToSolver:
         # Break up the sets based on their id and add them to the model separately.
         sos_variables.groupby(sos_id_columns).apply(add_sos_vars)
         # This is a hack to make mip knows there are binary constraints.
-        k = self.mip_model.add_var(var_type=BINARY, obj=0.0)
+        self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
     def add_sos_type_1(self, sos_variables):
         # Function that adds sets to mip model.
@@ -139,7 +242,7 @@ class InterfaceToSolver:
         # Break up the sets based on their id and add them to the model separately.
         sos_variables.groupby('sos_id').apply(add_sos_vars)
         # This is a hack to make mip knows there are binary constraints.
-        k = self.mip_model.add_var(var_type=BINARY, obj=0.0)
+        self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
     def add_objective_function(self, objective_function):
         """Add the objective function to the mip model.
@@ -287,6 +390,58 @@ class InterfaceToSolver:
             else:
                 raise ValueError("Constraint type not recognised should be one of '<=', '>=' or '='.")
             self.mip_model.add_constr(new_constraint, name=str(id))
+
+    def remove_constraints(self, constraints_to_remove):
+        """Remove constraints from the mip model.
+
+        Examples
+        --------
+        >>> decision_variables = pd.DataFrame({
+        ...   'variable_id': [0, 1, 2, 3, 4, 5],
+        ...   'lower_bound': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ...   'upper_bound': [5.0, 5.0, 10.0, 10.0, 5.0, 5.0],
+        ...   'type': ['continuous', 'continuous', 'continuous',
+        ...            'continuous', 'continuous', 'continuous']})
+
+        >>> constraints_lhs = pd.DataFrame({
+        ...   'constraint_id': [1, 1, 2, 2],
+        ...   'variable_id': [0, 1, 3, 4],
+        ...   'coefficient': [1.0, 0.5, 1.0, 2.0]})
+
+        >>> constraints_type_and_rhs = pd.DataFrame({
+        ...   'constraint_id': [1, 2],
+        ...   'type': ['<=', '='],
+        ...   'rhs': [10.0, 20.0]})
+
+        >>> constraints_to_remove = pd.DataFrame({
+        ...   'constraint_id': [1]})
+
+        >>> si = InterfaceToSolver()
+
+        >>> si.add_variables(decision_variables)
+
+        >>> si.add_constraints(constraints_lhs, constraints_type_and_rhs)
+
+        >>> print(si.mip_model.num_rows)
+        2
+
+        >>> print(si.mip_model.constr_by_name('1'))
+        1: +1.0 0 +0.5 1 <= 10.0
+
+        >>> print(si.mip_model.constr_by_name('2'))
+        2: +1.0 3 +2.0 4 = 20.0
+
+        >>> si.remove_constraints(constraints_to_remove)
+
+        >>> print(si.mip_model.num_rows)
+        1
+
+        >>> print(si.mip_model.constr_by_name('2'))
+        2: +1.0 3 +2.0 4 = 20.0
+
+        """
+        constraint_objects = constraints_to_remove['constraint_id'].apply(lambda x: self.mip_model.constr_by_name(str(x)))
+        constraint_objects.apply(lambda x: self.mip_model.remove(x))
 
     def optimize(self):
         """Optimize the mip model.
@@ -456,7 +611,7 @@ class InterfaceToSolver:
                                                                 self.mip_model)
         return slack
 
-    def price_constraints(self, constraint_ids_to_price, volume_bids, price_bids):
+    def price_constraints(self, constraint_ids_to_price):
         """For each constraint_id find the marginal value of the constraint.
 
         This is done by incrementing the constraint by a value of 1.0 and re-optimizing the model, the marginal cost
@@ -499,7 +654,7 @@ class InterfaceToSolver:
         >>> prices = si.price_constraints([1])
 
         >>> print(prices)
-        {1: 9.0}
+        {1: 8.0}
 
         >>> decision_variables['value'] = si.get_optimal_values_of_decision_variables(decision_variables)
 
@@ -520,21 +675,20 @@ class InterfaceToSolver:
         -------
 
         """
-        start_obj = self.mip_model.objective.x
         costs = {}
         for id in constraint_ids_to_price:
-            constraint = self.mip_model.constr_by_name(str(id))
-            constraint.rhs += 1e-6
-            self.mip_model.optimize()
-            marginal_cost = (self.mip_model.objective.x - start_obj) * 1e6
-            constraint.rhs -= 1e-6
-            costs[id] = marginal_cost
-        self.mip_model.optimize()
+            costs[id] = self.mip_model.constr_by_name(str(id)).pi
         return costs
 
     def update_rhs(self, constraint_id, violation_degree):
         constraint = self.mip_model.constr_by_name(str(constraint_id))
         constraint.rhs += violation_degree
+
+    def disable_variables(self, variables):
+        for var_id in variables['variable_id']:
+            var = self.mip_model.var_by_name(str(var_id))
+            var.lb = 0.0
+            var.ub = 0.0
 
 
 def find_problem_constraint(base_prob):

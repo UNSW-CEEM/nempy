@@ -20,7 +20,7 @@ def get_test_intervals():
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
-    intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
+    intervals = random.sample(range(1, difference_in_5_min_intervals), 1)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
@@ -28,7 +28,7 @@ def get_test_intervals():
 
 def test_setup():
 
-    running_for_first_time = True
+    running_for_first_time = False
 
     con = sqlite3.connect('test_files/historical.db')
     historical_inputs = inputs.HistoricalInputs(
@@ -387,7 +387,7 @@ def test_prices_full_featured():
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
-    outputs.to_csv('price_comp.csv')
+    outputs.to_csv('price_comp_latest.csv')
 
 
 def test_prices_full_featured_one_day_sequence():
@@ -461,6 +461,8 @@ class HistoricalSpotMarket:
 
     def set_fast_start_constraints(self):
         fast_start_profiles = self.unit_inputs.get_fast_start_profiles()
+        fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+                                                          'mode_four_length', 'min_loading']]
         self.market.set_fast_start_constraints(fast_start_profiles)
         cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['fast_start']
         try:

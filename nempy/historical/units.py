@@ -57,7 +57,7 @@ class HistoricalUnits:
         initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
 
         fast_start_profiles = self.get_fast_start_profiles()
-        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['next_mode'] == 2]['unit'].unique())
+        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
 
         ramp_rates = pd.merge(ramp_rates, initial_cons, 'left', on='DUID')
         ramp_rates = ramp_rates[~ramp_rates['DUID'].isin(units_ending_in_mode_two)]
@@ -1368,51 +1368,55 @@ def fast_start_calc_end_interval_state(fast_start_profile, dispatch_interval):
 
     fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
 
-    fast_start_profile['next_mode'] = np.where(fast_start_profile['time_in_current_mode_at_end'] >
+    fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_current_mode_at_end'] >
                                                   fast_start_profile['current_mode_length'],
                                                   fast_start_profile['current_mode'] + 1,
                                                   fast_start_profile['current_mode'])
 
-    fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['next_mode'] != fast_start_profile['current_mode'],
+    fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['end_mode'] != fast_start_profile['current_mode'],
                                                       fast_start_profile['time_in_current_mode_at_end'] -
                                                       fast_start_profile['current_mode_length'],
                                                       fast_start_profile['time_in_current_mode_at_end'])
 
     fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
-                                                         (fast_start_profile['next_mode'] == 3),
+                                                         (fast_start_profile['end_mode'] == 3),
                                                          fast_start_profile['time_in_end_mode'],
                                                          np.NAN)
 
     for i in range(1, 10):
 
-        fast_start_profile['previous_mode'] = fast_start_profile['next_mode']
+        fast_start_profile['previous_mode'] = fast_start_profile['end_mode']
 
         fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
 
-        fast_start_profile['next_mode'] = np.where(fast_start_profile['time_in_end_mode'] >
+        fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_end_mode'] >
                                                       fast_start_profile['current_mode_length'],
                                                       fast_start_profile['previous_mode'] + 1,
                                                       fast_start_profile['previous_mode'])
 
-        fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['next_mode'] !=
+        fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['end_mode'] !=
                                                           fast_start_profile['previous_mode'],
                                                           fast_start_profile['time_in_end_mode'] -
                                                           fast_start_profile['current_mode_length'],
                                                           fast_start_profile['time_in_end_mode'])
 
         fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
-                                                             (fast_start_profile['next_mode'] == 3),
+                                                             (fast_start_profile['end_mode'] == 3),
                                                              fast_start_profile['time_in_end_mode'],
                                                              fast_start_profile['time_after_mode_two'])
 
-    return fast_start_profile.loc[:, ['unit', 'min_loading', 'current_mode', 'next_mode', 'time_in_current_mode',
+    fast_start_profile['end_mode'] = np.where(fast_start_profile['end_mode'] == 5, 0, fast_start_profile['end_mode'])
+    fast_start_profile['mode_two_length'] = fast_start_profile['mode_two_length'].astype(np.float64)
+    fast_start_profile['mode_four_length'] = fast_start_profile['mode_four_length'].astype(np.float64)
+    fast_start_profile['min_loading'] = fast_start_profile['min_loading'].astype(np.float64)
+    return fast_start_profile.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
                                       'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
                                       'mode_four_length', 'time_after_mode_two']]
 
 
 def fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_end_condition, dispatch_interval):
     fast_start_end_condition = fast_start_end_condition[(fast_start_end_condition['current_mode'] == 2) |
-                                                        (fast_start_end_condition['next_mode'] > 2)]
+                                                        (fast_start_end_condition['end_mode'] > 2)]
     fast_start_end_condition = pd.merge(ramp_rates, fast_start_end_condition, left_on='DUID', right_on='unit')
     fast_start_end_condition['ramp_max'] = fast_start_end_condition['RAMPUPRATE'] / 12.0
     fast_start_end_condition['ramp_max'] = (fast_start_end_condition['time_after_mode_two'] / dispatch_interval) * \
