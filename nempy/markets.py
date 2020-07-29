@@ -2488,7 +2488,6 @@ class SpotMarket:
         self._next_variable_id = rhs['constraint_id'].max() + 1
         self.make_constraints_elastic('tie_break', violation_cost=cost)
 
-    # @check.pre_dispatch
     def dispatch(self, energy_market_ceiling_price=None, energy_market_floor_price=None, fcas_market_ceiling_price=None,
                  price_market_constraints=True, over_constrained_dispatch_re_run=True):
         """Combines the elements of the linear program and solves to find optimal dispatch.
@@ -2755,33 +2754,40 @@ class SpotMarket:
                     for constraint_group in self._market_constraints_rhs_and_type:
                         constraints_to_price = list(
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
-                        prices = model_with_no_sos.price_constraints(constraints_to_price, self._decision_variables['bids'],
-                                                      self._objective_function_components['bids'])
+                        prices = linear_model.price_constraints(constraints_to_price)
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
     def get_linear_model(self, si):
         self._remove_interconnector_loss_constraint_components(si)
         self._constrain_interconnectors_to_current_actual_losses(si)
+        self._constraint_interconnectors_to_current_flow(si)
         self._disable_unused_link_pair(si)
         return si
 
     def _disable_unused_link_pair(self, si):
-        special_ordered_sets = self._decision_variables['interconnectors']
-        special_ordered_sets = special_ordered_sets[special_ordered_sets['interconnector'] != special_ordered_sets['link']]
-        special_ordered_sets_unused = special_ordered_sets[special_ordered_sets['value'] == 0.0]
-        si.disable_variables(special_ordered_sets_unused)
+        inter_vars = self._decision_variables['interconnectors']
+        inter_vars = inter_vars[inter_vars['interconnector'] != inter_vars['link']]
+        inter_vars_unused = inter_vars[inter_vars['value'] == 0.0]
+        si.disable_variables(inter_vars_unused)
 
     def _get_interconnector_loss_factors(self):
         interconnector_loss_factors = self.get_interconnector_flows()
         interconnector_loss_factors['loss_factor'] = (interconnector_loss_factors['losses'] /
-                                                     interconnector_loss_factors['flow']).abs()
+                                                     interconnector_loss_factors['flow'])
+        interconnector_loss_factors['loss_factor'] = np.where(interconnector_loss_factors['flow'].abs() <= 0.00001,
+                                                              0.0, interconnector_loss_factors['loss_factor'])
         return interconnector_loss_factors.loc[:, ['interconnector', 'link', 'loss_factor']]
 
     def _remove_interconnector_loss_constraint_components(self, si):
         si.remove_constraints(self._constraints_rhs_and_type['interpolation_weights'])
         si.remove_constraints(self._constraints_dynamic_rhs_and_type['link_loss_to_flow'])
         si.remove_variables(self._decision_variables['interpolation_weights'])
+
+    def _constraint_interconnectors_to_current_flow(self, si):
+        self._decision_variables['interconnectors']['upper_bound'] = self._decision_variables['interconnectors']['value']
+        self._decision_variables['interconnectors']['lower_bound'] = self._decision_variables['interconnectors']['value']
+        si.update_variable_bounds(self._decision_variables['interconnectors'])
 
     def _constrain_interconnectors_to_current_actual_losses(self, si):
         loss_factors = self._get_interconnector_loss_factors()

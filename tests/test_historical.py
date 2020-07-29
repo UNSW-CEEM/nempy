@@ -20,7 +20,7 @@ def get_test_intervals():
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
-    intervals = random.sample(range(1, difference_in_5_min_intervals), 1)
+    intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
@@ -293,8 +293,8 @@ def test_slack_in_generic_constraints():
         market.add_unit_bids_to_market()
         market.add_interconnectors_to_market()
         market.add_generic_constraints()
-        market.set_unit_dispatch_to_historical_values(wiggle_room=0.003)
-        market.set_interconnector_flow_to_historical_values()
+        market.set_unit_dispatch_to_historical_values(wiggle_room=0.0001)
+        market.set_interconnector_flow_to_historical_values(wiggle_room=0.0001)
         market.dispatch(calc_prices=False)
         assert market.is_generic_constraint_slack_correct()
 
@@ -380,14 +380,14 @@ def test_prices_full_featured():
         market.set_region_demand_constraints()
         market.set_ramp_rate_limits()
         market.set_fast_start_constraints()
-        market.market.set_tie_break_constraints(cost=1e-3)
+        #market.market.set_tie_break_constraints(cost=1e-3)
         market.dispatch(calc_prices=True)
         #avails = market.market.get_fcas_availability()
         #disp = market.get_dispatch_comparison().sort_values('diff')
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
-    outputs.to_csv('price_comp_latest.csv')
+    outputs.to_csv('price_comp_base_case.csv')
 
 
 def test_prices_full_featured_one_day_sequence():

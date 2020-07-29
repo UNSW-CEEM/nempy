@@ -678,11 +678,39 @@ class InterfaceToSolver:
         costs = {}
         for id in constraint_ids_to_price:
             costs[id] = self.mip_model.constr_by_name(str(id)).pi
+        # start_obj = self.mip_model.objective.x
+        # costs = {}
+        # for id in constraint_ids_to_price:
+        #     constraint = self.mip_model.constr_by_name(str(id))
+        #     constraint.rhs += 1e-6
+        #     self.mip_model.optimize()
+        #     marginal_cost = (self.mip_model.objective.x - start_obj) * 1e6
+        #     constraint.rhs -= 1e-6
+        #     costs[id] = marginal_cost
+        # self.mip_model.optimize()
+        return costs
+
+    def price_cons_2(self, constraint_ids_to_price):
+        start_obj = self.mip_model.objective.x
+        costs = {}
+        for id in constraint_ids_to_price:
+            constraint = self.mip_model.constr_by_name(str(id))
+            constraint.rhs += 1e-6
+            self.mip_model.optimize()
+            marginal_cost = (self.mip_model.objective.x - start_obj) * 1e6
+            constraint.rhs -= 1e-6
+            costs[id] = marginal_cost
+        self.mip_model.optimize()
         return costs
 
     def update_rhs(self, constraint_id, violation_degree):
         constraint = self.mip_model.constr_by_name(str(constraint_id))
         constraint.rhs += violation_degree
+
+    def update_variable_bounds(self, new_bounds):
+        for variable_id, lb, ub in zip(new_bounds['variable_id'], new_bounds['lower_bound'], new_bounds['upper_bound']):
+            self.mip_model.var_by_name(str(variable_id)).lb = lb
+            self.mip_model.var_by_name(str(variable_id)).ub = ub
 
     def disable_variables(self, variables):
         for var_id in variables['variable_id']:
