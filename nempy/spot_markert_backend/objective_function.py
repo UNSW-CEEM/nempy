@@ -8,43 +8,6 @@ def bids(variable_ids, price_bids, unit_info):
 
     This function defines the cost associated with each decision variable that represents a unit's energy bid. Costs are
     are with reference to the regional node.
-
-    Parameters
-    ----------
-    variable_ids : pd.DataFrame
-        Variable ids with unit and capacity band information so costs can be assigned to correct decision variables.
-
-        =============  ===============================================================
-        Columns:       Description:
-        unit           unique identifier of a dispatch unit (as `str`)
-        service   the service being provided, optional, if missing energy assumed
-                  (as `str`)
-        capacity_band  the bid band of the variable (as `str`)
-        variable_id    the id of the variable (as `int`)
-        =============  ===============================================================
-
-    price_bids : pd.DataFrame
-        Bids by unit, in $/MW, can contain up to n bid bands.
-
-        ========  ======================================================
-        Columns:  Description:
-        unit      unique identifier of a dispatch unit (as `str`)
-        1         bid price in the 1st band, in $/MW (as `float`)
-        2         bid price in the 2nd band, in $/MW (as `float`)
-        n         bid price in the nth band, in $/MW (as `float`)
-        ========  ======================================================
-
-    Returns
-    -------
-    pd.DataFrame
-
-        =============  ===============================================================
-        Columns:       Description:
-        unit           unique identifier of a dispatch unit (as `str`)
-        capacity_band  the bid band of the variable (as `str`)
-        variable_id    the id of the variable (as `int`)
-        cost           the bid cost of the variable (as `float`)
-        =============  ===============================================================
     """
     # If no service column is provided assume bids are for energy.
     if 'service' not in price_bids.columns:

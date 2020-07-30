@@ -433,3 +433,45 @@ def fast_start_mode_four_constraints(fast_start_profile):
     units_ending_in_mode_four['max'] = units_ending_in_mode_four['target']
     units_ending_in_mode_four = units_ending_in_mode_four.loc[:, ['unit', 'min', 'max']]
     return units_ending_in_mode_four
+
+
+def tie_break_constraints(price_bids, bid_decision_variables, unit_regions, next_constraint_id):
+    energy_price_bids = price_bids[price_bids['service'] == 'energy']
+    energy_price_bids = pd.merge(energy_price_bids,
+                                 bid_decision_variables.loc[:, ['variable_id', 'upper_bound']],
+                                 on='variable_id')
+    energy_price_bids = pd.merge(energy_price_bids, unit_regions.loc[:, ['unit', 'region']], on='unit')
+
+    constraints = pd.merge(energy_price_bids, energy_price_bids, on=['cost', 'region'])
+    constraints = constraints[constraints['unit_x'] != constraints['unit_y']]
+
+    def make_id(unit_x, band_x, unit_y, band_y):
+        name = sorted([unit_x, str(band_x), unit_y, str(band_y)])
+        name = ''.join(name)
+        return name
+
+    constraints['name'] = \
+        constraints.apply(lambda x: make_id(x['unit_x'], x['capacity_band_x'],
+                                            x['unit_y'], x['capacity_band_y']), axis=1)
+
+    constraints = constraints.drop_duplicates('name')
+
+    constraints = constraints.loc[:, ['variable_id_x', 'upper_bound_x', 'variable_id_y', 'upper_bound_y']]
+    constraints = hf.save_index(constraints, 'constraint_id', next_constraint_id)
+
+    lhs_one = constraints.loc[:, ['constraint_id', 'variable_id_x', 'upper_bound_x']]
+    lhs_one['variable_id'] = lhs_one['variable_id_x']
+    lhs_one['coefficient'] = 1 / lhs_one['upper_bound_x']
+
+    lhs_two = constraints.loc[:, ['constraint_id', 'variable_id_y', 'upper_bound_y']]
+    lhs_two['variable_id'] = lhs_two['variable_id_y']
+    lhs_two['coefficient'] = - 1 / lhs_two['upper_bound_y']
+
+    lhs = pd.concat([lhs_one.loc[:, ['constraint_id', 'variable_id', 'coefficient']],
+                     lhs_two.loc[:, ['constraint_id', 'variable_id', 'coefficient']]])
+
+    rhs = constraints.loc[:, ['constraint_id']]
+
+    rhs['type'] = '='
+    rhs['rhs'] = 0.0
+    return lhs, rhs
