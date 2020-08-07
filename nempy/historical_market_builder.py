@@ -51,7 +51,10 @@ class SpotMarket:
         self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
 
     def set_fast_start_constraints(self):
-        fast_start_profiles = self.unit_inputs.get_fast_start_profiles()
+        self.market.dispatch(price_market_constraints=False)
+        dispatch = self.market.get_unit_dispatch()
+        dispatch = dispatch[dispatch['service'] == 'energy']
+        fast_start_profiles = self.unit_inputs.get_fast_start_profiles(dispatch)
         fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
                                                           'mode_four_length', 'min_loading']]
         self.market.set_fast_start_constraints(fast_start_profiles)
@@ -101,13 +104,11 @@ class SpotMarket:
         self.market.make_constraints_elastic('joint_capacity', cost)
 
     def set_region_demand_constraints(self):
-        # Set regional demand.
-        # Demand on regional basis.
         DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
         regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
-        # regional_demand['demand'] = np.where(regional_demand['region'] == 'TAS1', regional_demand['demand'] + 1.0,
-        #                            regional_demand['demand'])
         self.market.set_demand_constraints(regional_demand.loc[:, ['region', 'demand']])
+        cost = self.unit_inputs.xml_inputs.get_constraint_violation_prices()['regional_demand']
+        self.market.make_constraints_elastic('demand', cost)
 
     def add_interconnectors_to_market(self):
         interconnector_inputs = self.inputs.get_interconnector_inputs(self.interval)
@@ -194,8 +195,8 @@ class SpotMarket:
 
         violation_cost = generic_type.loc[:, ['set', 'cost']]
 
-        pos_cons = generic_rhs[generic_rhs['rhs'] > 0.0]
-        fcas_requirements = pd.merge(region_generic_lhs, pos_cons, on='set')
+        #pos_cons = generic_rhs[generic_rhs['rhs'] > 0.0]
+        fcas_requirements = pd.merge(region_generic_lhs, generic_rhs, on='set')
         fcas_requirements = fcas_requirements.loc[:, ['set', 'service', 'region', 'type', 'rhs']]
         fcas_requirements.columns = ['set', 'service', 'region', 'type', 'volume']
         self.market.set_fcas_requirements_constraints(fcas_requirements)
@@ -408,7 +409,7 @@ class SpotMarket:
         comp = pd.merge(bounds, nempy_dispatch, 'inner', on=['unit', 'service'])
         comp['diff'] = comp['dispatch'] - comp['dispatched']
         comp = pd.merge(comp, self.market._unit_info.loc[:, ['unit', 'dispatch_type']], on='unit')
-        comp['diff'] = np.where(comp['dispatch_type'] == 'load', comp['diff'] * -1, comp['diff'])
+        comp['diff'] = np.where((comp['dispatch_type'] == 'load') & (comp['service'] == 'energy'), comp['diff'] * -1, comp['diff'])
         return comp
 
     def do_fcas_availabilities_match_historical(self):

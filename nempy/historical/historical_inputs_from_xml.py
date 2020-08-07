@@ -83,9 +83,18 @@ class XMLInputs:
         return datetime.strptime(self.interval, '%Y/%m/%d %H:%M:%S')
 
     def load_xml(self):
-        with open(self.get_file_path()) as file:
-            inputs = xmltodict.parse(file.read())
-        self.xml = inputs
+
+        # try:
+        #
+        #     with open(self.get_file_path()) as file:
+        #         inputs = xmltodict.parse(file.read())
+        #         self.xml = inputs
+        #
+        # except:
+        #
+        #     print("Bad {}".format(self.interval))
+
+        x=1
 
     def get_unit_initial_conditions_dataframe(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
@@ -221,7 +230,6 @@ class XMLInputs:
                         generic_constraint='@GenericConstraintPrice',
                         ramp_rate='@RampRatePrice',
                         unit_capacity='@CapacityPrice',
-                        #energy_constraint='@TotalEnergyConstrViolation',
                         energy_offer='@OfferPrice',
                         fcas_profile='@ASProfilePrice',
                         fcas_max_avail='@ASMaxAvailPrice',

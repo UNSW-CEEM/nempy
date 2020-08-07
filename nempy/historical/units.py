@@ -78,7 +78,7 @@ class HistoricalUnits:
         ramp_rates.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
         return ramp_rates
 
-    def get_fast_start_profiles(self):
+    def get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.xml_fast_start_profiles
         fast_start_profiles = fast_start_profiles.loc[:, ['DUID', 'MinLoadingMW', 'CurrentMode', 'CurrentModeTime',
                                                           'T1', 'T2', 'T3', 'T4']]
@@ -86,6 +86,11 @@ class HistoricalUnits:
             columns={'DUID': 'unit', 'MinLoadingMW': 'min_loading', 'CurrentMode': 'current_mode',
                      'CurrentModeTime': 'time_in_current_mode', 'T1': 'mode_one_length', 'T2': 'mode_two_length',
                      'T3': 'mode_three_length', 'T4': 'mode_four_length'})
+        if unconstrained_dispatch is not None:
+            fast_start_profiles = pd.merge(fast_start_profiles, unconstrained_dispatch, on='unit')
+            fast_start_profiles['current_mode'] = np.where((fast_start_profiles['current_mode'] == 0) &
+                                                           (fast_start_profiles['dispatch'] > 0.0), 1,
+                                                           fast_start_profiles['current_mode'])
         fast_start_profiles = fast_start_calc_end_interval_state(fast_start_profiles, self.dispatch_interval)
         return fast_start_profiles
 
@@ -167,8 +172,6 @@ class HistoricalUnits:
 
     def get_contingency_services(self):
         return self.fcas_trapeziums[~self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
-
-
 
 
 def format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
@@ -1349,7 +1352,9 @@ def fast_start_mode_two_targets(fast_start_profile):
 
 
 def fast_start_calc_end_interval_state(fast_start_profile, dispatch_interval):
-    fast_start_profile = fast_start_profile[fast_start_profile['current_mode'] != 0]
+    #fast_start_profile = fast_start_profile[fast_start_profile['current_mode'] != 0]
+    # fast_start_profile['current_mode'] = np.where(fast_start_profile['current_mode'] == 0, 1,
+    #                                               fast_start_profile['current_mode'])
     fast_start_profile['time_in_current_mode_at_end'] = fast_start_profile['time_in_current_mode'] + dispatch_interval
 
     def clac_mode_length(data):
@@ -1405,7 +1410,7 @@ def fast_start_calc_end_interval_state(fast_start_profile, dispatch_interval):
                                                              fast_start_profile['time_in_end_mode'],
                                                              fast_start_profile['time_after_mode_two'])
 
-    fast_start_profile['end_mode'] = np.where(fast_start_profile['end_mode'] == 5, 0, fast_start_profile['end_mode'])
+    #fast_start_profile['end_mode'] = np.where(fast_start_profile['end_mode'] == 5, 0, fast_start_profile['end_mode'])
     fast_start_profile['mode_two_length'] = fast_start_profile['mode_two_length'].astype(np.float64)
     fast_start_profile['mode_four_length'] = fast_start_profile['mode_four_length'].astype(np.float64)
     fast_start_profile['min_loading'] = fast_start_profile['min_loading'].astype(np.float64)

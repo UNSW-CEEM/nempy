@@ -398,7 +398,7 @@ def create_constraints(unit_limits, next_constraint_id, rhs_col, direction):
 
 
 def fast_start_mode_one_constraints(fast_start_profile):
-    units_ending_in_mode_one = fast_start_profile[(fast_start_profile['end_mode'] == 1)]
+    units_ending_in_mode_one = fast_start_profile[(fast_start_profile['end_mode'].isin([0, 1]))]
     units_ending_in_mode_one['max'] = 0.0
     units_ending_in_mode_one['min'] = 0.0
     units_ending_in_mode_one = units_ending_in_mode_one.loc[:, ['unit', 'min', 'max']]
