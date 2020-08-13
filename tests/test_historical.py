@@ -7,22 +7,24 @@ import pytest
 from nempy.historical import inputs
 from nempy import historical_market_builder
 
+from time import time
+
 
 # Define a set of random intervals to test
 def get_test_intervals():
-    start_time = datetime(year=2019, month=1, day=2, hour=0, minute=0)
-    end_time = datetime(year=2019, month=2, day=1, hour=0, minute=0)
+    start_time = datetime(year=2019, month=1, day=1, hour=0, minute=0)
+    end_time = datetime(year=2019, month=12, day=31, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(2)
-    intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
+    intervals = random.sample(range(1, difference_in_5_min_intervals), 1)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
 
 
 def test_setup():
-    running_for_first_time = True
+    running_for_first_time = False
 
     con = sqlite3.connect('test_files/historical_all.db')
     historical_inputs = inputs.HistoricalInputs(
@@ -30,8 +32,8 @@ def test_setup():
         nemde_xml_cache_folder='test_files/historical_xml_files')
 
     if running_for_first_time:
-        # historical_inputs.build_market_management_system_database(start_year=2018, start_month=12,
-        #                                                           end_year=2020, end_month=1)
+        historical_inputs.build_market_management_system_database(start_year=2018, start_month=12,
+                                                                  end_year=2020, end_month=1)
         historical_inputs.build_xml_inputs_cache(start_year=2019, start_month=1,
                                                  end_year=2019, end_month=12)
 
@@ -118,7 +120,7 @@ def test_fast_start_constraints():
 
 
 def test_capacity_constraints():
-    inputs_database = 'test_files/historical.db'
+    inputs_database = 'test_files/historical_all.db'
     con = sqlite3.connect(inputs_database)
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
@@ -137,8 +139,8 @@ def test_capacity_constraints():
 
 
 def test_fcas_trapezium_scaled_availability():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
+    inputs_database = 'test_files/historical_all.db'
+    con = sqlite3.connect('test_files/historical_all.db')
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
@@ -163,8 +165,8 @@ def test_fcas_trapezium_scaled_availability():
 
 
 def test_all_units_and_service_dispatch_historically_present_in_market():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
+    inputs_database = 'test_files/historical_all.db'
+    con = sqlite3.connect('test_files/historical_all.db')
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
@@ -195,8 +197,8 @@ def test_slack_in_generic_constraints():
 
 
 def test_slack_in_generic_constraints_use_fcas_requirements_interface():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
+    inputs_database = 'test_files/historical_all.db'
+    con = sqlite3.connect('test_files/historical_all.db')
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
@@ -217,8 +219,8 @@ def test_slack_in_generic_constraints_use_fcas_requirements_interface():
 
 
 def test_slack_in_generic_constraints_with_all_features():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
+    inputs_database = 'test_files/historical_all.db'
+    con = sqlite3.connect('test_files/historical_all.db')
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
@@ -241,8 +243,8 @@ def test_slack_in_generic_constraints_with_all_features():
 
 
 def test_hist_dispatch_values_meet_demand():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
+    inputs_database = 'test_files/historical_all.db'
+    con = sqlite3.connect('test_files/historical_all.db')
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
@@ -261,12 +263,15 @@ def test_hist_dispatch_values_meet_demand():
 
 
 def test_prices_full_featured():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect('test_files/historical.db')
+    inputs_database = 'test_files/historical_all.db'
+    con = sqlite3.connect(inputs_database)
     historical_inputs = inputs.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     outputs = []
+    t0 = time()
+    t_dispatch = 0
+    t_dispatch_fast_start = 0
     for interval in get_test_intervals():
         print(interval)
         market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
@@ -278,10 +283,17 @@ def test_prices_full_featured():
         market.set_unit_limit_constraints()
         market.set_region_demand_constraints()
         market.set_ramp_rate_limits()
+        tb = time()
         market.set_fast_start_constraints()
+        t_dispatch_fast_start += time() - tb
+        ta = time()
         market.dispatch(calc_prices=True)
+        t_dispatch += time() - ta
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
+    print('Total average of ten runs {}'.format((time()-t0)))
+    print('Dispatching fast start average of ten runs {}'.format((t_dispatch_fast_start)))
+    print('Dispatching average of ten runs {}'.format((t_dispatch)))
     outputs = pd.concat(outputs)
-    outputs.to_csv('base_case_fast_start_commitment_2.csv')
+    outputs.to_csv('runtime_test.csv')
     #assert outputs['error'].abs().mean() <= pytest.approx(0.2, abs=0.01)

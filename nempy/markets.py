@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from time import time
 from nempy.help_functions import helper_functions as hf
 from nempy.spot_markert_backend import elastic_constraints, fcas_constraints, interconnectors as inter, \
     market_constraints, objective_function, solver_interface, unit_constraints, variable_ids, check, \
@@ -2650,24 +2651,27 @@ class SpotMarket:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
+        t00 = time()
         if allow_over_constrained_dispatch_re_run:
             if (energy_market_ceiling_price is None or energy_market_floor_price is None or
                     fcas_market_ceiling_price is None):
                 raise ValueError("""If allow_over_constrained_dispatch_re_run is set to True then values must \n 
                                     be provided for energy_market_ceiling_price, energy_market_floor_price, and \n
                                     fcas_market_ceiling_price.""")
-
+        t0 = time()
         # Create a data frame containing all fully defined components of the constraint matrix lhs. If there are none
         # then just create a place holder empty pd.DataFrame.
         if len(self._lhs_coefficients.values()) > 0:
             constraints_lhs = pd.concat(list(self._lhs_coefficients.values()))
         else:
             constraints_lhs = pd.DataFrame()
-
+        print('lhs 1 {}'.format(time() - t0))
+        t0 = time()
         # Get a pd.DataFrame mapping the generic constraint sets to their constraint ids.
         generic_constraint_ids = solver_interface.create_mapping_of_generic_constraint_sets_to_constraint_ids(
             self._constraints_rhs_and_type, self._market_constraints_rhs_and_type)
-
+        print('generic con ids {}'.format(time() - t0))
+        t0 = time()
         # If there are any generic constraints create their lhs definitions.
         if generic_constraint_ids is not None:
             generic_lhs = []
@@ -2699,7 +2703,8 @@ class SpotMarket:
                 generic_lhs.append(interconnector_lhs)
             # Add the generic lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs] + generic_lhs)
-
+        print('generic lhs {}'.format(time() - t0))
+        t0 = time()
         # If there are constraints that have been defined on a regional basis then create the constraints lhs
         # definition by mapping to all the variables that have been defined for the corresponding region and service.
         if len(self._constraint_to_variable_map['regional']) > 0:
@@ -2709,7 +2714,8 @@ class SpotMarket:
                                                                    ['region', 'service'])
             # Add the lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs, regional_constraints_lhs])
-
+        print('regional lhs {}'.format(time() - t0))
+        t0 = time()
         # If there are constraints that have been defined on a unit basis then create the constraints lhs
         # definition by mapping to all the variables that have been defined for the corresponding unit and service.
         if len(self._constraint_to_variable_map['unit_level']) > 0:
@@ -2718,23 +2724,28 @@ class SpotMarket:
             unit_constraints_lhs = solver_interface.create_lhs(constraints, decision_variables, ['unit', 'service'])
             # Add the lhs definitions the cumulative lhs pd.DataFrame.
             constraints_lhs = pd.concat([constraints_lhs, unit_constraints_lhs])
+        print('unit lhs {}'.format(time() - t0))
 
         # Create the interface to the solver.
+        t0 = time()
         si = solver_interface.InterfaceToSolver()
-
+        print('load interface {}'.format(time() - t0))
+        t0 = time()
         if self._decision_variables:
             # Combine dictionary of pd.DataFrames into a single pd.DataFrame for processing by the interface.
             variable_definitions = pd.concat(self._decision_variables)
             si.add_variables(variable_definitions)
         else:
             raise check.ModelBuildError('The market could not be dispatch because no variables have been created')
-
+        print('decision vars {}'.format(time() - t0))
+        t0 = time()
         # If Costs have been defined for bids or constraints then add an objective function.
         if self._objective_function_components:
             # Combine components of objective function into a single pd.DataFrame
             objective_function_definition = pd.concat(self._objective_function_components)
             si.add_objective_function(objective_function_definition)
-
+        print('obj {}'.format(time() - t0))
+        t0 = time()
         # Collect all constraint rhs and type definitions into a single pd.DataFrame.
         constraints_rhs_and_type = []
         if self._constraints_rhs_and_type:
@@ -2747,18 +2758,23 @@ class SpotMarket:
             constraints_dynamic_rhs_and_type['rhs'] = constraints_dynamic_rhs_and_type. \
                 apply(lambda x: si.variables[x['rhs_variable_id']], axis=1)
             constraints_rhs_and_type.append(constraints_dynamic_rhs_and_type)
+        print('collect cons {}'.format(time() - t0))
+        t0 = time()
         if len(constraints_rhs_and_type) > 0:
             constraints_rhs_and_type = pd.concat(constraints_rhs_and_type)
             si.add_constraints(constraints_lhs, constraints_rhs_and_type)
-
+        print('Time to add constraints {}'.format(time() - t0))
+        t0 = time()
         model_with_no_sos = si.copy()
-
+        print('copy model {}'.format(time() - t0))
+        t0 = time()
         # If interconnectors with losses are being used, create special ordered sets for modelling losses.
         if 'interpolation_weights' in self._decision_variables:
             special_ordered_sets = self._decision_variables['interpolation_weights']
             si.add_sos_type_2(special_ordered_sets, sos_id_columns=['interconnector', 'link'],
                               position_column='loss_segment')
-
+        print('sos 2 {}'.format(time() - t0))
+        t0 = time()
         if 'interconnectors' in self._decision_variables:
             special_ordered_sets = self._decision_variables['interconnectors']
             special_ordered_sets = special_ordered_sets[
@@ -2766,9 +2782,13 @@ class SpotMarket:
             if not special_ordered_sets.empty:
                 special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
                 si.add_sos_type_1(special_ordered_sets)
+        print('sos 1 {}'.format(time() - t0))
 
+        t0 = time()
         si.optimize()
+        t1 = time() - t0
 
+        t0 = time()
         # Find the slack in constraints.
         if self._constraints_rhs_and_type:
             for constraint_group in self._constraints_rhs_and_type:
@@ -2787,14 +2807,21 @@ class SpotMarket:
         for var_group in self._decision_variables:
             self._decision_variables[var_group]['value'] = \
                 si.get_optimal_values_of_decision_variables(self._decision_variables[var_group])
-
+        print('get results out {}'.format(time() - t0))
         # Models with interconnectors use binary variables, the model needs to be linearised to allow for shadow prices
         # to be accessed and used to price constraints.
         if 'interconnector_losses' in self._decision_variables:
+            ta = time()
             linear_model = self._get_linear_model(model_with_no_sos)
+            print('get linear model {}'.format(time() - ta))
+            t0 = time()
             linear_model.optimize()
+            t2 = time() - t0
             si = linear_model
 
+        print('Time to optimize 1 {}'.format(t1))
+        print('Time to optimize 2 {}'.format(t2))
+        t0 = time()
         # If there are market constraints then calculate their associated prices.
         if self._market_constraints_rhs_and_type and price_market_constraints:
             for constraint_group in self._market_constraints_rhs_and_type:
@@ -2849,6 +2876,8 @@ class SpotMarket:
                         prices = si.price_constraints(constraints_to_price)
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
+        print('rest {}'.format(time() - t0))
+        print('inside {}'.format(time() - t00))
 
     def _get_linear_model(self, si):
         self._remove_unused_interpolation_weights(si)
@@ -2873,8 +2902,9 @@ class SpotMarket:
             return df
 
         vars_to_remove = vars.groupby(['interconnector', 'link'], as_index=False).apply(not_closest_three)
-
+        t0 = time()
         si.remove_variables(vars_to_remove.loc[:, ['variable_id']])
+        print('remove weights {}'.format(time() - t0))
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.

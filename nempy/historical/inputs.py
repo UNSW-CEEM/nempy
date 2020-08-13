@@ -69,7 +69,8 @@ class HistoricalInputs:
         return units.HistoricalUnits(self.mms_db, self.nemde_xml_cache_folder, interval)
 
     def get_interconnector_inputs(self, interval):
-        return historical_interconnectors.HistoricalInterconnectors(self.mms_db, interval)
+        xml_inputs = historical_inputs_from_xml.XMLInputs(self.nemde_xml_cache_folder, interval)
+        return historical_interconnectors.HistoricalInterconnectors(self.mms_db, xml_inputs, interval)
 
     def find_intervals_with_violations(self, limit, start_year, start_month, end_year, end_month):
         start = datetime(year=start_year, month=start_month, day=1)

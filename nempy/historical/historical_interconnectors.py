@@ -52,9 +52,10 @@ class HistoricalInterconnectors:
     inputs_manager : historical_spot_market_inputs.DBManager
     interval : str
     """
-    def __init__(self, inputs_manager, interval):
+    def __init__(self, inputs_manager, xml_inputs, interval):
         self.inputs_manager = inputs_manager
         self.interval = interval
+        self.xml_inputs = xml_inputs
         self.INTERCONNECTORCONSTRAINT = self.inputs_manager.INTERCONNECTORCONSTRAINT.get_data(self.interval)
         self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'] = \
             np.where(self.INTERCONNECTORCONSTRAINT['INTERCONNECTORID'] == 'T-V-MNSP1', 1.0,
@@ -238,14 +239,15 @@ class HistoricalInterconnectors:
         self.splitting_used = True
 
     def get_market_interconnector_links(self):
-
+        mnsp_bids = self.xml_inputs.get_bass_link_bid_availability()
         MNSP_INTERCONNECTOR = self.inputs_manager.MNSP_INTERCONNECTOR.get_data(self.interval)
         mnsp_transmission_loss_factors = format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
                                                                                self.INTERCONNECTORCONSTRAINT)
-        mnsp_transmission_loss_factors['max'] = \
-            np.where(mnsp_transmission_loss_factors['link'] == 'BLNKTAS', 478.0,
-                     mnsp_transmission_loss_factors['max'])
-        return mnsp_transmission_loss_factors
+        mnsp_transmission_loss_factors = pd.merge(mnsp_transmission_loss_factors, mnsp_bids, on=['interconnector', 'to_region'])
+        mnsp_transmission_loss_factors['max'] = np.where(~mnsp_transmission_loss_factors['availability'].isna(),
+                                                         mnsp_transmission_loss_factors['availability'],
+                                                         mnsp_transmission_loss_factors['max'])
+        return mnsp_transmission_loss_factors.drop(columns=['availability'])
 
 
 

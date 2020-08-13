@@ -1,13 +1,16 @@
 import numpy as np
 import pandas as pd
-from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY
-
+from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, CBC, GUROBI
+from time import time
 
 class InterfaceToSolver:
     """A wrapper for the mip model class, allows interaction with mip using pd.DataFrames."""
     def __init__(self):
         self.variables = {}
-        self.mip_model = Model("market")
+        from time import time
+        t0 = time()
+        self.mip_model = Model("market", solver_name=GUROBI)
+        print('load mip model {}'.format(time() - t0))
         self.mip_model.verbose = 0
         self.dummy_binary_1 = None
         self.dummy_binary_2 = None
@@ -54,10 +57,18 @@ class InterfaceToSolver:
         >>> print(si_copy.mip_model.var_by_name('1').ub)
         1.0
         """
+        from time import time
+        t00 = time()
+        t0 = time()
         model_copy = InterfaceToSolver()
         model_copy.mip_model = self.mip_model.copy()
+        print('mip copy {}'.format(time() - t0))
+        model_copy.mip_model.verbose = 0
+        t0 = time()
         for var in model_copy.mip_model.vars:
             model_copy.variables[int(var.name)] = var
+        print('var copy {}'.format(time() - t0))
+        print('inside model copy {}'.format(time() - t00))
         return model_copy
 
     def add_variables(self, decision_variables):
@@ -180,7 +191,8 @@ class InterfaceToSolver:
         -------
 
         """
-        variables_to_remove['variable_id'].apply(lambda x: self.mip_model.remove(self.variables[x]))
+        vars = [self.variables[var_id] for var_id in variables_to_remove['variable_id']]
+        self.mip_model.remove(vars)
 
     def add_sos_type_2(self, sos_variables, sos_id_columns, position_column):
         """Add groups of special ordered sets of type 2 two the mip model.
@@ -350,10 +362,117 @@ class InterfaceToSolver:
         -------
 
         """
+        t0 = time()
+        constraints_lhs = constraints_lhs.groupby(['constraint_id', 'variable_id'], as_index=False).agg({'coefficient': 'sum'})
+        rows = constraints_lhs.groupby(['constraint_id'], as_index=False)
 
+        print('time make matrix {}'.format(time() - t0))
+        t0 = time()
+        # Make a dictionary so constraint rhs values can be accessed using the constraint id.
+        rhs = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['rhs']))
+        # Make a dictionary so constraint type can be accessed using the constraint id.
+        enq_type = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['type']))
+        print('time make dicts {}'.format(time() - t0))
+        t0 = time()
+        var_ids = constraints_lhs['variable_id'].to_numpy()
+        vars = np.asarray([self.variables[k] if k in self.variables.keys() else None for k in range(0, max(var_ids)+1)])
+        coefficients = constraints_lhs['coefficient'].to_numpy()
+        print('time make arrays {}'.format(time() - t0))
+        t0 = time()
+        ta = 0
+        for row_id, row in rows.indices.items():
+            # Use the variable_ids to get mip variable objects present in the constraints
+            lhs_variables = vars[var_ids[row]]
+            # Use the positions of the non nan values to the lhs coefficients.
+            lhs = coefficients[row]
+
+            # Multiply and the variables by their coefficients and sum to create the lhs of the constraint.
+            tb = time()
+            exp = lhs_variables * lhs
+            exp = exp.tolist()
+            exp = xsum(exp)
+            ta += time() - tb
+            # Add based on inequality type.
+            if enq_type[row_id] == '<=':
+                new_constraint = exp <= rhs[row_id]
+            elif enq_type[row_id] == '>=':
+                new_constraint = exp >= rhs[row_id]
+            elif enq_type[row_id] == '=':
+                new_constraint = exp == rhs[row_id]
+            else:
+                raise ValueError("Constraint type not recognised should be one of '<=', '>=' or '='.")
+            self.mip_model.add_constr(new_constraint, name=str(row_id))
+        print('time to_numpy {}'.format(ta))
+        print('time in con adding loop {}'.format(time()-t0))
+
+
+    def add_constraints_2(self, constraints_lhs, constraints_type_and_rhs):
+        """Add constraints to the mip model.
+
+        Examples
+        --------
+        >>> decision_variables = pd.DataFrame({
+        ...   'variable_id': [0, 1, 2, 3, 4, 5],
+        ...   'lower_bound': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        ...   'upper_bound': [5.0, 5.0, 10.0, 10.0, 5.0, 5.0],
+        ...   'type': ['continuous', 'continuous', 'continuous',
+        ...            'continuous', 'continuous', 'continuous']})
+
+        >>> constraints_lhs = pd.DataFrame({
+        ...   'constraint_id': [1, 1, 2, 2],
+        ...   'variable_id': [0, 1, 3, 4],
+        ...   'coefficient': [1.0, 0.5, 1.0, 2.0]})
+
+        >>> constraints_type_and_rhs = pd.DataFrame({
+        ...   'constraint_id': [1, 2],
+        ...   'type': ['<=', '='],
+        ...   'rhs': [10.0, 20.0]})
+
+        >>> si = InterfaceToSolver()
+
+        >>> si.add_variables(decision_variables)
+
+        >>> si.add_constraints(constraints_lhs, constraints_type_and_rhs)
+
+        >>> print(si.mip_model.constr_by_name('1'))
+        1: +1.0 0 +0.5 1 <= 10.0
+
+        >>> print(si.mip_model.constr_by_name('2'))
+        2: +1.0 3 +2.0 4 = 20.0
+
+
+        Parameters
+        ----------
+        constraints_lhs : pd.DataFrame
+
+            =============  ===============================================================
+            Columns:       Description:
+            variable_id    the unique identifier of the variable (as `np.int64`)
+            constraint_id  the unique identifier of the constraint (as `np.int64`)
+            coefficient    the coefficient of the variable in constraint (as `np.float64`)
+            =============  ===============================================================
+
+        constraints_type_and_rhs : pd.DataFrame
+
+            =============  ===============================================================
+            Columns:       Description:
+            constraint_id  the unique identifier of the constraint (as `np.int64`)
+            type           the direction of the constraint, can be '>=' '<=' or '='
+                           (as 'str')
+            rhs            the value on the right hand side of the constraint
+                           (can be `np.int64` or a mip variable object)
+            =============  ===============================================================
+
+        Returns
+        -------
+
+        """
+        t0 = time()
         # Transform the pd.DataFrame so each coefficient for a particular constraint is on an individual row.
         constraint_matrix = pd.pivot_table(constraints_lhs, 'coefficient', 'constraint_id', 'variable_id',
                                            aggfunc='sum')
+        print('time pivot {}'.format(time() - t0))
+        t0 = time()
         # Make sure columns and rows are ordered by name.
         constraint_matrix = constraint_matrix.sort_index(axis=1)
         constraint_matrix = constraint_matrix.sort_index()
@@ -362,15 +481,18 @@ class InterfaceToSolver:
         row_ids = np.asarray(constraint_matrix.index)
         # Convert the constrain matrix to an np.array, makes adding the constraints to model much faster.
         constraint_matrix_np = np.asarray(constraint_matrix)
-
+        print('time make matrix {}'.format(time() - t0))
+        t0 = time()
         # Make a dictionary so constraint rhs values can be accessed using the constraint id.
         rhs = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['rhs']))
         # Make a dictionary so constraint type can be accessed using the constraint id.
         enq_type = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['type']))
+        print('time make dicts {}'.format(time() - t0))
+        t0 = time()
         for row, id in zip(constraint_matrix_np, row_ids):
             # Get the position of all non nan (i.e non zero) values in the constraint row.
             columns_in_constraint = np.argwhere(~np.isnan(row)).flatten()
-            # Use the positions to get the is of non nan values in the constraint row.
+            # Use the positions to get the ids of non nan values in the constraint row.
             column_ids_in_constraint = column_ids[columns_in_constraint]
             # Use the variable_ids to get mip variable objects present in the constraint.
             lhs_variables = np.asarray([self.variables[k] for k in column_ids_in_constraint])
@@ -390,6 +512,7 @@ class InterfaceToSolver:
             else:
                 raise ValueError("Constraint type not recognised should be one of '<=', '>=' or '='.")
             self.mip_model.add_constr(new_constraint, name=str(id))
+        print('time in con adding loop {}'.format(time()-t0))
 
     def remove_constraints(self, constraints_to_remove):
         """Remove constraints from the mip model.

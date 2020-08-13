@@ -19,7 +19,11 @@ class XMLInputs:
             self.download_xml_from_nemweb()
             if not self.interval_inputs_in_cache():
                 raise ValueError('File not downloaded.')
-        self.load_xml()
+        try:
+            self.load_xml()
+        except:
+            self.download_xml_from_nemweb()
+            self.load_xml()
 
     def interval_inputs_in_cache(self):
         return os.path.exists(self.get_file_path())
@@ -83,18 +87,9 @@ class XMLInputs:
         return datetime.strptime(self.interval, '%Y/%m/%d %H:%M:%S')
 
     def load_xml(self):
-
-        # try:
-        #
-        #     with open(self.get_file_path()) as file:
-        #         inputs = xmltodict.parse(file.read())
-        #         self.xml = inputs
-        #
-        # except:
-        #
-        #     print("Bad {}".format(self.interval))
-
-        x=1
+        with open(self.get_file_path()) as file:
+            inputs = xmltodict.parse(file.read())
+            self.xml = inputs
 
     def get_unit_initial_conditions_dataframe(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
@@ -474,7 +469,16 @@ class XMLInputs:
         -------
 
         """
-        bass_link_bids = self.xml['NEMSPDCaseFile']['NemSpdInputs']['InterconnectorPeriodCollection']['']
+        inters = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection']['InterconnectorPeriod']
+        bid_availability = dict(interconnector=[], to_region=[], availability=[])
+        for inter in inters:
+            if inter['@MNSP'] == '1':
+                for offer in inter['MNSPOfferCollection']['MNSPOffer']:
+                    bid_availability['interconnector'].append(inter['@InterconnectorID'])
+                    bid_availability['to_region'].append(offer['@RegionID'])
+                    bid_availability['availability'].append(float(offer['@MaxAvail']))
+        bid_availability = pd.DataFrame(bid_availability)
+        return bid_availability
 
 
 
