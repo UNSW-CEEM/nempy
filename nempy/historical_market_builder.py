@@ -6,7 +6,9 @@ import numpy as np
 from nempy import markets
 from nempy.spot_markert_backend import check
 from nempy.help_functions import helper_functions as hf
-from nempy.historical import historical_spot_market_inputs as hi, historical_interconnector_loss_models as hii
+from nempy.historical import historical_spot_market_inputs as hi, historical_interconnector_loss_models as hii, \
+    historical_inputs_from_xml
+from time import time
 
 
 class SpotMarket:
@@ -21,12 +23,16 @@ class SpotMarket:
                                      'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
                                      'ENERGY': 'energy'}
+        t0 = time()
         self.unit_inputs = self.inputs.get_unit_inputs(self.interval)
+        print('unit inputs {}'.format((time() - t0)))
         unit_info = self.unit_inputs.get_unit_info()
         self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
 
     def add_unit_bids_to_market(self):
+        t0 = time()
         volume_bids, price_bids = self.unit_inputs.get_processed_bids()
+        print('get unit inputs {}'.format((time() - t0)))
         self.market.set_unit_volume_bids(volume_bids)
         self.market.set_unit_price_bids(price_bids)
 

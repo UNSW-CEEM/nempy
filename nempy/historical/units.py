@@ -1,13 +1,16 @@
 import pandas as pd
 import numpy as np
+from time import time
 
 from nempy.historical import historical_inputs_from_xml as hist_xml
 
 
 class HistoricalUnits:
-    def __init__(self, mms_database, xml_inputs_cache, interval):
+    def __init__(self, mms_database, xml_inputs, interval):
         self.mms_database = mms_database
-        self.xml_inputs = hist_xml.XMLInputs(cache_folder=xml_inputs_cache, interval=interval)
+        t0 = time()
+        self.xml_inputs = xml_inputs
+        print('load xml {}'.format((time() - t0)))
         self.interval = interval
 
         self.dispatch_interval = 5  # minutes
@@ -17,10 +20,12 @@ class HistoricalUnits:
                                      'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min', 'LOWER6SEC': 'lower_6s',
                                      'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
 
+        t0 = time()
         self.xml_volume_bids = self.xml_inputs.get_unit_volume_bids()
         self.xml_fast_start_profiles = self.xml_inputs.get_unit_fast_start_parameters()
         self.xml_initial_conditions = self.xml_inputs.get_unit_initial_conditions_dataframe()
         self.xml_ugif_values = self.xml_inputs.get_UGIF_values()
+        print('initial xml queries {}'.format((time() - t0)))
 
         self.BIDDAYOFFER_D = self.mms_database.BIDDAYOFFER_D.get_data(self.interval)
         self.DUDETAILSUMMARY = self.mms_database.DUDETAILSUMMARY.get_data(self.interval)
@@ -107,19 +112,23 @@ class HistoricalUnits:
         return pd.concat([bid_availability, ugif_availability])
 
     def get_processed_bids(self):
+        t0 = time()
         ugif_values = self.xml_inputs.get_UGIF_values()
-        BIDDAYOFFER_D = self.mms_database.BIDDAYOFFER_D.get_data(self.interval)
         BIDPEROFFER_D = self.xml_volume_bids.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
         initial_conditions = self.xml_initial_conditions
+        print('unit inputs xml {}'.format((time() - t0)))
+
+        BIDDAYOFFER_D = self.mms_database.BIDDAYOFFER_D.get_data(self.interval)
         unit_info = self.get_unit_info()
         unit_availability = self.get_unit_availability()
-
+        t0 = time()
         DISPATCHLOAD = self.mms_database.DISPATCHLOAD.get_data(self.interval)
         BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
         BIDPEROFFER_D = scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
         BIDPEROFFER_D = scaling_for_uigf(BIDPEROFFER_D, ugif_values)
         self.BIDPEROFFER_D, BIDDAYOFFER_D = enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, initial_conditions, unit_availability)
+        print('unit inputs processing {}'.format((time() - t0)))
 
         volume_bids = format_volume_bids(self.BIDPEROFFER_D, self.service_name_mapping)
         price_bids = format_price_bids(BIDDAYOFFER_D, self.service_name_mapping)

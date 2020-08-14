@@ -9,6 +9,10 @@ class HistoricalInputs:
         self.nemde_xml_cache_folder = nemde_xml_cache_folder
         self.mms_db = \
             historical_spot_market_inputs.DBManager(connection=market_management_system_database_connection)
+        self.xml_inputs = None
+
+    def load_interval(self, interval):
+        self.xml_inputs = historical_inputs_from_xml.XMLInputs(self.nemde_xml_cache_folder, interval)
 
     def build_market_management_system_database(self, start_year, start_month, end_year, end_month):
         self.mms_db.create_tables()
@@ -66,11 +70,10 @@ class HistoricalInputs:
             download_date += timedelta(days=1)
 
     def get_unit_inputs(self, interval):
-        return units.HistoricalUnits(self.mms_db, self.nemde_xml_cache_folder, interval)
+        return units.HistoricalUnits(self.mms_db, self.xml_inputs, interval)
 
     def get_interconnector_inputs(self, interval):
-        xml_inputs = historical_inputs_from_xml.XMLInputs(self.nemde_xml_cache_folder, interval)
-        return historical_interconnectors.HistoricalInterconnectors(self.mms_db, xml_inputs, interval)
+        return historical_interconnectors.HistoricalInterconnectors(self.mms_db, self.xml_inputs, interval)
 
     def find_intervals_with_violations(self, limit, start_year, start_month, end_year, end_month):
         start = datetime(year=start_year, month=start_month, day=1)

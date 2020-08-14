@@ -8,6 +8,8 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta, time
 
+from time import time as timer
+
 
 class XMLInputs:
     def __init__(self, cache_folder, interval):
@@ -19,11 +21,9 @@ class XMLInputs:
             self.download_xml_from_nemweb()
             if not self.interval_inputs_in_cache():
                 raise ValueError('File not downloaded.')
-        try:
-            self.load_xml()
-        except:
-            self.download_xml_from_nemweb()
-            self.load_xml()
+        t0 = timer()
+        self.load_xml()
+        print('load_xml {}'.format((timer() - t0)))
 
     def interval_inputs_in_cache(self):
         return os.path.exists(self.get_file_path())
@@ -88,7 +88,12 @@ class XMLInputs:
 
     def load_xml(self):
         with open(self.get_file_path()) as file:
-            inputs = xmltodict.parse(file.read())
+            t0 = timer()
+            read = file.read()
+            print('read {}'.format((timer() - t0)))
+            t0 = timer()
+            inputs = xmltodict.parse(read)
+            print('parse {}'.format((timer() - t0)))
             self.xml = inputs
 
     def get_unit_initial_conditions_dataframe(self):

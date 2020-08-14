@@ -2765,7 +2765,7 @@ class SpotMarket:
             si.add_constraints(constraints_lhs, constraints_rhs_and_type)
         print('Time to add constraints {}'.format(time() - t0))
         t0 = time()
-        model_with_no_sos = si.copy()
+        #model_with_no_sos = si.copy()
         print('copy model {}'.format(time() - t0))
         t0 = time()
         # If interconnectors with losses are being used, create special ordered sets for modelling losses.
@@ -2812,15 +2812,19 @@ class SpotMarket:
         # to be accessed and used to price constraints.
         if 'interconnector_losses' in self._decision_variables:
             ta = time()
-            linear_model = self._get_linear_model(model_with_no_sos)
+            linear_model = self._get_linear_model(si)
             print('get linear model {}'.format(time() - ta))
             t0 = time()
-            linear_model.optimize()
+            linear_model.linear_mip_model.optimize()
             t2 = time() - t0
             si = linear_model
+            print('Time to optimize 2 {}'.format(t2))
+
+        for var_group in self._decision_variables:
+            self._decision_variables[var_group]['value_lin'] = \
+                si.get_optimal_values_of_decision_variables_lin(self._decision_variables[var_group])
 
         print('Time to optimize 1 {}'.format(t1))
-        print('Time to optimize 2 {}'.format(t2))
         t0 = time()
         # If there are market constraints then calculate their associated prices.
         if self._market_constraints_rhs_and_type and price_market_constraints:
@@ -2867,7 +2871,7 @@ class SpotMarket:
                 variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.0001) * \
                                                  variables_and_cons['coefficient'] * -1
                 variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
-                si.optimize()
+                si.linear_mip_model.optimize()
                 # If there are market constraints then calculate their associated prices.
                 if self._market_constraints_rhs_and_type and price_market_constraints:
                     for constraint_group in self._market_constraints_rhs_and_type:
@@ -2903,7 +2907,7 @@ class SpotMarket:
 
         vars_to_remove = vars.groupby(['interconnector', 'link'], as_index=False).apply(not_closest_three)
         t0 = time()
-        si.remove_variables(vars_to_remove.loc[:, ['variable_id']])
+        si.disable_variables(vars_to_remove.loc[:, ['variable_id']])
         print('remove weights {}'.format(time() - t0))
 
     def get_unit_dispatch(self):
