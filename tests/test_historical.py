@@ -291,34 +291,8 @@ def test_against_10_interval_benchmark():
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
+    outputs.to_csv('latest_10_interval_run.csv', index=False)
     benchmark = pd.read_csv('10_interval_benchmark.csv')
-    assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_less_precise=3)
-
-
-def test_against_10_interval_benchmark():
-    inputs_database = 'test_files/historical_all.db'
-    con = sqlite3.connect(inputs_database)
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
-    outputs = []
-    for interval in get_test_intervals(number=10):
-        historical_inputs.load_interval(interval)
-        market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                      interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.add_generic_constraints_fcas_requirements()
-        market.set_unit_fcas_constraints()
-        market.set_unit_limit_constraints()
-        market.set_region_demand_constraints()
-        market.set_ramp_rate_limits()
-        market.set_fast_start_constraints()
-        market.dispatch(calc_prices=True)
-        price_comp = market.get_price_comparison()
-        outputs.append(price_comp)
-    outputs = pd.concat(outputs)
-    benchmark = pd.read_csv('100_interval_benchmark.csv')
     assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_less_precise=3)
 
 
@@ -345,6 +319,7 @@ def test_against_100_interval_benchmark():
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
+    outputs.to_csv('latest_100_interval_run.csv', index=False)
     benchmark = pd.read_csv('100_interval_benchmark.csv')
     assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_less_precise=3)
 
@@ -356,7 +331,7 @@ def test_against_1000_interval_benchmark():
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     outputs = []
-    for interval in ['2019/07/01 05:00:00']:
+    for interval in get_test_intervals(number=1000):
         historical_inputs.load_interval(interval)
         market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
                                                       interval=interval)
@@ -372,7 +347,6 @@ def test_against_1000_interval_benchmark():
         price_comp = market.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
-    #outputs.to_csv('latest_1000_interval_run.csv', index=False)
-    #outputs = pd.read_csv('latest_1000_interval_run.csv')
+    outputs.to_csv('latest_1000_interval_run.csv', index=False)
     benchmark = pd.read_csv('1000_interval_benchmark.csv')
     assert_frame_equal(outputs.reset_index(drop=True), benchmark.reset_index(drop=True), check_less_precise=3)

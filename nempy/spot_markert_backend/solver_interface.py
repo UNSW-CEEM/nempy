@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, CBC, GUROBI
+from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, CBC, GUROBI, LP_Method
 from time import time
 
 
@@ -12,13 +12,17 @@ class InterfaceToSolver:
         self.linear_mip_variables = {}
         from time import time
         t0 = time()
-        self.mip_model = Model("market", solver_name=CBC)
-        self.linear_mip_model = Model("market", solver_name=CBC)
+        self.mip_model = Model("market", solver_name=GUROBI)
+        self.linear_mip_model = Model("market", solver_name=GUROBI)
         print('load mip model {}'.format(time() - t0))
         self.mip_model.verbose = 0
-        self.mip_model.min_max_gap_abs = 1e-13
-        self.mip_model.min_max_gap = 1e-22
+        self.mip_model.solver.set_mip_gap_abs(1e-10)
+        self.mip_model.solver.set_mip_gap(1e-20)
+        self.mip_model.lp_method = LP_Method.DUAL
         self.linear_mip_model.verbose = 0
+        self.linear_mip_model.solver.set_mip_gap_abs(1e-10)
+        self.linear_mip_model.solver.set_mip_gap(1e-20)
+        self.linear_mip_model.lp_method = LP_Method.DUAL
         self.dummy_binary_1 = None
         self.dummy_binary_2 = None
 
