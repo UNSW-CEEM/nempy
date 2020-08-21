@@ -4,7 +4,7 @@ import numpy as np
 from nempy import historical_spot_market_inputs as hi
 
 
-class HistoricalInterconnectors:
+class InterconnectorData:
     """Class for creating interconnector inputs for historical dispatch intervals.
 
     Examples
@@ -52,16 +52,20 @@ class HistoricalInterconnectors:
     inputs_manager : historical_spot_market_inputs.DBManager
     interval : str
     """
-    def __init__(self, inputs_manager, xml_inputs, interval):
-        self.inputs_manager = inputs_manager
-        self.interval = interval
-        self.xml_inputs = xml_inputs
-        self.INTERCONNECTORCONSTRAINT = self.inputs_manager.INTERCONNECTORCONSTRAINT.get_data(self.interval)
+    def __init__(self, raw_input_loader):
+        self.raw_input_loader = raw_input_loader
+
+        self.INTERCONNECTORCONSTRAINT = self.raw_input_loader.get_interconnector_constraint_parameters()
+
         self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'] = \
             np.where(self.INTERCONNECTORCONSTRAINT['INTERCONNECTORID'] == 'T-V-MNSP1', 1.0,
                      self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'])
-        self.INTERCONNECTOR = self.inputs_manager.INTERCONNECTOR.get_data()
+
+        self.INTERCONNECTOR = self.raw_input_loader.get_interconnector_definitions()
+
         self.interconnectors = format_interconnector_definitions(self.INTERCONNECTOR, self.INTERCONNECTORCONSTRAINT)
+
+
         self.splitting_used = False
         self.transmission_loss_factors_added = False
         self.interpolation_break_points = None
@@ -81,9 +85,9 @@ class HistoricalInterconnectors:
         if self.splitting_used:
             raise OrderError('Loss model must be added before splitting bass link.')
 
-        DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
-        LOSSFACTORMODEL = self.inputs_manager.LOSSFACTORMODEL.get_data(self.interval)
-        LOSSMODEL = self.inputs_manager.LOSSMODEL.get_data(self.interval)
+        DISPATCHREGIONSUM = self.raw_input_loader.get_regional_loads()
+        LOSSFACTORMODEL = self.raw_input_loader.get_interconnector_loss_paramteters()
+        LOSSMODEL = self.raw_input_loader.get_interconnector_loss_segments()
 
         regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
         interconnector_loss_coefficients = format_interconnector_loss_coefficients(self.INTERCONNECTORCONSTRAINT)
@@ -239,8 +243,8 @@ class HistoricalInterconnectors:
         self.splitting_used = True
 
     def get_market_interconnector_links(self):
-        mnsp_bids = self.xml_inputs.get_bass_link_bid_availability()
-        MNSP_INTERCONNECTOR = self.inputs_manager.MNSP_INTERCONNECTOR.get_data(self.interval)
+        mnsp_bids = self.raw_input_loader.get_market_interconnector_link_bid_availability()
+        MNSP_INTERCONNECTOR = self.raw_input_loader.get_market_interconnectors()
         mnsp_transmission_loss_factors = format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
                                                                                self.INTERCONNECTORCONSTRAINT)
         mnsp_transmission_loss_factors = pd.merge(mnsp_transmission_loss_factors, mnsp_bids, on=['interconnector', 'to_region'])

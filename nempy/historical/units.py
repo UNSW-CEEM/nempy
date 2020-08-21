@@ -2,17 +2,10 @@ import pandas as pd
 import numpy as np
 from time import time
 
-from nempy.historical import historical_inputs_from_xml as hist_xml
 
-
-class HistoricalUnits:
-    def __init__(self, mms_database, xml_inputs, interval):
-        self.mms_database = mms_database
-        t0 = time()
-        self.xml_inputs = xml_inputs
-        print('load xml {}'.format((time() - t0)))
-        self.interval = interval
-
+class UnitData:
+    def __init__(self, raw_input_loader):
+        self.raw_input_loader = raw_input_loader
         self.dispatch_interval = 5  # minutes
         self.dispatch_type_name_map = {'GENERATOR': 'generator', 'LOAD': 'load'}
         self.service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
@@ -20,46 +13,40 @@ class HistoricalUnits:
                                      'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min', 'LOWER6SEC': 'lower_6s',
                                      'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
 
-        t0 = time()
-        self.xml_volume_bids = self.xml_inputs.get_unit_volume_bids()
-        self.xml_fast_start_profiles = self.xml_inputs.get_unit_fast_start_parameters()
-        self.xml_initial_conditions = self.xml_inputs.get_unit_initial_conditions_dataframe()
-        self.xml_ugif_values = self.xml_inputs.get_UGIF_values()
-        print('initial xml queries {}'.format((time() - t0)))
+        self.volume_bids = self.raw_input_loader.get_unit_volume_bids()
+        self.fast_start_profiles = self.raw_input_loader.get_unit_fast_start_parameters()
+        self.initial_conditions = self.raw_input_loader.get_unit_initial_conditions_dataframe()
+        self.ugif_values = self.raw_input_loader.get_UGIF_values()
 
-        self.BIDDAYOFFER_D = self.mms_database.BIDDAYOFFER_D.get_data(self.interval)
-        self.DUDETAILSUMMARY = self.mms_database.DUDETAILSUMMARY.get_data(self.interval)
+        self.price_bids = self.raw_input_loader.get_unit_price_bids()
+        self.unit_details = self.raw_input_loader.get_unit_details()
 
     def get_unit_bid_availability(self):
-        bid_availability = self.xml_volume_bids
+        bid_availability = self.volume_bids
         bid_availability = bid_availability.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'RAMPDOWNRATE', 'RAMPUPRATE']]
         bid_availability = bid_availability[bid_availability['BIDTYPE'] == 'ENERGY']
 
         non_schedualed_units = list(self.get_unit_uigf_limits()['unit'])
 
-        initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW']]
+        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW']]
 
         bid_availability = bid_availability[~bid_availability['DUID'].isin(non_schedualed_units)]
         bid_availability = pd.merge(bid_availability, initial_cons, 'inner', on='DUID')
-
-        # bid_availability['RAMPMIN'] = bid_availability['INITIALMW'] - bid_availability['RAMPDOWNRATE'] / 12
-        # bid_availability['MAXAVAIL'] = np.where(bid_availability['RAMPMIN'] > bid_availability['MAXAVAIL'],
-        #                                         bid_availability['RAMPMIN'], bid_availability['MAXAVAIL'])
 
         bid_availability = bid_availability.loc[:, ['DUID', 'MAXAVAIL']]
         bid_availability.columns = ['unit', 'capacity']
         return bid_availability
 
     def get_unit_uigf_limits(self):
-        ugif = self.xml_ugif_values.loc[:, ['DUID', 'UGIF']]
+        ugif = self.ugif_values.loc[:, ['DUID', 'UGIF']]
         ugif.columns = ['unit', 'capacity']
         return ugif
 
     def get_ramp_rates_used_for_energy_dispatch(self):
-        ramp_rates = self.xml_volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
         ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
 
-        initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
 
         fast_start_profiles = self.get_fast_start_profiles()
         units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
@@ -84,7 +71,7 @@ class HistoricalUnits:
         return ramp_rates
 
     def get_fast_start_profiles(self, unconstrained_dispatch=None):
-        fast_start_profiles = self.xml_fast_start_profiles
+        fast_start_profiles = self.fast_start_profiles
         fast_start_profiles = fast_start_profiles.loc[:, ['DUID', 'MinLoadingMW', 'CurrentMode', 'CurrentModeTime',
                                                           'T1', 'T2', 'T3', 'T4']]
         fast_start_profiles = fast_start_profiles.rename(
@@ -100,10 +87,10 @@ class HistoricalUnits:
         return fast_start_profiles
 
     def get_fast_start_violation(self):
-        return self.xml_inputs.get_non_intervention_violations()['fast_start']
+        return self.raw_input_loader.get_violations()['fast_start']
 
     def get_unit_info(self):
-        unit_info = format_unit_info(self.DUDETAILSUMMARY, self.dispatch_type_name_map)
+        unit_info = format_unit_info(self.unit_details, self.dispatch_type_name_map)
         return unit_info.loc[:, ['unit', 'region', 'dispatch_type', 'loss_factor']]
 
     def get_unit_availability(self):
@@ -112,23 +99,20 @@ class HistoricalUnits:
         return pd.concat([bid_availability, ugif_availability])
 
     def get_processed_bids(self):
-        t0 = time()
-        ugif_values = self.xml_inputs.get_UGIF_values()
-        BIDPEROFFER_D = self.xml_volume_bids.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
-        initial_conditions = self.xml_initial_conditions
-        print('unit inputs xml {}'.format((time() - t0)))
+        ugif_values = self.raw_input_loader.get_UGIF_values()
+        BIDPEROFFER_D = self.volume_bids.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
+        initial_conditions = self.initial_conditions
 
-        BIDDAYOFFER_D = self.mms_database.BIDDAYOFFER_D.get_data(self.interval)
+        BIDDAYOFFER_D = self.price_bids
         unit_info = self.get_unit_info()
         unit_availability = self.get_unit_availability()
-        t0 = time()
-        DISPATCHLOAD = self.mms_database.DISPATCHLOAD.get_data(self.interval)
-        BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+
+        agc_enablement_limits = self.raw_input_loader.get_agc_enablement_limits()
+        BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, agc_enablement_limits)
         BIDPEROFFER_D = scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
         BIDPEROFFER_D = scaling_for_uigf(BIDPEROFFER_D, ugif_values)
         self.BIDPEROFFER_D, BIDDAYOFFER_D = enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, initial_conditions, unit_availability)
-        print('unit inputs processing {}'.format((time() - t0)))
 
         volume_bids = format_volume_bids(self.BIDPEROFFER_D, self.service_name_mapping)
         price_bids = format_price_bids(BIDDAYOFFER_D, self.service_name_mapping)
@@ -150,7 +134,7 @@ class HistoricalUnits:
         return self.fcas_trapeziums[self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
 
     def get_scada_ramp_up_rates(self):
-        initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
+        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
         initial_cons.columns = ['unit', 'initial_output', 'ramp_up_rate']
         units_with_scada_ramp_rates = list(
             initial_cons[(~initial_cons['ramp_up_rate'].isna()) & initial_cons['ramp_up_rate'] != 0]['unit'])
@@ -158,7 +142,7 @@ class HistoricalUnits:
         return initial_cons
 
     def get_scada_ramp_down_rates(self):
-        initial_cons = self.xml_initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
+        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
         initial_cons.columns = ['unit', 'initial_output', 'ramp_down_rate']
         units_with_scada_ramp_rates = list(
             initial_cons[(~initial_cons['ramp_down_rate'].isna()) & initial_cons['ramp_down_rate'] != 0]['unit'])

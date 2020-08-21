@@ -8,22 +8,24 @@ import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta, time
 
-from time import time as timer
 
-
-class XMLInputs:
-    def __init__(self, cache_folder, interval):
-        self.xml = None
-        self.interval = interval
+class XMLCacheManager:
+    def __init__(self, cache_folder):
         self.cache_folder = cache_folder
+        self.interval = None
+        self.xml = None
+
         Path(cache_folder).mkdir(parents=False, exist_ok=True)
+
+    def load_interval(self, interval):
+        self.interval = interval
         if not self.interval_inputs_in_cache():
             self.download_xml_from_nemweb()
             if not self.interval_inputs_in_cache():
                 raise ValueError('File not downloaded.')
-        t0 = timer()
-        self.load_xml()
-        print('load_xml {}'.format((timer() - t0)))
+        with open(self.get_file_path()) as file:
+            read = file.read()
+            self.xml = xmltodict.parse(read)
 
     def interval_inputs_in_cache(self):
         return os.path.exists(self.get_file_path())
@@ -85,16 +87,6 @@ class XMLInputs:
 
     def get_interval_datetime_object(self):
         return datetime.strptime(self.interval, '%Y/%m/%d %H:%M:%S')
-
-    def load_xml(self):
-        with open(self.get_file_path()) as file:
-            t0 = timer()
-            read = file.read()
-            print('read {}'.format((timer() - t0)))
-            t0 = timer()
-            inputs = xmltodict.parse(read)
-            print('parse {}'.format((timer() - t0)))
-            self.xml = inputs
 
     def get_unit_initial_conditions_dataframe(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
@@ -197,7 +189,7 @@ class XMLInputs:
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
         return trades_by_unit_and_type
 
-    def get_non_intervention_violations(self):
+    def get_violations(self):
         outputs = self.xml['NEMSPDCaseFile']['NemSpdOutputs']
         name_map = dict(regional_demand='@TotalAreaGenViolation',
                         interocnnector='@TotalInterconnectorViolation',
@@ -460,7 +452,7 @@ class XMLInputs:
                     lhs_values['coefficient'].append(float(term['@Factor']))
         return pd.DataFrame(lhs_values)
 
-    def get_bass_link_bid_availability(self):
+    def get_market_interconnector_link_bid_availability(self):
         """
 
         Examples
