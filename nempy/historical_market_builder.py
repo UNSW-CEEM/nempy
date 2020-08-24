@@ -6,12 +6,120 @@ import numpy as np
 from nempy import markets
 from nempy.spot_markert_backend import check
 from nempy.help_functions import helper_functions as hf
-from nempy.historical import historical_spot_market_inputs as hi,  historical_inputs_from_xml
-from time import time
+from nempy.historical import historical_spot_market_inputs as hi
 
 
 class SpotMarketBuilder:
-    def __init__(self, unit_inputs, interconnector_inputs, mms_db, xml_cache, interval):
+    def __init__(self, unit_inputs, interconnector_inputs, constraint_inputs, demand_inputs):
+
+        self.unit_inputs = unit_inputs
+        self.interconnector_inputs = interconnector_inputs
+        self.constraint_inputs = constraint_inputs
+        self.regional_demand_inputs = demand_inputs
+
+        unit_info = self.unit_inputs.get_unit_info()
+        self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
+
+    def add_unit_bids_to_market(self):
+        volume_bids, price_bids = self.unit_inputs.get_processed_bids()
+        self.market.set_unit_volume_bids(volume_bids)
+        self.market.set_unit_price_bids(price_bids)
+
+    def set_unit_limit_constraints(self):
+        unit_bid_limit = self.unit_inputs.get_unit_bid_availability()
+        self.market.set_unit_bid_capacity_constraints(unit_bid_limit)
+        cost = self.constraint_inputs.get_constraint_violation_prices()['unit_capacity']
+        self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
+        unit_ugif_limit = self.unit_inputs.get_unit_uigf_limits()
+        self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_ugif_limit)
+        cost = self.constraint_inputs.get_constraint_violation_prices()['ugif']
+        self.market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
+
+    def set_ramp_rate_limits(self):
+        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+        self.market.set_unit_ramp_up_constraints(
+            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+        self.market.set_unit_ramp_down_constraints(
+            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+        cost = self.constraint_inputs.get_constraint_violation_prices()['ramp_rate']
+        self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
+        self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
+
+    def set_fast_start_constraints(self):
+        self.market.dispatch(price_market_constraints=False)
+        dispatch = self.market.get_unit_dispatch()
+        fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
+        self.market.set_fast_start_constraints(fast_start_profiles)
+        if 'fast_start' in self.market._constraints_rhs_and_type:
+            cost = self.constraint_inputs.get_constraint_violation_prices()['fast_start']
+            self.market.make_constraints_elastic('fast_start', cost)
+
+    def set_unit_fcas_constraints(self):
+        self.unit_inputs.add_fcas_trapezium_constraints()
+
+        cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_max_avail']
+        fcas_availability = self.unit_inputs.get_fcas_max_availability()
+        self.market.set_fcas_max_availability(fcas_availability)
+        self.market.make_constraints_elastic('fcas_max_availability', cost)
+
+        cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_profile']
+
+        regulation_trapeziums = self.unit_inputs.get_fcas_regulation_trapeziums()
+        self.market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+        self.market.make_constraints_elastic('energy_and_regulation_capacity', cost)
+
+        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units()
+        self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
+        self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
+
+        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units()
+        self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
+        self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+
+        contingency_trapeziums = self.unit_inputs.get_contingency_services()
+        self.market.set_joint_capacity_constraints(contingency_trapeziums)
+        self.market.make_constraints_elastic('joint_capacity', cost)
+
+    def set_region_demand_constraints(self):
+        regional_demand = self.regional_demand_inputs.get_operational_demand()
+        self.market.set_demand_constraints(regional_demand)
+        cost = self.constraint_inputs.get_constraint_violation_prices()['regional_demand']
+        self.market.make_constraints_elastic('demand', cost)
+
+    def add_interconnectors_to_market(self):
+        self.interconnector_inputs.add_loss_model()
+        interconnectors = self.interconnector_inputs.get_interconnector_definitions()
+        loss_functions, interpolation_break_points = self.interconnector_inputs.get_interconnector_loss_model()
+        self.market.set_interconnectors(interconnectors)
+        self.market.set_interconnector_losses(loss_functions, interpolation_break_points)
+
+    def add_generic_constraints_fcas_requirements(self):
+        fcas_requirements = self.constraint_inputs.get_fcas_requirements()
+        self.market.set_fcas_requirements_constraints(fcas_requirements)
+        violation_costs = self.constraint_inputs.get_violation_costs()
+        self.market.make_constraints_elastic('fcas', violation_cost=violation_costs)
+        generic_rhs = self.constraint_inputs.get_rhs_and_type()
+        self.market.set_generic_constraints(generic_rhs)
+        self.market.make_constraints_elastic('generic', violation_cost=violation_costs)
+        unit_generic_lhs = self.constraint_inputs.get_unit_lhs()
+        self.market.link_units_to_generic_constraints(unit_generic_lhs)
+        interconnector_generic_lhs = self.constraint_inputs.get_interconnector_lhs()
+        self.market.link_interconnectors_to_generic_constraints(interconnector_generic_lhs)
+
+    def dispatch(self, calc_prices=True):
+        if self.constraint_inputs.is_over_constrained_dispatch_rerun():
+            self.market.dispatch(price_market_constraints=calc_prices, allow_over_constrained_dispatch_re_run=True,
+                                 energy_market_floor_price=-1000.0, energy_market_ceiling_price=14500.0,
+                                 fcas_market_ceiling_price=1000.0)
+        else:
+            self.market.dispatch(price_market_constraints=calc_prices, allow_over_constrained_dispatch_re_run=False)
+
+    def get_market_object(self):
+        return self.market
+
+
+class MarketOverrider:
+    def __init__(self, unit_inputs, interconnector_inputs, generic_constraint_inputs, mms_db, xml_cache, interval):
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
                          'LOWERREG', 'RAISEREG']
 
@@ -22,174 +130,14 @@ class SpotMarketBuilder:
 
         self.unit_inputs = unit_inputs
         self.interconnector_inputs = interconnector_inputs
-        #self.constraint_inputs = constraint_inputs
+        self.generic_constraint_inputs = generic_constraint_inputs
 
         self.inputs_manager = mms_db
         self.xml_inputs = xml_cache
         self.interval = interval
 
         unit_info = self.unit_inputs.get_unit_info()
-
         self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
-
-    def add_unit_bids_to_market(self):
-        t0 = time()
-        volume_bids, price_bids = self.unit_inputs.get_processed_bids()
-        print('get unit inputs {}'.format((time() - t0)))
-        self.market.set_unit_volume_bids(volume_bids)
-        self.market.set_unit_price_bids(price_bids)
-
-    def set_unit_limit_constraints(self):
-        unit_bid_limit = self.unit_inputs.get_unit_bid_availability()
-        self.market.set_unit_bid_capacity_constraints(unit_bid_limit)
-        cost = self.xml_inputs.get_constraint_violation_prices()['unit_capacity']
-        self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
-        unit_ugif_limit = self.unit_inputs.get_unit_uigf_limits()
-        self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_ugif_limit)
-        cost = self.xml_inputs.get_constraint_violation_prices()['ugif']
-        self.market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
-
-    def set_ramp_rate_limits(self):
-        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
-        self.market.set_unit_ramp_up_constraints(
-            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-        self.market.set_unit_ramp_down_constraints(
-            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
-        cost = self.xml_inputs.get_constraint_violation_prices()['ramp_rate']
-        self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
-        self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
-
-    def set_fast_start_constraints(self):
-        self.market.dispatch(price_market_constraints=False)
-        dispatch = self.market.get_unit_dispatch()
-        dispatch = dispatch[dispatch['service'] == 'energy']
-        fast_start_profiles = self.unit_inputs.get_fast_start_profiles(dispatch)
-        fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
-                                                          'mode_four_length', 'min_loading']]
-        self.market.set_fast_start_constraints(fast_start_profiles)
-        cost = self.xml_inputs.get_constraint_violation_prices()['fast_start']
-        try:
-            self.market.make_constraints_elastic('fast_start', cost)
-        except check.ModelBuildError:
-            pass
-
-    def measured_violation_equals_historical_violation(self, historical_name, nempy_constraints):
-        measured = 0.0
-        for name in nempy_constraints:
-            measured += self.market.get_elastic_constraints_violation_degree(name)
-        historical = self.unit_inputs.xml_inputs.get_non_intervention_violations()[historical_name]
-        if historical > 0.0 or measured > 0.0:
-            x=1
-        return measured == pytest.approx(historical, abs=0.1)
-
-    def set_unit_fcas_constraints(self):
-        self.unit_inputs.add_fcas_trapezium_constraints()
-
-        cost = self.xml_inputs.get_constraint_violation_prices()['fcas_max_avail']
-        fcas_availability = self.unit_inputs.get_fcas_max_availability()
-        self.market.set_fcas_max_availability(fcas_availability)
-        self.market.make_constraints_elastic('fcas_max_availability', cost)
-
-        cost = self.xml_inputs.get_constraint_violation_prices()['fcas_profile']
-
-        regulation_trapeziums = self.unit_inputs.get_fcas_regulation_trapeziums()
-        self.market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
-        self.market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-
-        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates()
-        lower_reg_units = self.unit_inputs.get_lower_reg_units_with_scada_ramp_rates()
-        scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['unit'].isin(lower_reg_units['unit'])]
-        self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
-        self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-
-        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates()
-        raise_reg_units = self.unit_inputs.get_raise_reg_units_with_scada_ramp_rates()
-        scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['unit'].isin(raise_reg_units['unit'])]
-        self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
-        self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
-
-        contingency_trapeziums = self.unit_inputs.get_contingency_services()
-        self.market.set_joint_capacity_constraints(contingency_trapeziums)
-        self.market.make_constraints_elastic('joint_capacity', cost)
-
-    def set_region_demand_constraints(self):
-        DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
-        regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
-        self.market.set_demand_constraints(regional_demand.loc[:, ['region', 'demand']])
-        cost = self.xml_inputs.get_constraint_violation_prices()['regional_demand']
-        self.market.make_constraints_elastic('demand', cost)
-
-    def add_interconnectors_to_market(self):
-        self.interconnector_inputs.add_loss_model()
-        interconnectors = self.interconnector_inputs.get_interconnector_definitions()
-        market_interconnectors = self.interconnector_inputs.get_market_interconnector_links()
-        loss_functions, interpolation_break_points = self.interconnector_inputs.get_interconnector_loss_model()
-
-        interconnectors['link'] = interconnectors['interconnector']
-        interconnectors['from_region_loss_factor'] = 1.0
-        interconnectors['to_region_loss_factor'] = 1.0
-        interconnectors['generic_constraint_factor'] = 1
-
-        interconnectors = pd.concat([interconnectors, market_interconnectors])
-        interconnectors['generic_constraint_factor'] = interconnectors['generic_constraint_factor'].astype(np.int64)
-
-        interpolation_break_points = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
-                                              interpolation_break_points, on='interconnector')
-        interpolation_break_points['break_point'] = interpolation_break_points['break_point'] * interpolation_break_points['generic_constraint_factor']
-        interpolation_break_points['loss_segment'] = interpolation_break_points['loss_segment'] * \
-                                                    interpolation_break_points['generic_constraint_factor']
-        interpolation_break_points = interpolation_break_points.drop('generic_constraint_factor', axis=1)
-
-        loss_functions = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
-                                  loss_functions, on='interconnector')
-
-        def loss_function_adjuster(loss_function, generic_constraint_factor):
-            def wrapper(flow):
-                return loss_function(flow * generic_constraint_factor)
-            return wrapper
-
-        loss_functions['loss_function'] = \
-            loss_functions.apply(lambda x: loss_function_adjuster(x['loss_function'], x['generic_constraint_factor']), axis=1)
-
-        loss_functions = loss_functions.drop('generic_constraint_factor', axis=1)
-
-        self.market.set_interconnectors(interconnectors)
-        self.market.set_interconnector_losses(loss_functions, interpolation_break_points)
-
-    def add_generic_constraints_fcas_requirements(self):
-
-        generic_rhs = self.xml_inputs.get_constraint_rhs()
-        generic_type = self.xml_inputs.get_constraint_type()
-        generic_rhs = pd.merge(generic_rhs, generic_type.loc[:, ['set', 'type']], on='set')
-        type_map = {'LE': '<=', 'EQ': '=', 'GE': '>='}
-        generic_rhs['type'] = generic_rhs['type'].apply(lambda x: type_map[x])
-
-        bid_type_map = dict(ENOF='energy', LDOF='energy', L5RE='lower_reg', R5RE='raise_reg', R5MI='raise_5min',
-                            L5MI='lower_5min', R60S='raise_60s', L60S='lower_60s', R6SE='raise_6s',
-                            L6SE='lower_6s')
-
-        unit_generic_lhs = self.xml_inputs.get_constraint_unit_lhs()
-        unit_generic_lhs['service'] = unit_generic_lhs['service'].apply(lambda x: bid_type_map[x])
-        region_generic_lhs = self.xml_inputs.get_constraint_region_lhs()
-        region_generic_lhs['service'] = region_generic_lhs['service'].apply(lambda x: bid_type_map[x])
-        interconnector_generic_lhs = self.xml_inputs.get_constraint_interconnector_lhs()
-
-        violation_cost = generic_type.loc[:, ['set', 'cost']]
-
-        #pos_cons = generic_rhs[generic_rhs['rhs'] > 0.0]
-        fcas_requirements = pd.merge(region_generic_lhs, generic_rhs, on='set')
-        fcas_requirements = fcas_requirements.loc[:, ['set', 'service', 'region', 'type', 'rhs']]
-        fcas_requirements.columns = ['set', 'service', 'region', 'type', 'volume']
-        self.market.set_fcas_requirements_constraints(fcas_requirements)
-        self.market.make_constraints_elastic('fcas', violation_cost=violation_cost)
-
-        generic_rhs = generic_rhs[~generic_rhs['set'].isin(list(fcas_requirements['set']))]
-        region_generic_lhs = region_generic_lhs[~region_generic_lhs['set'].isin(list(fcas_requirements['set']))]
-        self.market.set_generic_constraints(generic_rhs)
-        self.market.make_constraints_elastic('generic', violation_cost=violation_cost)
-        self.market.link_units_to_generic_constraints(unit_generic_lhs)
-        self.market.link_interconnectors_to_generic_constraints(interconnector_generic_lhs)
-        self.market.link_regions_to_generic_constraints(region_generic_lhs)
 
     def set_unit_dispatch_to_historical_values(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
@@ -227,6 +175,42 @@ class SpotMarketBuilder:
 
         self.market._decision_variables['bids'] = decision_variables
 
+    def set_interconnector_flow_to_historical_values(self, wiggle_room=0.1):
+        # Historical interconnector dispatch
+        DISPATCHINTERCONNECTORRES = self.inputs_manager.DISPATCHINTERCONNECTORRES.get_data(self.interval)
+        interconnector_flow = DISPATCHINTERCONNECTORRES.loc[:, ['INTERCONNECTORID', 'MWFLOW']]
+        interconnector_flow.columns = ['interconnector', 'flow']
+        interconnector_flow['link'] = interconnector_flow['interconnector']
+        interconnector_flow['link'] = np.where(interconnector_flow['interconnector'] == 'T-V-MNSP1',
+            np.where(interconnector_flow['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC'), interconnector_flow['link'])
+
+        flow_variables = self.market._decision_variables['interconnectors']
+        flow_variables = pd.merge(flow_variables, interconnector_flow, 'left', on=['interconnector', 'link'])
+        flow_variables = flow_variables.fillna(0.0)
+        flow_variables['flow'] = np.where(flow_variables['link'] != flow_variables['interconnector'],
+                                          flow_variables['flow'].abs(), flow_variables['flow'])
+        flow_variables['lower_bound'] = flow_variables['flow'] - wiggle_room
+        flow_variables['upper_bound'] = flow_variables['flow'] + wiggle_room
+        flow_variables = flow_variables.drop(['flow'], axis=1)
+        self.market._decision_variables['interconnectors'] = flow_variables
+
+
+class MarketChecker:
+    def __init__(self, market, mms_db, xml_cache, interval):
+        self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
+                         'LOWERREG', 'RAISEREG']
+
+        self.service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
+                                     'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
+                                     'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
+                                     'ENERGY': 'energy'}
+
+        self.inputs_manager = mms_db
+        self.xml = xml_cache
+        self.interval = interval
+
+        self.market = market
+
     def all_dispatch_units_and_service_have_decision_variables(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
 
@@ -251,33 +235,6 @@ class SpotMarketBuilder:
         decision_variables = decision_variables.sort_values('not_missing')
 
         return decision_variables['not_missing'].all()
-
-    def set_interconnector_flow_to_historical_values(self, wiggle_room=0.1):
-        # Historical interconnector dispatch
-        DISPATCHINTERCONNECTORRES = self.inputs_manager.DISPATCHINTERCONNECTORRES.get_data(self.interval)
-        interconnector_flow = DISPATCHINTERCONNECTORRES.loc[:, ['INTERCONNECTORID', 'MWFLOW']]
-        interconnector_flow.columns = ['interconnector', 'flow']
-        interconnector_flow['link'] = interconnector_flow['interconnector']
-        interconnector_flow['link'] = np.where(interconnector_flow['interconnector'] == 'T-V-MNSP1',
-            np.where(interconnector_flow['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC'), interconnector_flow['link'])
-
-        flow_variables = self.market._decision_variables['interconnectors']
-        flow_variables = pd.merge(flow_variables, interconnector_flow, 'left', on=['interconnector', 'link'])
-        flow_variables = flow_variables.fillna(0.0)
-        flow_variables['flow'] = np.where(flow_variables['link'] != flow_variables['interconnector'],
-                                          flow_variables['flow'].abs(), flow_variables['flow'])
-        flow_variables['lower_bound'] = flow_variables['flow'] - wiggle_room
-        flow_variables['upper_bound'] = flow_variables['flow'] + wiggle_room
-        flow_variables = flow_variables.drop(['flow'], axis=1)
-        self.market._decision_variables['interconnectors'] = flow_variables
-
-    def dispatch(self, calc_prices=True):
-        if 'OCD' in self.xml_inputs.get_file_name():
-            self.market.dispatch(price_market_constraints=calc_prices, allow_over_constrained_dispatch_re_run=True,
-                                 energy_market_floor_price=-1000.0, energy_market_ceiling_price=14500.0,
-                                 fcas_market_ceiling_price=1000.0)
-        else:
-            self.market.dispatch(price_market_constraints=calc_prices, allow_over_constrained_dispatch_re_run=False)
 
     def is_regional_demand_meet(self, tolerance=0.5):
         DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
@@ -434,3 +391,12 @@ class SpotMarketBuilder:
         availabilities['match'] = availabilities['error'].abs() < 0.1
         availabilities = availabilities.sort_values('match')
         return availabilities
+
+    def measured_violation_equals_historical_violation(self, historical_name, nempy_constraints):
+        measured = 0.0
+        for name in nempy_constraints:
+            measured += self.market.get_elastic_constraints_violation_degree(name)
+        historical = self.xml.get_non_intervention_violations()[historical_name]
+        if historical > 0.0 or measured > 0.0:
+            x=1
+        return measured == pytest.approx(historical, abs=0.1)

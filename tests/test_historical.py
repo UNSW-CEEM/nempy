@@ -5,7 +5,8 @@ from datetime import datetime, timedelta
 import random
 import pickle
 import pytest
-from nempy.historical import inputs, historical_inputs_from_xml, historical_spot_market_inputs, units, interconnectors
+from nempy.historical import inputs, historical_inputs_from_xml, historical_spot_market_inputs, units, interconnectors, \
+    constraints, demand
 from nempy import historical_market_builder
 
 from time import time
@@ -279,10 +280,13 @@ def test_against_10_interval_benchmark():
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
         market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
                                                                      interconnector_inputs=interconnector_inputs,
-                                                                     mms_db=mms_database, xml_cache=xml_cache,
-                                                                     interval=interval)
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
         market_builder.add_interconnectors_to_market()
         market_builder.add_generic_constraints_fcas_requirements()
@@ -292,7 +296,13 @@ def test_against_10_interval_benchmark():
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
         market_builder.dispatch(calc_prices=True)
-        price_comp = market_builder.get_price_comparison()
+        market = market_builder.get_market_object()
+
+        market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                 mms_db=mms_database,
+                                                                 xml_cache=xml_cache,
+                                                                 interval=interval)
+        price_comp = market_checker.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
     outputs.to_csv('latest_10_interval_run.csv', index=False)
@@ -339,10 +349,13 @@ def test_against_1000_interval_benchmark():
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
         market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
                                                                      interconnector_inputs=interconnector_inputs,
-                                                                     mms_db=mms_database, xml_cache=xml_cache,
-                                                                     interval=interval)
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
         market_builder.add_interconnectors_to_market()
         market_builder.add_generic_constraints_fcas_requirements()
@@ -352,7 +365,13 @@ def test_against_1000_interval_benchmark():
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
         market_builder.dispatch(calc_prices=True)
-        price_comp = market_builder.get_price_comparison()
+        market = market_builder.get_market_object()
+
+        market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                 mms_db=mms_database,
+                                                                 xml_cache=xml_cache,
+                                                                 interval=interval)
+        price_comp = market_checker.get_price_comparison()
         outputs.append(price_comp)
     outputs = pd.concat(outputs)
     outputs.to_csv('latest_1000_interval_run.csv', index=False)

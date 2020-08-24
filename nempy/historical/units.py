@@ -78,13 +78,21 @@ class UnitData:
             columns={'DUID': 'unit', 'MinLoadingMW': 'min_loading', 'CurrentMode': 'current_mode',
                      'CurrentModeTime': 'time_in_current_mode', 'T1': 'mode_one_length', 'T2': 'mode_two_length',
                      'T3': 'mode_three_length', 'T4': 'mode_four_length'})
+
         if unconstrained_dispatch is not None:
+            unconstrained_dispatch = unconstrained_dispatch[unconstrained_dispatch['service'] == 'energy']
             fast_start_profiles = pd.merge(fast_start_profiles, unconstrained_dispatch, on='unit')
             fast_start_profiles['current_mode'] = np.where((fast_start_profiles['current_mode'] == 0) &
                                                            (fast_start_profiles['dispatch'] > 0.0), 1,
                                                            fast_start_profiles['current_mode'])
+
         fast_start_profiles = fast_start_calc_end_interval_state(fast_start_profiles, self.dispatch_interval)
+
         return fast_start_profiles
+
+    def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
+        profiles = self.get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
+        return profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length', 'min_loading']]
 
     def get_fast_start_violation(self):
         return self.raw_input_loader.get_violations()['fast_start']
@@ -162,6 +170,18 @@ class UnitData:
         reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_down_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
+
+    def get_scada_ramp_down_rates_of_lower_reg_units(self):
+        lower_reg_units = self.get_lower_reg_units_with_scada_ramp_rates()
+        scada_ramp_down_rates = self.get_scada_ramp_down_rates()
+        scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['unit'].isin(lower_reg_units['unit'])]
+        return scada_ramp_down_rates
+
+    def get_scada_ramp_up_rates_of_raise_reg_units(self):
+        scada_ramp_up_rates = self.get_scada_ramp_up_rates()
+        raise_reg_units = self.get_raise_reg_units_with_scada_ramp_rates()
+        scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['unit'].isin(raise_reg_units['unit'])]
+        return scada_ramp_up_rates
 
     def get_contingency_services(self):
         return self.fcas_trapeziums[~self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]

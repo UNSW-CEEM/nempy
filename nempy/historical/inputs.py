@@ -152,3 +152,6 @@ class RawInputsLoader:
 
     def get_unit_fast_start_parameters(self):
         return self.xml.get_unit_fast_start_parameters()
+
+    def is_over_constrained_dispatch_rerun(self):
+        return 'OCD' in self.xml.get_file_name()

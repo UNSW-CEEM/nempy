@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from nempy import historical_spot_market_inputs as hi
+from nempy.historical import demand
 
 
 class InterconnectorData:
@@ -65,8 +65,6 @@ class InterconnectorData:
 
         self.interconnectors = format_interconnector_definitions(self.INTERCONNECTOR, self.INTERCONNECTORCONSTRAINT)
 
-
-        self.splitting_used = False
         self.transmission_loss_factors_added = False
         self.interpolation_break_points = None
         self.loss_functions = None
@@ -77,25 +75,42 @@ class InterconnectorData:
         Returns
         -------
 
-        Raises
-        ------
-        OrderError : If this method is called after splitting bass link into forward and reverse interconnectors.
-
         """
-        if self.splitting_used:
-            raise OrderError('Loss model must be added before splitting bass link.')
 
         DISPATCHREGIONSUM = self.raw_input_loader.get_regional_loads()
         LOSSFACTORMODEL = self.raw_input_loader.get_interconnector_loss_paramteters()
         LOSSMODEL = self.raw_input_loader.get_interconnector_loss_segments()
 
-        regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
+        regional_demand = demand.format_regional_demand(DISPATCHREGIONSUM)
         interconnector_loss_coefficients = format_interconnector_loss_coefficients(self.INTERCONNECTORCONSTRAINT)
         interconnector_demand_coefficients = format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL)
-        self.interpolation_break_points = format_interpolation_break_points(LOSSMODEL)
-        self.loss_functions = create_loss_functions(interconnector_loss_coefficients,
+        interpolation_break_points = format_interpolation_break_points(LOSSMODEL)
+        loss_functions = create_loss_functions(interconnector_loss_coefficients,
                                                     interconnector_demand_coefficients,
                                                     regional_demand.loc[:, ['region', 'loss_function_demand']])
+
+        interconnectors = self.get_interconnector_definitions()
+
+        interpolation_break_points = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
+                                              interpolation_break_points, on='interconnector')
+
+        interpolation_break_points['break_point'] = interpolation_break_points['break_point'] * interpolation_break_points['generic_constraint_factor']
+        interpolation_break_points['loss_segment'] = interpolation_break_points['loss_segment'] * \
+                                                    interpolation_break_points['generic_constraint_factor']
+        self.interpolation_break_points = interpolation_break_points.drop('generic_constraint_factor', axis=1)
+
+        loss_functions = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
+                                  loss_functions, on='interconnector')
+
+        def loss_function_adjuster(loss_function, generic_constraint_factor):
+            def wrapper(flow):
+                return loss_function(flow * generic_constraint_factor)
+            return wrapper
+
+        loss_functions['loss_function'] = \
+            loss_functions.apply(lambda x: loss_function_adjuster(x['loss_function'], x['generic_constraint_factor']), axis=1)
+
+        self.loss_functions = loss_functions.drop('generic_constraint_factor', axis=1)
 
     def get_interconnector_definitions(self):
         """Returns inputs in the format needed to create interconnectors in the Spot market class.
@@ -139,7 +154,19 @@ class InterconnectorData:
         """
         regulated_interconnectors = \
             self.INTERCONNECTORCONSTRAINT[self.INTERCONNECTORCONSTRAINT['ICTYPE'] == 'REGULATED']['INTERCONNECTORID']
-        interconnectors = self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors)]
+        regulated_interconnectors = self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors)]
+
+        regulated_interconnectors['link'] = regulated_interconnectors['interconnector']
+        regulated_interconnectors['from_region_loss_factor'] = 1.0
+        regulated_interconnectors['to_region_loss_factor'] = 1.0
+        regulated_interconnectors['generic_constraint_factor'] = 1
+
+        market_interconnectors = self._get_market_interconnector_links()
+
+        interconnectors = pd.concat([regulated_interconnectors, market_interconnectors])
+
+        interconnectors['generic_constraint_factor'] = interconnectors['generic_constraint_factor'].astype(np.int64)
+
         return interconnectors
 
     def get_interconnector_loss_model(self):
@@ -196,53 +223,9 @@ class InterconnectorData:
         OrderError : If this method is called before the add_loss_model method.
 
         """
-        if self.loss_functions is not None:
-            return self.loss_functions, self.interpolation_break_points
-        else:
-            raise OrderError('Loss model must be added before calling get_interconnector_loss_model.')
+        return self.loss_functions, self.interpolation_break_points
 
-    def split_bass_link_to_enable_dynamic_from_region_loss_shares(self):
-        """Split bass link into two interconnectors, one for each direction, allows the from region loss share to be
-        relative to the actual direction of flow.
-
-        Examples
-        --------
-
-        For this example we use a fake DBManager. In production use the historical_spot_market_inputs.DBManager class.
-
-        >>> input_manager = FakeDBManager()
-
-        >>> interconnector_inputs = HistoricalInterconnectors(input_manager, '2019/01/01 00:00:00')
-
-        >>> interconnectors = interconnector_inputs.split_bass_link_to_enable_dynamic_from_region_loss_shares()
-
-        >>> interconnectors = interconnector_inputs.get_interconnector_definitions()
-
-        >>> print(interconnectors)
-              interconnector from_region to_region    min    max
-        1                  Y         VIC        SA -900.0  800.0
-        0  T-V-MNSP1_forward         TAS       VIC    0.0  150.0
-        0  T-V-MNSP1_reverse         TAS       VIC -100.0    0.0
-
-        """
-
-        bass_link, interconnectors = split_out_bass_link(self.interconnectors)
-        bass_link = split_interconnectors_definitions_into_two_one_directional_links(bass_link)
-        bass_link['max'] = np.where(bass_link['interconnector'] == 'T-V-MNSP1_forward', 478.0, bass_link['max'])
-        self.interconnectors = pd.concat([interconnectors, bass_link])
-
-        if self.loss_functions is not None:
-            bass_link, loss_functions = split_out_bass_link(self.loss_functions)
-            bass_link = split_interconnector_loss_functions_into_two_directional_links(bass_link)
-            self.loss_functions = pd.concat([loss_functions, bass_link])
-
-            bass_link, interpolation_break_points = split_out_bass_link(self.interpolation_break_points)
-            bass_link = split_interconnector_interpolation_break_points_into_two_directional_links(bass_link)
-            self.interpolation_break_points = pd.concat([interpolation_break_points, bass_link])
-
-        self.splitting_used = True
-
-    def get_market_interconnector_links(self):
+    def _get_market_interconnector_links(self):
         mnsp_bids = self.raw_input_loader.get_market_interconnector_link_bid_availability()
         MNSP_INTERCONNECTOR = self.raw_input_loader.get_market_interconnectors()
         mnsp_transmission_loss_factors = format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
@@ -252,7 +235,6 @@ class InterconnectorData:
                                                          mnsp_transmission_loss_factors['availability'],
                                                          mnsp_transmission_loss_factors['max'])
         return mnsp_transmission_loss_factors.drop(columns=['availability'])
-
 
 
 class OrderError(Exception):
