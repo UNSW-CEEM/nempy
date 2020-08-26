@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from nempy.historical import aemo_to_nempy_name_mapping as an
 from time import time
 
 
@@ -16,90 +17,195 @@ class UnitData:
         self.volume_bids = self.raw_input_loader.get_unit_volume_bids()
         self.fast_start_profiles = self.raw_input_loader.get_unit_fast_start_parameters()
         self.initial_conditions = self.raw_input_loader.get_unit_initial_conditions_dataframe()
-        self.ugif_values = self.raw_input_loader.get_UGIF_values()
+        self.uigf_values = self.raw_input_loader.get_UIGF_values()
 
         self.price_bids = self.raw_input_loader.get_unit_price_bids()
         self.unit_details = self.raw_input_loader.get_unit_details()
 
     def get_unit_bid_availability(self):
-        bid_availability = self.volume_bids
-        bid_availability = bid_availability.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-        bid_availability = bid_availability[bid_availability['BIDTYPE'] == 'ENERGY']
-
-        non_schedualed_units = list(self.get_unit_uigf_limits()['unit'])
-
-        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW']]
-
-        bid_availability = bid_availability[~bid_availability['DUID'].isin(non_schedualed_units)]
-        bid_availability = pd.merge(bid_availability, initial_cons, 'inner', on='DUID')
-
+        bid_availability = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL']]
+        bid_availability = self._remove_non_energy_bids(bid_availability)
         bid_availability = bid_availability.loc[:, ['DUID', 'MAXAVAIL']]
-        bid_availability.columns = ['unit', 'capacity']
+        bid_availability = self._remove_non_scheduled_units(bid_availability)
+        bid_availability = an.map_aemo_column_names_to_nempy_names(bid_availability)
         return bid_availability
 
+    @staticmethod
+    def _remove_non_energy_bids(dataframe):
+        return dataframe[dataframe['BIDTYPE'] == 'ENERGY']
+
+    def _remove_non_scheduled_units(self, dataframe):
+        non_scheduled_units = self.get_unit_uigf_limits()['unit']
+        dataframe = dataframe[~dataframe['DUID'].isin(non_scheduled_units)]
+        return dataframe
+
     def get_unit_uigf_limits(self):
-        ugif = self.ugif_values.loc[:, ['DUID', 'UGIF']]
-        ugif.columns = ['unit', 'capacity']
-        return ugif
+        uigf = an.map_aemo_column_names_to_nempy_names(self.uigf_values)
+        return uigf
 
     def get_ramp_rates_used_for_energy_dispatch(self):
-        ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-        ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY']
+        ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
+        ramp_rates = self._remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates)
+        ramp_rates = self._adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(ramp_rates)
+        ramp_rates = ramp_rates.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
+        ramp_rates.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
+        return ramp_rates
 
-        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-
-        fast_start_profiles = self.get_fast_start_profiles()
-        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
-
-        ramp_rates = pd.merge(ramp_rates, initial_cons, 'left', on='DUID')
-        ramp_rates = ramp_rates[~ramp_rates['DUID'].isin(units_ending_in_mode_two)]
-
+    def _get_minimum_of_bid_and_scada_telemetered_ramp_rates(self):
+        bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        bid_ramp_rates = self._remove_non_energy_bids(bid_ramp_rates)
+        scada_telemetered_ramp_rates = self.initial_conditions.loc[:,
+                                       ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        ramp_rates = pd.merge(bid_ramp_rates, scada_telemetered_ramp_rates, 'left', on='DUID')
         ramp_rates['RAMPDOWNRATE'] = np.fmin(ramp_rates['RAMPDOWNRATE_x'], ramp_rates['RAMPDOWNRATE_y'])
         ramp_rates['RAMPUPRATE'] = np.fmin(ramp_rates['RAMPUPRATE_x'], ramp_rates['RAMPUPRATE_y'])
+        return ramp_rates
 
+    def _remove_fast_start_units_ending_dispatch_interval_in_mode_two(self, dataframe):
+        fast_start_profiles = self.get_fast_start_profiles()
+        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
+        dataframe = dataframe[~dataframe['DUID'].isin(units_ending_in_mode_two)]
+        return dataframe
+
+    def _adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(self, ramp_rates):
+        fast_start_profiles = self.get_fast_start_profiles()
         if not fast_start_profiles.empty:
-            fast_start_profiles = fast_start_mode_two_targets(fast_start_profiles)
-            fast_start_target = fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_profiles, self.dispatch_interval)
+            fast_start_profiles = self._fast_start_mode_two_initial_mw(fast_start_profiles)
+            fast_start_target = self._fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_profiles,
+                                                                       self.dispatch_interval)
             ramp_rates = pd.merge(ramp_rates, fast_start_target, 'left', left_on='DUID', right_on='unit')
             ramp_rates['INITIALMW'] = np.where(~ramp_rates['fast_start_initial_mw'].isna(),
                                                ramp_rates['fast_start_initial_mw'], ramp_rates['INITIALMW'])
             ramp_rates['RAMPUPRATE'] = np.where(~ramp_rates['new_ramp_up_rate'].isna(),
                                                 ramp_rates['new_ramp_up_rate'], ramp_rates['RAMPUPRATE'])
-
-        ramp_rates = ramp_rates.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
-        ramp_rates.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
         return ramp_rates
+
+    @staticmethod
+    def _fast_start_mode_two_initial_mw(fast_start_profile):
+        """Calculates the initial conditions of the unit had it adhering to the dispatch inflexibility profile."""
+        units_in_mode_two = \
+            fast_start_profile[(fast_start_profile['current_mode'] == 2)]
+        units_in_mode_two['fast_start_initial_mw'] = (((units_in_mode_two['time_in_current_mode'])
+                                                       / units_in_mode_two['mode_two_length']) *
+                                                      units_in_mode_two['min_loading'])
+        return units_in_mode_two
+
+    @staticmethod
+    def _fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_end_condition, dispatch_interval):
+        """Calculate the ramp rate required to adjust for a unit spending the first part of the dispatch interval
+           constrained by its dispatch inflexibility profile."""
+        fast_start_end_condition = fast_start_end_condition[(fast_start_end_condition['current_mode'] == 2) &
+                                                            (fast_start_end_condition['end_mode'] > 2)]
+        fast_start_end_condition = pd.merge(ramp_rates, fast_start_end_condition, left_on='DUID', right_on='unit')
+        fast_start_end_condition['ramp_mw_per_min'] = fast_start_end_condition['RAMPUPRATE'] / 60
+        fast_start_end_condition['ramp_max'] = fast_start_end_condition['time_after_mode_two'] * \
+                                               fast_start_end_condition['ramp_mw_per_min'] + \
+                                               fast_start_end_condition['min_loading']
+        fast_start_end_condition['new_ramp_up_rate'] = (fast_start_end_condition['ramp_max'] -
+                                                        fast_start_end_condition['fast_start_initial_mw']) * \
+                                                       (60 / dispatch_interval)
+        return fast_start_end_condition.loc[:, ['unit', 'fast_start_initial_mw', 'new_ramp_up_rate']]
+
+    def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
+        profiles = self.get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
+        return profiles.loc[:,
+               ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length', 'min_loading']]
 
     def get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.fast_start_profiles
-        fast_start_profiles = fast_start_profiles.loc[:, ['DUID', 'MinLoadingMW', 'CurrentMode', 'CurrentModeTime',
-                                                          'T1', 'T2', 'T3', 'T4']]
-        fast_start_profiles = fast_start_profiles.rename(
-            columns={'DUID': 'unit', 'MinLoadingMW': 'min_loading', 'CurrentMode': 'current_mode',
-                     'CurrentModeTime': 'time_in_current_mode', 'T1': 'mode_one_length', 'T2': 'mode_two_length',
-                     'T3': 'mode_three_length', 'T4': 'mode_four_length'})
+        fast_start_profiles = an.map_aemo_column_names_to_nempy_names(fast_start_profiles)
+        fast_start_profiles = self._commit_fast_start_units_in_mode_zero_if_they_have_non_zero_unconstrained_dispatch(
+            fast_start_profiles, unconstrained_dispatch)
+        fast_start_profiles = self._fast_start_calc_end_interval_state(fast_start_profiles, self.dispatch_interval)
+        return fast_start_profiles
 
+    @staticmethod
+    def _commit_fast_start_units_in_mode_zero_if_they_have_non_zero_unconstrained_dispatch(fast_start_profiles,
+                                                                                           unconstrained_dispatch):
         if unconstrained_dispatch is not None:
             unconstrained_dispatch = unconstrained_dispatch[unconstrained_dispatch['service'] == 'energy']
             fast_start_profiles = pd.merge(fast_start_profiles, unconstrained_dispatch, on='unit')
             fast_start_profiles['current_mode'] = np.where((fast_start_profiles['current_mode'] == 0) &
                                                            (fast_start_profiles['dispatch'] > 0.0), 1,
                                                            fast_start_profiles['current_mode'])
-
-        fast_start_profiles = fast_start_calc_end_interval_state(fast_start_profiles, self.dispatch_interval)
-
         return fast_start_profiles
 
-    def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
-        profiles = self.get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
-        return profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length', 'min_loading']]
+    @staticmethod
+    def _fast_start_calc_end_interval_state(fast_start_profile, dispatch_interval):
+
+        def clac_mode_length(data):
+            if data['previous_mode'] == 1:
+                return data['mode_one_length']
+            elif data['previous_mode'] == 2:
+                return data['mode_two_length']
+            elif data['previous_mode'] == 3:
+                return data['mode_three_length']
+            elif data['previous_mode'] == 4:
+                return data['mode_four_length']
+            else:
+                return np.inf
+
+        fast_start_profile['previous_mode'] = fast_start_profile['current_mode']
+
+        fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
+
+        fast_start_profile['time_in_current_mode_at_end'] = \
+            fast_start_profile['time_in_current_mode'] + dispatch_interval
+
+        fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_current_mode_at_end'] >
+                                                  fast_start_profile['current_mode_length'],
+                                                  fast_start_profile['current_mode'] + 1,
+                                                  fast_start_profile['current_mode'])
+
+        fast_start_profile['time_in_end_mode'] = np.where(
+            fast_start_profile['end_mode'] != fast_start_profile['current_mode'],
+            fast_start_profile['time_in_current_mode_at_end'] -
+            fast_start_profile['current_mode_length'],
+            fast_start_profile['time_in_current_mode_at_end'])
+
+        fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
+                                                             (fast_start_profile['end_mode'] == 3),
+                                                             fast_start_profile['time_in_end_mode'],
+                                                             np.NAN)
+
+        for i in range(1, 10):
+            fast_start_profile['previous_mode'] = fast_start_profile['end_mode']
+
+            fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
+
+            fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_end_mode'] >
+                                                      fast_start_profile['current_mode_length'],
+                                                      fast_start_profile['previous_mode'] + 1,
+                                                      fast_start_profile['previous_mode'])
+
+            fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['end_mode'] !=
+                                                              fast_start_profile['previous_mode'],
+                                                              fast_start_profile['time_in_end_mode'] -
+                                                              fast_start_profile['current_mode_length'],
+                                                              fast_start_profile['time_in_end_mode'])
+
+            fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
+                                                                 (fast_start_profile['end_mode'] == 3),
+                                                                 fast_start_profile['time_in_end_mode'],
+                                                                 fast_start_profile['time_after_mode_two'])
+
+        fast_start_profile['mode_two_length'] = fast_start_profile['mode_two_length'].astype(np.float64)
+        fast_start_profile['mode_four_length'] = fast_start_profile['mode_four_length'].astype(np.float64)
+        fast_start_profile['min_loading'] = fast_start_profile['min_loading'].astype(np.float64)
+        return fast_start_profile.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
+                                          'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
+                                          'mode_four_length', 'time_after_mode_two']]
 
     def get_fast_start_violation(self):
         return self.raw_input_loader.get_violations()['fast_start']
 
     def get_unit_info(self):
-        unit_info = format_unit_info(self.unit_details, self.dispatch_type_name_map)
-        return unit_info.loc[:, ['unit', 'region', 'dispatch_type', 'loss_factor']]
+        unit_details = self.unit_details
+        unit_details['LOSSFACTOR'] = unit_details['TRANSMISSIONLOSSFACTOR'] * unit_details['DISTRIBUTIONLOSSFACTOR']
+        unit_details = unit_details.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
+        unit_details = an.map_aemo_column_names_to_nempy_names(unit_details)
+        unit_details = an.map_aemo_column_values_to_nempy_name(unit_details, column='dispatch_type')
+        return unit_details.loc[:, ['unit', 'region', 'dispatch_type', 'loss_factor']]
 
     def get_unit_availability(self):
         bid_availability = self.get_unit_bid_availability()
@@ -107,7 +213,7 @@ class UnitData:
         return pd.concat([bid_availability, ugif_availability])
 
     def get_processed_bids(self):
-        ugif_values = self.raw_input_loader.get_UGIF_values()
+        uigf_values = self.raw_input_loader.get_UIGF_values()
         BIDPEROFFER_D = self.volume_bids.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
         initial_conditions = self.initial_conditions
 
@@ -118,7 +224,7 @@ class UnitData:
         agc_enablement_limits = self.raw_input_loader.get_agc_enablement_limits()
         BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, agc_enablement_limits)
         BIDPEROFFER_D = scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
-        BIDPEROFFER_D = scaling_for_uigf(BIDPEROFFER_D, ugif_values)
+        BIDPEROFFER_D = scaling_for_uigf(BIDPEROFFER_D, uigf_values)
         self.BIDPEROFFER_D, BIDDAYOFFER_D = enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, initial_conditions, unit_availability)
 
@@ -836,7 +942,7 @@ def scaling_for_uigf(BIDPEROFFER_D, ugif_values):
     fcas_semi_scheduled = fcas_bids[fcas_bids['DUID'].isin(semi_scheduled_units)]
     fcas_not_semi_scheduled = fcas_bids[~fcas_bids['DUID'].isin(semi_scheduled_units)]
 
-    fcas_semi_scheduled = pd.merge(fcas_semi_scheduled, ugif_values.loc[:, ['DUID', 'UGIF']],
+    fcas_semi_scheduled = pd.merge(fcas_semi_scheduled, ugif_values.loc[:, ['DUID', 'UIGF']],
                                    'inner', on='DUID')
 
     def get_new_high_break_point(availability, high_break_point, enablement_max):
@@ -846,16 +952,16 @@ def scaling_for_uigf(BIDPEROFFER_D, ugif_values):
 
     # Scale high break points.
     fcas_semi_scheduled['HIGHBREAKPOINT'] = \
-        fcas_semi_scheduled.apply(lambda x: get_new_high_break_point(x['UGIF'], x['HIGHBREAKPOINT'],
+        fcas_semi_scheduled.apply(lambda x: get_new_high_break_point(x['UIGF'], x['HIGHBREAKPOINT'],
                                                                      x['ENABLEMENTMAX']),
                                   axis=1)
 
     # Adjust ENABLEMENTMAX.
     fcas_semi_scheduled['ENABLEMENTMAX'] = \
-        np.where(fcas_semi_scheduled['ENABLEMENTMAX'] > fcas_semi_scheduled['UGIF'],
-                 fcas_semi_scheduled['UGIF'], fcas_semi_scheduled['ENABLEMENTMAX'])
+        np.where(fcas_semi_scheduled['ENABLEMENTMAX'] > fcas_semi_scheduled['UIGF'],
+                 fcas_semi_scheduled['UIGF'], fcas_semi_scheduled['ENABLEMENTMAX'])
 
-    fcas_semi_scheduled.drop(['UGIF'], axis=1)
+    fcas_semi_scheduled.drop(['UIGF'], axis=1)
 
     # Combined bids back together.
     BIDPEROFFER_D = pd.concat([energy_bids, fcas_not_semi_scheduled, fcas_semi_scheduled])
@@ -1353,93 +1459,3 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
     ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
     return ic
-
-
-def fast_start_mode_two_targets(fast_start_profile):
-    units_in_mode_two = \
-        fast_start_profile[(fast_start_profile['current_mode'] == 2)]
-    units_in_mode_two['fast_start_initial_mw'] = (((units_in_mode_two['time_in_current_mode'])
-                                                          / units_in_mode_two['mode_two_length']) *
-                                                         units_in_mode_two['min_loading'])
-    return units_in_mode_two
-
-
-def fast_start_calc_end_interval_state(fast_start_profile, dispatch_interval):
-    #fast_start_profile = fast_start_profile[fast_start_profile['current_mode'] != 0]
-    # fast_start_profile['current_mode'] = np.where(fast_start_profile['current_mode'] == 0, 1,
-    #                                               fast_start_profile['current_mode'])
-    fast_start_profile['time_in_current_mode_at_end'] = fast_start_profile['time_in_current_mode'] + dispatch_interval
-
-    def clac_mode_length(data):
-        if data['previous_mode'] == 1:
-            return data['mode_one_length']
-        elif data['previous_mode'] == 2:
-            return data['mode_two_length']
-        elif data['previous_mode'] == 3:
-            return data['mode_three_length']
-        elif data['previous_mode'] == 4:
-            return data['mode_four_length']
-        else:
-            return np.inf
-
-    fast_start_profile['previous_mode'] = fast_start_profile['current_mode']
-
-    fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
-
-    fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_current_mode_at_end'] >
-                                                  fast_start_profile['current_mode_length'],
-                                                  fast_start_profile['current_mode'] + 1,
-                                                  fast_start_profile['current_mode'])
-
-    fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['end_mode'] != fast_start_profile['current_mode'],
-                                                      fast_start_profile['time_in_current_mode_at_end'] -
-                                                      fast_start_profile['current_mode_length'],
-                                                      fast_start_profile['time_in_current_mode_at_end'])
-
-    fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
-                                                         (fast_start_profile['end_mode'] == 3),
-                                                         fast_start_profile['time_in_end_mode'],
-                                                         np.NAN)
-
-    for i in range(1, 10):
-
-        fast_start_profile['previous_mode'] = fast_start_profile['end_mode']
-
-        fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
-
-        fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_end_mode'] >
-                                                      fast_start_profile['current_mode_length'],
-                                                      fast_start_profile['previous_mode'] + 1,
-                                                      fast_start_profile['previous_mode'])
-
-        fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['end_mode'] !=
-                                                          fast_start_profile['previous_mode'],
-                                                          fast_start_profile['time_in_end_mode'] -
-                                                          fast_start_profile['current_mode_length'],
-                                                          fast_start_profile['time_in_end_mode'])
-
-        fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
-                                                             (fast_start_profile['end_mode'] == 3),
-                                                             fast_start_profile['time_in_end_mode'],
-                                                             fast_start_profile['time_after_mode_two'])
-
-    #fast_start_profile['end_mode'] = np.where(fast_start_profile['end_mode'] == 5, 0, fast_start_profile['end_mode'])
-    fast_start_profile['mode_two_length'] = fast_start_profile['mode_two_length'].astype(np.float64)
-    fast_start_profile['mode_four_length'] = fast_start_profile['mode_four_length'].astype(np.float64)
-    fast_start_profile['min_loading'] = fast_start_profile['min_loading'].astype(np.float64)
-    return fast_start_profile.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
-                                      'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
-                                      'mode_four_length', 'time_after_mode_two']]
-
-
-def fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_end_condition, dispatch_interval):
-    fast_start_end_condition = fast_start_end_condition[(fast_start_end_condition['current_mode'] == 2) |
-                                                        (fast_start_end_condition['end_mode'] > 2)]
-    fast_start_end_condition = pd.merge(ramp_rates, fast_start_end_condition, left_on='DUID', right_on='unit')
-    fast_start_end_condition['ramp_max'] = fast_start_end_condition['RAMPUPRATE'] / 12.0
-    fast_start_end_condition['ramp_max'] = (fast_start_end_condition['time_after_mode_two'] / dispatch_interval) * \
-                                           fast_start_end_condition['ramp_max'] + fast_start_end_condition[
-                                               'min_loading']
-    fast_start_end_condition['new_ramp_up_rate'] = (fast_start_end_condition['ramp_max'] -
-                                                    fast_start_end_condition['fast_start_initial_mw']) * 12
-    return fast_start_end_condition.loc[:, ['unit', 'fast_start_initial_mw', 'new_ramp_up_rate']]

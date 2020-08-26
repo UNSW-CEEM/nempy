@@ -105,8 +105,8 @@ class RawInputsLoader:
     def get_agc_enablement_limits(self):
         return self.mms_db.DISPATCHLOAD.get_data(self.interval)
 
-    def get_UGIF_values(self):
-        return self.xml.get_UGIF_values()
+    def get_UIGF_values(self):
+        return self.xml.get_UIGF_values()
 
     def get_violations(self):
         return self.xml.get_violations()

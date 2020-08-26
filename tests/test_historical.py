@@ -373,6 +373,7 @@ def test_against_1000_interval_benchmark():
                                                                  interval=interval)
         price_comp = market_checker.get_price_comparison()
         outputs.append(price_comp)
+
     outputs = pd.concat(outputs)
     outputs.to_csv('latest_1000_interval_run.csv', index=False)
     benchmark = pd.read_csv('1000_interval_benchmark.csv')

@@ -1,6 +1,42 @@
 
-service_names_in_dispatch_load = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
-                                  'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
-                                  'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
-                                  'ENERGY': 'energy'}
+name_map = {'TOTALCLEARED': 'energy',
+            'RAISEREG': 'raise_reg',
+            'LOWERREG': 'lower_reg',
+            'RAISE6SEC': 'raise_6s',
+            'RAISE60SEC': 'raise_60s',
+            'RAISE5MIN': 'raise_5min',
+            'LOWER6SEC': 'lower_6s',
+            'LOWER60SEC': 'lower_60s',
+            'LOWER5MIN': 'lower_5min',
+            'ENERGY': 'energy',
+            'DUID': 'unit',
+            'BIDTYPE': 'service',
+            'MAXAVAIL': 'capacity',
+            'UIGF': 'capacity',
+            'MinLoadingMW': 'min_loading',
+            'CurrentMode': 'current_mode',
+            'CurrentModeTime': 'time_in_current_mode',
+            'T1': 'mode_one_length',
+            'T2': 'mode_two_length',
+            'T3': 'mode_three_length',
+            'T4': 'mode_four_length',
+            'GENERATOR': 'generator',
+            'LOAD': 'load',
+            'LOSSFACTOR': 'loss_factor',
+            'DISPATCHTYPE': 'dispatch_type',
+            'CONNECTIONPOINTID': 'connection_point',
+            'REGIONID': 'region'}
+
+
+def map_aemo_column_names_to_nempy_names(dataframe):
+    for name in dataframe.columns:
+        if name not in name_map.keys():
+            raise ValueError("No mapping for '{}' available.".format(name))
+    return dataframe.rename(columns=name_map)
+
+
+def map_aemo_column_values_to_nempy_name(dataframe, column):
+    dataframe[column] = dataframe[column].apply(lambda x: name_map[x])
+    return dataframe
+
 

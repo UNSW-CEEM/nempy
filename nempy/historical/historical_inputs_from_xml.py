@@ -114,8 +114,8 @@ class XMLCacheManager:
     def get_unit_fast_start_parameters(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
         initial_conditions = dict(DUID=[], MinLoadingMW=[], CurrentMode=[], CurrentModeTime=[], T1=[], T2=[],
-                                  T3=[], T4=[], SEMIDISPATCH=[])
-        cols = dict(MinLoadingMW='@MinLoadingMW', CurrentMode='@CurrentMode', SEMIDISPATCH='@SemiDispatch',
+                                  T3=[], T4=[])
+        cols = dict(MinLoadingMW='@MinLoadingMW', CurrentMode='@CurrentMode',
                     CurrentModeTime='@CurrentModeTime', T1='@T1', T2='@T2', T3='@T3', T4='@T4')
         for trader in traders:
             row = False
@@ -179,13 +179,13 @@ class XMLCacheManager:
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
         return trades_by_unit_and_type
 
-    def get_UGIF_values(self):
+    def get_UIGF_values(self):
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection']['TraderPeriod']
-        trades_by_unit_and_type = dict(DUID=[], UGIF=[])
+        trades_by_unit_and_type = dict(DUID=[], UIGF=[])
         for trader in traders:
             if '@UIGF' in trader:
                 trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                trades_by_unit_and_type['UGIF'].append(float(trader['@UIGF']))
+                trades_by_unit_and_type['UIGF'].append(float(trader['@UIGF']))
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
         return trades_by_unit_and_type
 
