@@ -2,10 +2,16 @@ from datetime import datetime, timedelta
 
 
 def build_market_management_system_database(market_management_system_database, start_year, start_month, end_year,
-                                            end_month):
+                                            end_month, verbose=True):
 
     mms_db = market_management_system_database
     mms_db.create_tables()
+
+    if start_month == 1:
+        start_year -= 1
+        start_month = 12
+    else:
+        start_month -= 1
 
     # Download data were inputs are needed on a monthly basis.
     finished = False
@@ -14,6 +20,9 @@ def build_market_management_system_database(market_management_system_database, s
             if year == end_year and month == end_month + 1:
                 finished = True
                 break
+
+            if verbose:
+                print('Downloading MMS table for year={} month={}'.format(year, month))
 
             mms_db.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
             mms_db.DISPATCHREGIONSUM.add_data(year=year, month=month)
@@ -47,17 +56,20 @@ def build_market_management_system_database(market_management_system_database, s
     mms_db.DUDETAIL.set_data(year=end_year, month=end_month)
 
 
-def build_xml_inputs_cache(nemde_xml_cache_manager, start_year, start_month, end_year, end_month):
-    start = datetime(year=start_year, month=start_month, day=1)
+def build_xml_inputs_cache(nemde_xml_cache_manager, start_year, start_month, end_year, end_month, verbose=True):
+    start = datetime(year=start_year, month=start_month, day=1) - timedelta(days=1)
     if end_month == 12:
         end_month = 0
         end_year += 1
     end = datetime(year=end_year, month=end_month + 1, day=1)
     download_date = start
     while download_date <= end:
-        print(download_date)
+        if verbose:
+            print('Downloading NEMDE XML file for year={}, month={}, day={}'.format(download_date.year,
+                                                                                    download_date.month,
+                                                                                    download_date.day))
         download_date_str = download_date.isoformat().replace('T', ' ').replace('-', '/')
-        nemde_xml_cache_manager.download_data(download_date_str)
+        nemde_xml_cache_manager.load_interval(download_date_str)
         download_date += timedelta(days=1)
 
 

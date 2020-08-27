@@ -40,13 +40,16 @@ demand = pd.DataFrame({
 })
 
 # Create the market model
-market = markets.SpotMarket(dispatch_interval=5)
-market.set_unit_info(unit_info)
+market = markets.SpotMarket(unit_info=unit_info,
+                            market_regions=['NSW'])
 market.set_unit_volume_bids(volume_bids)
 market.set_unit_price_bids(price_bids)
-market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
-market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-market.set_unit_ramp_down_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+market.set_unit_bid_capacity_constraints(
+    unit_limits.loc[:, ['unit', 'capacity']])
+market.set_unit_ramp_up_constraints(
+    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+market.set_unit_ramp_down_constraints(
+    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
 market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing

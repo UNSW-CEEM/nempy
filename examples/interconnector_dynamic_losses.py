@@ -1,9 +1,7 @@
 import pandas as pd
 from nempy import markets
-from nempy.historical import historical_spot_market_inputs
+from nempy.historical import interconnectors as interconnector_inputs
 
-# Create a market instance.
-market = markets.SpotMarket()
 
 # The only generator is located in NSW.
 unit_info = pd.DataFrame({
@@ -11,7 +9,9 @@ unit_info = pd.DataFrame({
     'region': ['NSW']  # MW
 })
 
-market.set_unit_info(unit_info)
+# Create a market instance.
+market = markets.SpotMarket(unit_info=unit_info,
+                            market_regions=['NSW', 'VIC'])
 
 # Volume of each bids.
 volume_bids = pd.DataFrame({
@@ -38,7 +38,8 @@ demand = pd.DataFrame({
 
 market.set_demand_constraints(demand.loc[:, ['region', 'demand']])
 
-# There is one interconnector between NSW and VIC. Its nominal direction is towards VIC.
+# There is one interconnector between NSW and VIC.
+# Its nominal direction is towards VIC.
 interconnectors = pd.DataFrame({
     'interconnector': ['VIC1-NSW1'],
     'to_region': ['VIC'],
@@ -64,8 +65,9 @@ interconnector_coefficients = pd.DataFrame({
     'from_region_loss_share': [0.5]})
 
 # Create loss functions on per interconnector basis.
-loss_functions = historical_spot_market_inputs.create_loss_functions(
-    interconnector_coefficients, demand_coefficients, demand.loc[:, ['region', 'loss_function_demand']])
+loss_functions = interconnector_inputs.create_loss_functions(
+    interconnector_coefficients, demand_coefficients,
+    demand.loc[:, ['region', 'loss_function_demand']])
 
 # The points to linearly interpolate the loss function between.
 interpolation_break_points = pd.DataFrame({
@@ -75,7 +77,8 @@ interpolation_break_points = pd.DataFrame({
                     0.0, 200.0, 400.0, 600.0, 800.0, 1000]
 })
 
-market.set_interconnector_losses(loss_functions, interpolation_break_points)
+market.set_interconnector_losses(loss_functions,
+                                 interpolation_break_points)
 
 # Calculate dispatch.
 market.dispatch()

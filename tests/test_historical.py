@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import random
 import pickle
 import pytest
-from nempy.historical import inputs, historical_inputs_from_xml, historical_spot_market_inputs, units, interconnectors, \
+from nempy.historical import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, interconnectors, \
     constraints, demand
 from nempy import historical_market_builder
 
@@ -271,7 +271,7 @@ def test_hist_dispatch_values_meet_demand():
 
 def test_against_10_interval_benchmark():
     con = sqlite3.connect('test_files/historical_all.db')
-    mms_database = historical_spot_market_inputs.DBManager(con)
+    mms_database = historical_inputs_from_mms_db.DBManager(con)
     xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
     raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
                                                market_management_system_database=mms_database)
@@ -340,7 +340,7 @@ def test_against_100_interval_benchmark():
 
 def test_against_1000_interval_benchmark():
     con = sqlite3.connect('test_files/historical_all.db')
-    mms_database = historical_spot_market_inputs.DBManager(con)
+    mms_database = historical_inputs_from_mms_db.DBManager(con)
     xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
     raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
                                                market_management_system_database=mms_database)

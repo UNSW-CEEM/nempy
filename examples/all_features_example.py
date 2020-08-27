@@ -3,7 +3,7 @@ import sqlite3
 import pandas as pd
 from nempy import markets
 from nempy.help_functions import helper_functions as hf
-from nempy.historical import historical_spot_market_inputs as hi
+from nempy.historical import historical_inputs_from_mms_db as hi
 
 # Create a list of the historical dispatch intervals to be used.
 dispatch_intervals = hi.datetime_dispatch_sequence(start_time='2020/01/02 00:00:00',

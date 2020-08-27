@@ -1,86 +1,34 @@
 import numpy as np
 import pandas as pd
 from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, CBC, GUROBI, LP_Method
-from time import time
 
 
 class InterfaceToSolver:
     """A wrapper for the mip model class, allows interaction with mip using pd.DataFrames."""
 
-    def __init__(self):
+    def __init__(self, solver_name='CBC'):
         self.variables = {}
         self.linear_mip_variables = {}
-        from time import time
-        t0 = time()
-        self.mip_model = Model("market", solver_name=GUROBI)
-        self.linear_mip_model = Model("market", solver_name=GUROBI)
-        print('load mip model {}'.format(time() - t0))
+
+        self.solver_name = solver_name
+        if solver_name == 'CBC':
+            self.mip_model = Model("market", solver_name=CBC)
+            self.linear_mip_model = Model("market", solver_name=CBC)
+        elif solver_name == 'GUROBI':
+            self.mip_model = Model("market", solver_name=GUROBI)
+            self.linear_mip_model = Model("market", solver_name=GUROBI)
+        else:
+            raise ValueError("Solver '{}' not recognised.")
+
         self.mip_model.verbose = 0
         self.mip_model.solver.set_mip_gap_abs(1e-10)
         self.mip_model.solver.set_mip_gap(1e-20)
         self.mip_model.lp_method = LP_Method.DUAL
+
         self.linear_mip_model.verbose = 0
         self.linear_mip_model.solver.set_mip_gap_abs(1e-10)
         self.linear_mip_model.solver.set_mip_gap(1e-20)
         self.linear_mip_model.lp_method = LP_Method.DUAL
-        self.dummy_binary_1 = None
-        self.dummy_binary_2 = None
-
-    def copy(self):
-        """Add decision variables to the model.
-
-        Examples
-        --------
-        >>> decision_variables = pd.DataFrame({
-        ...   'variable_id': [0, 1],
-        ...   'lower_bound': [0.0, 0.0],
-        ...   'upper_bound': [6.0, 1.0],
-        ...   'type': ['continuous', 'binary']})
-
-        >>> si = InterfaceToSolver()
-
-        >>> si.add_variables(decision_variables)
-
-        >>> si_copy = si.copy()
-
-        >>> print(si_copy.mip_model.num_cols)
-        2
-
-        The first one should have the following properties.
-
-        >>> print(si_copy.mip_model.var_by_name('0').var_type)
-        C
-
-        >>> print(si_copy.mip_model.var_by_name('0').lb)
-        0.0
-
-        >>> print(si_copy.mip_model.var_by_name('0').ub)
-        6.0
-
-        The second one should have the following properties.
-
-        >>> print(si_copy.mip_model.var_by_name('1').var_type)
-        B
-
-        >>> print(si_copy.mip_model.var_by_name('1').lb)
-        0.0
-
-        >>> print(si_copy.mip_model.var_by_name('1').ub)
-        1.0
-        """
-        from time import time
-        t00 = time()
-        t0 = time()
-        model_copy = InterfaceToSolver()
-        model_copy.mip_model = self.mip_model.copy()
-        print('mip copy {}'.format(time() - t0))
-        model_copy.mip_model.verbose = 0
-        t0 = time()
-        for var in model_copy.mip_model.vars:
-            model_copy.variables[int(var.name)] = var
-        print('var copy {}'.format(time() - t0))
-        print('inside model copy {}'.format(time() - t00))
-        return model_copy
 
     def add_variables(self, decision_variables):
         """Add decision variables to the model.
@@ -124,21 +72,6 @@ class InterfaceToSolver:
         >>> print(si.mip_model.var_by_name('1').ub)
         1.0
 
-        Parameters
-        ----------
-        decision_variables : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            variable_id    the id of the variable (as `int`)
-            lower_bound    the lower bound of the variable, is zero for bids (as `np.float64`)
-            upper_bound    the upper bound of the variable, the volume bid (as `np.float64`)
-            type           the type of variable, 'continuous' or 'binary'  (as `str`)
-            =============  ===============================================================
-
-        Returns
-        -------
-
         """
         # Create a mapping between the nempy level names for variable types and the mip representation.
         variable_types = {'continuous': CONTINUOUS, 'binary': BINARY}
@@ -154,60 +87,6 @@ class InterfaceToSolver:
                                                                                    var_type=variable_types[
                                                                                        variable_type],
                                                                                    name=str(variable_id))
-
-    def remove_variables(self, variables_to_remove):
-        """Add decision variables to the model.
-
-        Examples
-        --------
-        >>> decision_variables = pd.DataFrame({
-        ...   'variable_id': [0, 1],
-        ...   'lower_bound': [0.0, 0.0],
-        ...   'upper_bound': [6.0, 1.0],
-        ...   'type': ['continuous', 'binary']})
-
-        >>> variables_to_remove = pd.DataFrame({
-        ...   'variable_id': [1]})
-
-        >>> si = InterfaceToSolver()
-
-        >>> si.add_variables(decision_variables)
-
-        >>> print(si.mip_model.num_cols)
-        2
-
-        >>> si.remove_variables(variables_to_remove)
-
-        >>> print(si.mip_model.num_cols)
-        1
-
-        >>> print(si.mip_model.var_by_name('0').var_type)
-        C
-
-        >>> print(si.mip_model.var_by_name('0').lb)
-        0.0
-
-        >>> print(si.mip_model.var_by_name('0').ub)
-        6.0
-
-        Parameters
-        ----------
-        decision_variables : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            variable_id    the id of the variable (as `int`)
-            lower_bound    the lower bound of the variable, is zero for bids (as `np.float64`)
-            upper_bound    the upper bound of the variable, the volume bid (as `np.float64`)
-            type           the type of variable, 'continuous' or 'binary'  (as `str`)
-            =============  ===============================================================
-
-        Returns
-        -------
-
-        """
-        vars = [self.linear_mip_variables[var_id] for var_id in variables_to_remove['variable_id']]
-        self.linear_mip_model.remove(vars)
 
     def add_sos_type_2(self, sos_variables, sos_id_columns, position_column):
         """Add groups of special ordered sets of type 2 two the mip model.
@@ -231,22 +110,7 @@ class InterfaceToSolver:
 
         >>> si.add_variables(decision_variables)
 
-        >>> si.add_sos_type_2(sos_variables)
-
-        Parameters
-        ----------
-        sos_variables : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            variable_id    the unique identifier of the variable (as `np.int64`)
-            sos_id         the unique identifier of each special ordered set (as `str`)
-            position       the position of the variable in the special ordered set
-                           (as `np.int64`)
-            =============  ===============================================================
-
-        Returns
-        -------
+        >>> si.add_sos_type_2(sos_variables, 'sos_id', 'position')
 
         """
 
@@ -258,7 +122,7 @@ class InterfaceToSolver:
         sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: self.variables[x])
         # Break up the sets based on their id and add them to the model separately.
         sos_variables.groupby(sos_id_columns).apply(add_sos_vars)
-        # This is a hack to make mip knows there are binary constraints.
+        # This is a hack to make sure mip knows there are binary constraints.
         self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
     def add_sos_type_1(self, sos_variables):
@@ -302,16 +166,6 @@ class InterfaceToSolver:
         >>> print(si.mip_model.var_by_name('5').obj)
         0.0
 
-        Parameters
-        ----------
-        objective_function : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            variable_id    the unique identifier of the variable (as `np.int64`)
-            cost           the cost of the variable in model (as `np.float64`)
-            =============  ===============================================================
-
         """
         objective_function = objective_function.sort_values('variable_id')
         objective_function = objective_function.set_index('variable_id')
@@ -354,65 +208,29 @@ class InterfaceToSolver:
         >>> print(si.mip_model.constr_by_name('2'))
         2: +1.0 3 +2.0 4 = 20.0
 
-
-        Parameters
-        ----------
-        constraints_lhs : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            variable_id    the unique identifier of the variable (as `np.int64`)
-            constraint_id  the unique identifier of the constraint (as `np.int64`)
-            coefficient    the coefficient of the variable in constraint (as `np.float64`)
-            =============  ===============================================================
-
-        constraints_type_and_rhs : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            constraint_id  the unique identifier of the constraint (as `np.int64`)
-            type           the direction of the constraint, can be '>=' '<=' or '='
-                           (as 'str')
-            rhs            the value on the right hand side of the constraint
-                           (can be `np.int64` or a mip variable object)
-            =============  ===============================================================
-
-        Returns
-        -------
-
         """
-        t0 = time()
+
         constraints_lhs = constraints_lhs.groupby(['constraint_id', 'variable_id'], as_index=False).agg(
             {'coefficient': 'sum'})
         rows = constraints_lhs.groupby(['constraint_id'], as_index=False)
 
-        print('time make matrix {}'.format(time() - t0))
-        t0 = time()
         # Make a dictionary so constraint rhs values can be accessed using the constraint id.
         rhs = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['rhs']))
         # Make a dictionary so constraint type can be accessed using the constraint id.
         enq_type = dict(zip(constraints_type_and_rhs['constraint_id'], constraints_type_and_rhs['type']))
-        print('time make dicts {}'.format(time() - t0))
-        t0 = time()
         var_ids = constraints_lhs['variable_id'].to_numpy()
         vars = np.asarray(
             [self.variables[k] if k in self.variables.keys() else None for k in range(0, max(var_ids) + 1)])
         coefficients = constraints_lhs['coefficient'].to_numpy()
-        print('time make arrays {}'.format(time() - t0))
-        t0 = time()
-        ta = 0
         for row_id, row in rows.indices.items():
             # Use the variable_ids to get mip variable objects present in the constraints
             lhs_variables = vars[var_ids[row]]
             # Use the positions of the non nan values to the lhs coefficients.
             lhs = coefficients[row]
-
             # Multiply and the variables by their coefficients and sum to create the lhs of the constraint.
-            tb = time()
             exp = lhs_variables * lhs
             exp = exp.tolist()
             exp = xsum(exp)
-            ta += time() - tb
             # Add based on inequality type.
             if enq_type[row_id] == '<=':
                 new_constraint = exp <= rhs[row_id]
@@ -424,61 +242,6 @@ class InterfaceToSolver:
                 raise ValueError("Constraint type not recognised should be one of '<=', '>=' or '='.")
             self.mip_model.add_constr(new_constraint, name=str(row_id))
             self.linear_mip_model.add_constr(new_constraint, name=str(row_id))
-        print('time to_numpy {}'.format(ta))
-        print('time in con adding loop {}'.format(time() - t0))
-
-    def remove_constraints(self, constraints_to_remove):
-        """Remove constraints from the mip model.
-
-        Examples
-        --------
-        >>> decision_variables = pd.DataFrame({
-        ...   'variable_id': [0, 1, 2, 3, 4, 5],
-        ...   'lower_bound': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-        ...   'upper_bound': [5.0, 5.0, 10.0, 10.0, 5.0, 5.0],
-        ...   'type': ['continuous', 'continuous', 'continuous',
-        ...            'continuous', 'continuous', 'continuous']})
-
-        >>> constraints_lhs = pd.DataFrame({
-        ...   'constraint_id': [1, 1, 2, 2],
-        ...   'variable_id': [0, 1, 3, 4],
-        ...   'coefficient': [1.0, 0.5, 1.0, 2.0]})
-
-        >>> constraints_type_and_rhs = pd.DataFrame({
-        ...   'constraint_id': [1, 2],
-        ...   'type': ['<=', '='],
-        ...   'rhs': [10.0, 20.0]})
-
-        >>> constraints_to_remove = pd.DataFrame({
-        ...   'constraint_id': [1]})
-
-        >>> si = InterfaceToSolver()
-
-        >>> si.add_variables(decision_variables)
-
-        >>> si.add_constraints(constraints_lhs, constraints_type_and_rhs)
-
-        >>> print(si.mip_model.num_rows)
-        2
-
-        >>> print(si.mip_model.constr_by_name('1'))
-        1: +1.0 0 +0.5 1 <= 10.0
-
-        >>> print(si.mip_model.constr_by_name('2'))
-        2: +1.0 3 +2.0 4 = 20.0
-
-        >>> si.remove_constraints(constraints_to_remove)
-
-        >>> print(si.mip_model.num_rows)
-        1
-
-        >>> print(si.mip_model.constr_by_name('2'))
-        2: +1.0 3 +2.0 4 = 20.0
-
-        """
-        constraint_objects = constraints_to_remove['constraint_id'].apply(
-            lambda x: self.linear_mip_model.constr_by_name(str(x)))
-        constraint_objects.apply(lambda x: self.linear_mip_model.remove(x))
 
     def optimize(self):
         """Optimize the mip model.
@@ -574,19 +337,6 @@ class InterfaceToSolver:
         4            4          0.0          5.0  continuous    5.0
         5            5          0.0          5.0  continuous    0.0
 
-        Parameters
-        ----------
-        variable_definitions : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            variable_id    the unique identifier of the variable (as `np.int64`)
-            =============  ===============================================================
-
-        Returns
-        -------
-        values : pd.Series
-
         """
         values = variable_definitions['variable_id'].apply(lambda x: self.mip_model.var_by_name(str(x)).x,
                                                            self.mip_model)
@@ -635,19 +385,6 @@ class InterfaceToSolver:
         0              1   <=  10.0   10.0
         1              2    =  20.0    0.0
 
-        Parameters
-        ----------
-        variable_definitions : pd.DataFrame
-
-            =============  ===============================================================
-            Columns:       Description:
-            constraint_id  the unique identifier of the constraint (as `np.int64`)
-            =============  ===============================================================
-
-        Returns
-        -------
-        slack : pd.Series
-
         """
         slack = constraints_type_and_rhs['constraint_id'].apply(lambda x: self.mip_model.constr_by_name(str(x)).slack,
                                                                 self.mip_model)
@@ -693,6 +430,9 @@ class InterfaceToSolver:
 
         >>> si.optimize()
 
+        >>> si.linear_mip_model.optimize()
+        <OptimizationStatus.OPTIMAL: 0>
+
         >>> prices = si.price_constraints([1])
 
         >>> print(prices)
@@ -709,30 +449,10 @@ class InterfaceToSolver:
         4            4          0.0          5.0  continuous    0.0
         5            5          0.0          5.0  continuous    0.0
 
-        Parameters
-        ----------
-        constraint_ids_to_price : list[int]
-
-        Returns
-        -------
-
         """
         costs = {}
         for id in constraint_ids_to_price:
             costs[id] = self.linear_mip_model.constr_by_name(str(id)).pi
-        return costs
-
-    def price_cons_2(self, constraint_ids_to_price):
-        start_obj = self.mip_model.objective.x
-        costs = {}
-        for id in constraint_ids_to_price:
-            constraint = self.mip_model.constr_by_name(str(id))
-            constraint.rhs += 1e-6
-            self.mip_model.optimize()
-            marginal_cost = (self.mip_model.objective.x - start_obj) * 1e6
-            constraint.rhs -= 1e-6
-            costs[id] = marginal_cost
-        self.mip_model.optimize()
         return costs
 
     def update_rhs(self, constraint_id, violation_degree):

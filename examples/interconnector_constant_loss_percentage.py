@@ -1,17 +1,14 @@
 import pandas as pd
 from nempy import markets
 
-
-# Create a market instance.
-market = markets.SpotMarket()
-
 # The only generator is located in NSW.
 unit_info = pd.DataFrame({
     'unit': ['A'],
     'region': ['NSW']  # MW
 })
 
-market.set_unit_info(unit_info)
+# Create a market instance.
+market = markets.SpotMarket(unit_info=unit_info, market_regions=['NSW', 'VIC'])
 
 # Volume of each bids.
 volume_bids = pd.DataFrame({

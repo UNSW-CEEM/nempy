@@ -8,7 +8,8 @@ pd.options.display.width = 0
 # Volume of each bid.
 volume_bids = pd.DataFrame({
     'unit': ['A', 'A', 'B', 'B', 'B'],
-    'service': ['energy', 'raise_6s', 'energy', 'raise_6s', 'raise_reg'],
+    'service': ['energy', 'raise_6s', 'energy', 
+                'raise_6s', 'raise_reg'],
     '1': [100.0, 10.0, 110.0, 15.0, 15.0],  # MW
 })
 
@@ -23,7 +24,8 @@ print(volume_bids)
 # Price of each bid.
 price_bids = pd.DataFrame({
     'unit': ['A', 'A', 'B', 'B', 'B'],
-    'service': ['energy', 'raise_6s', 'energy', 'raise_6s', 'raise_reg'],
+    'service': ['energy', 'raise_6s', 'energy', 
+                'raise_6s', 'raise_reg'],
     '1': [50.0, 35.0, 60.0, 20.0, 30.0],  # $/MW
 })
 
@@ -87,16 +89,16 @@ print(fcas_requirements)
 # 1    nsw_raise_6s_requirement    NSW   raise_6s    10.0
 
 # Create the market model with unit service bids.
-market = markets.SpotMarket()
-market.set_unit_info(unit_info)
-market.set_unit_energy_volume_bids(volume_bids)
-market.set_unit_energy_price_bids(price_bids)
+market = markets.SpotMarket(unit_info=unit_info,
+                            market_regions=['NSW'])
+market.set_unit_volume_bids(volume_bids)
+market.set_unit_price_bids(price_bids)
 
 # Create constraints that enforce the top of the FCAS trapezium.
 fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
 market.set_fcas_max_availability(fcas_availability)
 
-# Create constraints the enforce the lower and upper slope of the FCAS regulation
+# Create constraints that enforce the lower and upper slope of the FCAS regulation
 # service trapeziums.
 regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_reg']
 market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
@@ -139,9 +141,9 @@ print(market.get_energy_prices())
 
 # Return the price of regulation FCAS.
 print(market.get_fcas_prices())
-#                           set  price
-# 0  nsw_regulation_requirement   45.0
-# 1    nsw_raise_6s_requirement   35.0
+#   region    service  price
+# 0    NSW   raise_6s   35.0
+# 1    NSW  raise_reg   45.0
 
 # Note:
 # A marginal unit of raise_reg would have to come from unit B as it is the only

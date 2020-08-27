@@ -1,12 +1,10 @@
-import sqlite3
 import pandas as pd
 import pytest
 import numpy as np
 
 from nempy import markets
-from nempy.spot_markert_backend import check
 from nempy.help_functions import helper_functions as hf
-from nempy.historical import historical_spot_market_inputs as hi
+from nempy.historical import historical_inputs_from_mms_db as hi
 
 
 class SpotMarketBuilder:
@@ -19,6 +17,7 @@ class SpotMarketBuilder:
 
         unit_info = self.unit_inputs.get_unit_info()
         self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
+        self.market.solver_name = 'GUROBI'
 
     def add_unit_bids_to_market(self):
         volume_bids, price_bids = self.unit_inputs.get_processed_bids()

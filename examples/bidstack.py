@@ -30,8 +30,7 @@ demand = pd.DataFrame({
 })
 
 # Create the market model
-market = markets.SpotMarket(dispatch_interval=5)
-market.set_unit_info(unit_info)
+market = markets.SpotMarket(unit_info=unit_info, market_regions=['NSW'])
 market.set_unit_volume_bids(volume_bids)
 market.set_unit_price_bids(price_bids)
 market.set_demand_constraints(demand)

@@ -429,6 +429,7 @@ class _AllHistDataSource(_MMSTable):
         ------
         None
         """
+        cumulative_data = pd.DataFrame()
         for y in range(year, 2009, -1):
             for m in range(12, 0, -1):
                 if y == year and m > month:
@@ -439,7 +440,7 @@ class _AllHistDataSource(_MMSTable):
                         continue
                     data = data.loc[:, self.table_columns]
                     with self.con:
-                        if y == year and m == month:
+                        if cumulative_data.empty:
                             data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)
                             cumulative_data = data.loc[:, self.table_primary_keys]
                         else:
