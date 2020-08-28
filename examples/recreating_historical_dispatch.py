@@ -1,4 +1,5 @@
-import os
+# Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
+
 import sqlite3
 import pandas as pd
 from nempy import markets
@@ -17,11 +18,13 @@ nemde_xml_file_cache_interface = \
 down_load_inputs = True
 
 if down_load_inputs:
-    # inputs.build_market_management_system_database(
-    #     market_management_system_db_interface,
-    #     start_year=2019, start_month=1,
-    #     end_year=2019, end_month=1)
+    # This requires approximately 5 GB of storage.
+    inputs.build_market_management_system_database(
+        market_management_system_db_interface,
+        start_year=2019, start_month=1,
+        end_year=2019, end_month=1)
 
+    # This requires approximately 60 GB of storage.
     inputs.build_xml_inputs_cache(
         nemde_xml_file_cache_interface,
         start_year=2019, start_month=1,
@@ -32,13 +35,13 @@ raw_inputs_loader = inputs.RawInputsLoader(
     market_management_system_database=market_management_system_db_interface)
 
 # A list of intervals we want to recreate historical dispatch for.
-dispatch_intervals = ['2019/01/01 00:00:00',
-                      '2019/01/01 00:05:00',
-                      '2019/01/01 00:10:00',
-                      '2019/01/01 00:15:00',
-                      '2019/01/01 00:20:00',
-                      '2019/01/01 00:25:00',
-                      '2019/01/01 00:30:00']
+dispatch_intervals = ['2019/01/01 12:00:00',
+                      '2019/01/01 12:05:00',
+                      '2019/01/01 12:10:00',
+                      '2019/01/01 12:15:00',
+                      '2019/01/01 12:20:00',
+                      '2019/01/01 12:25:00',
+                      '2019/01/01 12:30:00']
 
 # List for saving outputs to.
 outputs = []
@@ -60,6 +63,13 @@ for interval in dispatch_intervals:
     market.set_unit_volume_bids(volume_bids)
     market.set_unit_price_bids(price_bids)
 
+    unit_bid_limit = unit_inputs.get_unit_bid_availability()
+    market.set_unit_bid_capacity_constraints(unit_bid_limit)
+
+    unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
+    market.set_unconstrained_intermitent_generation_forecast_constraint(
+        unit_uigf_limit)
+
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
 
@@ -77,21 +87,43 @@ for interval in dispatch_intervals:
     # Save prices from this interval
     prices = market.get_energy_prices()
     prices['time'] = interval
-    outputs.append(prices)
+    outputs.append(prices.loc[:, ['time', 'region', 'price']])
 
 con.close()
 print(pd.concat(outputs))
-#    region      price                 time
-# 0    NSW1  61.114147  2020/01/02 15:05:00
-# 1    QLD1  58.130015  2020/01/02 15:05:00
-# 2     SA1  72.675411  2020/01/02 15:05:00
-# 3    TAS1  73.013327  2020/01/02 15:05:00
-# 4    VIC1  68.778493  2020/01/02 15:05:00
-# ..    ...        ...                  ...
-# 0    NSW1  54.630861  2020/01/02 21:00:00
-# 1    QLD1  55.885854  2020/01/02 21:00:00
-# 2     SA1  53.038412  2020/01/02 21:00:00
-# 3    TAS1  61.537939  2020/01/02 21:00:00
-# 4    VIC1  57.040000  2020/01/02 21:00:00
-#
-# [360 rows x 3 columns]
+#                   time region      price
+# 0  2019/01/01 12:00:00   NSW1  91.857666
+# 1  2019/01/01 12:00:00   QLD1  76.180429
+# 2  2019/01/01 12:00:00    SA1  85.126914
+# 3  2019/01/01 12:00:00   TAS1  85.948523
+# 4  2019/01/01 12:00:00   VIC1  83.250703
+# 0  2019/01/01 12:05:00   NSW1  88.357224
+# 1  2019/01/01 12:05:00   QLD1  72.255334
+# 2  2019/01/01 12:05:00    SA1  82.417720
+# 3  2019/01/01 12:05:00   TAS1  83.451561
+# 4  2019/01/01 12:05:00   VIC1  80.621103
+# 0  2019/01/01 12:10:00   NSW1  91.857666
+# 1  2019/01/01 12:10:00   QLD1  75.665675
+# 2  2019/01/01 12:10:00    SA1  85.680310
+# 3  2019/01/01 12:10:00   TAS1  86.715499
+# 4  2019/01/01 12:10:00   VIC1  83.774337
+# 0  2019/01/01 12:15:00   NSW1  88.343034
+# 1  2019/01/01 12:15:00   QLD1  71.746786
+# 2  2019/01/01 12:15:00    SA1  82.379539
+# 3  2019/01/01 12:15:00   TAS1  83.451561
+# 4  2019/01/01 12:15:00   VIC1  80.621103
+# 0  2019/01/01 12:20:00   NSW1  91.864122
+# 1  2019/01/01 12:20:00   QLD1  75.052319
+# 2  2019/01/01 12:20:00    SA1  85.722028
+# 3  2019/01/01 12:20:00   TAS1  86.576848
+# 4  2019/01/01 12:20:00   VIC1  83.859306
+# 0  2019/01/01 12:25:00   NSW1  91.864122
+# 1  2019/01/01 12:25:00   QLD1  75.696247
+# 2  2019/01/01 12:25:00    SA1  85.746024
+# 3  2019/01/01 12:25:00   TAS1  86.613642
+# 4  2019/01/01 12:25:00   VIC1  83.894945
+# 0  2019/01/01 12:30:00   NSW1  91.870167
+# 1  2019/01/01 12:30:00   QLD1  75.188735
+# 2  2019/01/01 12:30:00    SA1  85.694071
+# 3  2019/01/01 12:30:00   TAS1  86.560602
+# 4  2019/01/01 12:30:00   VIC1  83.843570

@@ -35,8 +35,8 @@ def joint_ramping_constraints_load_and_generator_constructor(unit_limits, unit_i
                                                              next_constraint_id, settings):
     constraints = hf.save_index(unit_limits, 'constraint_id', next_constraint_id)
     constraints = pd.merge(constraints, unit_info, 'left', on='unit')
-    constraints_generators = constraints[constraints['dispatch_type'] == 'generator']
-    constraints_loads = constraints[constraints['dispatch_type'] == 'load']
+    constraints_generators = constraints[constraints['dispatch_type'] == 'generator'].copy()
+    constraints_loads = constraints[constraints['dispatch_type'] == 'load'].copy()
     gen_rhs_and_type, gen_variable_mapping = \
         joint_ramping_constraints_generic_constructor(constraints_generators, settings['generator'],
                                                       dispatch_interval)

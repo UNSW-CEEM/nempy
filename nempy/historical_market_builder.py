@@ -29,9 +29,9 @@ class SpotMarketBuilder:
         self.market.set_unit_bid_capacity_constraints(unit_bid_limit)
         cost = self.constraint_inputs.get_constraint_violation_prices()['unit_capacity']
         self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
-        unit_ugif_limit = self.unit_inputs.get_unit_uigf_limits()
-        self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_ugif_limit)
-        cost = self.constraint_inputs.get_constraint_violation_prices()['ugif']
+        unit_uigf_limit = self.unit_inputs.get_unit_uigf_limits()
+        self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_uigf_limit)
+        cost = self.constraint_inputs.get_constraint_violation_prices()['uigf']
         self.market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     def set_ramp_rate_limits(self):
@@ -45,7 +45,7 @@ class SpotMarketBuilder:
         self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
 
     def set_fast_start_constraints(self):
-        self.market.dispatch(price_market_constraints=False)
+        self.market.dispatch()
         dispatch = self.market.get_unit_dispatch()
         fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
         self.market.set_fast_start_constraints(fast_start_profiles)
@@ -107,11 +107,11 @@ class SpotMarketBuilder:
 
     def dispatch(self, calc_prices=True):
         if self.constraint_inputs.is_over_constrained_dispatch_rerun():
-            self.market.dispatch(price_market_constraints=calc_prices, allow_over_constrained_dispatch_re_run=True,
+            self.market.dispatch(allow_over_constrained_dispatch_re_run=True,
                                  energy_market_floor_price=-1000.0, energy_market_ceiling_price=14500.0,
                                  fcas_market_ceiling_price=1000.0)
         else:
-            self.market.dispatch(price_market_constraints=calc_prices, allow_over_constrained_dispatch_re_run=False)
+            self.market.dispatch(allow_over_constrained_dispatch_re_run=False)
 
     def get_market_object(self):
         return self.market

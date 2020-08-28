@@ -2576,7 +2576,7 @@ class SpotMarket:
         self.make_constraints_elastic('tie_break', violation_cost=cost)
 
     def dispatch(self, energy_market_ceiling_price=None, energy_market_floor_price=None, fcas_market_ceiling_price=None,
-                 price_market_constraints=True, allow_over_constrained_dispatch_re_run=False):
+                 allow_over_constrained_dispatch_re_run=False):
         """Combines the elements of the linear program and solves to find optimal dispatch.
 
         If allow_over_constrained_dispatch_re_run is set to True then constraints will be relaxed when market ceiling
@@ -2802,14 +2802,14 @@ class SpotMarket:
                 si.get_optimal_values_of_decision_variables_lin(self._decision_variables[var_group])
 
         # If there are market constraints then calculate their associated prices.
-        if self._market_constraints_rhs_and_type and price_market_constraints:
+        if self._market_constraints_rhs_and_type:
             for constraint_group in self._market_constraints_rhs_and_type:
                 constraints_to_price = list(self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
                 prices = si.price_constraints(constraints_to_price)
                 self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                     self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
-        if price_market_constraints and 'generic_deficit' in self._decision_variables and allow_over_constrained_dispatch_re_run:
+        if 'generic_deficit' in self._decision_variables and allow_over_constrained_dispatch_re_run:
             fcas_ceiling_price_violated = False
             if 'fcas' in self._market_constraints_rhs_and_type:
                 if self._market_constraints_rhs_and_type['fcas']['price'].max() >= fcas_market_ceiling_price:
@@ -2847,8 +2847,9 @@ class SpotMarket:
                                                  variables_and_cons['coefficient'] * -1
                 variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
                 si.linear_mip_model.optimize()
+
                 # If there are market constraints then calculate their associated prices.
-                if self._market_constraints_rhs_and_type and price_market_constraints:
+                if self._market_constraints_rhs_and_type:
                     for constraint_group in self._market_constraints_rhs_and_type:
                         constraints_to_price = list(
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'])
@@ -2880,6 +2881,9 @@ class SpotMarket:
 
         vars_to_remove = vars.groupby(['interconnector', 'link'], as_index=False).apply(not_closest_three)
         si.disable_variables(vars_to_remove.loc[:, ['variable_id']])
+
+    def get_constraint_set_names(self):
+        return self._market_constraints_rhs_and_type.keys()
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.

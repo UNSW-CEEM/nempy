@@ -231,7 +231,7 @@ class XMLCacheManager:
                         mnsp_ramp_rate='@MNSPRampRatePrice',
                         msnp_offer='@MNSPOfferPrice',
                         mnsp_capacity='@MNSPCapacityPrice',
-                        ugif='@UIGFSurplusPrice',
+                        uigf='@UIGFSurplusPrice',
                         voll='@VoLL')
         violations = {}
         for name, aemo_name in name_map.items():

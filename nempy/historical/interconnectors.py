@@ -152,9 +152,9 @@ class InterconnectorData:
             ========================  ==================================================================================
 
         """
-        regulated_interconnectors = \
-            self.INTERCONNECTORCONSTRAINT[self.INTERCONNECTORCONSTRAINT['ICTYPE'] == 'REGULATED']['INTERCONNECTORID']
-        regulated_interconnectors = self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors)]
+        regulated_interconnectors_series = \
+            self.INTERCONNECTORCONSTRAINT[self.INTERCONNECTORCONSTRAINT['ICTYPE'] == 'REGULATED'].loc[:, 'INTERCONNECTORID']
+        regulated_interconnectors = self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors_series)].copy()
 
         regulated_interconnectors['link'] = regulated_interconnectors['interconnector']
         regulated_interconnectors['from_region_loss_factor'] = 1.0
