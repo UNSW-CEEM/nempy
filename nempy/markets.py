@@ -1034,20 +1034,20 @@ class SpotMarket:
         fcas_requirements : pd.DataFrame
             requirement by set and the regions and service the requirement applies to.
 
-            ========  ================================================
-            Columns:  Description:
-            set       unique identifier of the requirement set, \n
-                      (as `str`)
-            service   the service or services the requirement set \n
-                      applies to (as `str`)
-            region    the regions that can contribute to meeting a \n
-                      requirement, (as `str`)
-            volume    the amount of service required, in MW, \n
-                      (as `np.float64`)
-            type      the direction of the constrain '=', '>=' or \n
-                      '<=', optional, a value of '=' is assumed if
-                      \n the column is missing (as `str`)
-            ========  ================================================
+            ========   ===============================================
+            Columns:   Description:
+            set        unique identifier of the requirement set, \n
+                       (as `str`)
+            service    the service or services the requirement set \n
+                       applies to (as `str`)
+            region     the regions that can contribute to meeting a \n
+                       requirement, (as `str`)
+            volume     the amount of service required, in MW, \n
+                       (as `np.float64`)
+            type       the direction of the constrain '=', '>=' or \n
+                       '<=', optional, a value of '=' is assumed if \n
+                       the column is missing (as `str`)
+            ========   ===============================================
 
         Returns
         -------
@@ -1136,7 +1136,7 @@ class SpotMarket:
             service            the fcas service being offered, \n
                                (as `str`)
             max_availability   the maximum volume of the contingency \n
-                                service, in MW, (as `np.float64`)
+                               service, in MW, (as `np.float64`)
             ================   =======================================
 
         Returns
@@ -1227,17 +1227,17 @@ class SpotMarket:
         ----------
         ramp_details : pd.DataFrame
 
-            ==============  ==========================================
-            Columns:        Description:
-            unit            unique identifier of a dispatch unit, \n
-                            (as `str`)
-            initial_output  the output of the unit at the start of \n
-                            the dispatch interval, in MW, \n
-                            (as `np.float64`)
-            ramp_up_rate    the maximum rate at which the unit can \n,
-                            increase output, in MW/h, \n
-                            (as `np.float64`)
-            ==============  ==========================================
+            ==============   =========================================
+            Columns:         Description:
+            unit             unique identifier of a dispatch unit, \n
+                             (as `str`)
+            initial_output   the output of the unit at the start of \n
+                             the dispatch interval, in MW, \n
+                             (as `np.float64`)
+            ramp_up_rate     the maximum rate at which the unit can \n
+                             increase output, in MW/h, \n
+                             (as `np.float64`)
+            ==============   =========================================
 
         Returns
         -------
@@ -1434,7 +1434,7 @@ class SpotMarket:
                                contingency service, in MW, \n
                                (as `np.float64`)
             low_break_point    the energy dispatch level at which \n
-                               the unit can provide the full
+                               the unit can provide the full \n
                                contingency service offered, in MW, \n
                                (as `np.float64`)
             high_break_point   the energy dispatch level at which \n
@@ -1442,7 +1442,7 @@ class SpotMarket:
                                full contingency service offered, \n
                                in MW, (as `np.float64`)
             enablement_max     the energy dispatch level at which \n
-                               the unit can no longer provide
+                               the unit can no longer provide \n
                                the contingency service, in MW, \n
                                (as `np.float64`)
             ================   =======================================
@@ -1904,7 +1904,7 @@ class SpotMarket:
                             (as `str`)
             loss_segment    unique identifier of a loss segment on \n
                             an interconnector basis, (as `np.float64`)
-            break_point     points between which the loss function
+            break_point     points between which the loss function \n
                             will be linearly interpolated, in MW, \n
                             (as `np.float64`)
             ==============  ==========================================
@@ -2233,7 +2233,7 @@ class SpotMarket:
             service        the service whose variables will be mapped \n
                            to the lhs, (as `str`)
             coefficient    the lhs coefficient (as `np.float64`)
-            =============  ==============================================================
+            =============  ===========================================
 
         Raises
         ------
@@ -2303,14 +2303,14 @@ class SpotMarket:
         ----------
         unit_coefficients : pd.DataFrame
 
-            =============  ===========================================
-            Columns:       Description:
-            set            the unique identifier of the constraint set \n
-                           to map the lhs coefficients to, (as `str`)
-            interconnetor  the interconnetor whose variables will be \n
-                           mapped to the lhs, (as `str`)
-            coefficient    the lhs coefficient (as `np.float64`)
-            =============  ===========================================
+            =============   ==========================================
+            Columns:        Description:
+            set             the unique identifier of the constraint set \n
+                            to map the lhs coefficients to, (as `str`)
+            interconnetor   the interconnetor whose variables will be \n
+                            mapped to the lhs, (as `str`)
+            coefficient     the lhs coefficient (as `np.float64`)
+            =============   ==========================================
 
         Raises
         ------
@@ -3234,15 +3234,19 @@ class SpotMarket:
         -------
         pd.DataFrame
 
-            =====================    =================================================================
+            =====================    =================================
             Columns:                 Description:
-            region                   unique identifier of a market region, required (as `str`)
-            dispatch                 the net dispatch of units inside a region i.e. generators dispatch
-                                     - load dispatch, in MW. (as `np.float64`)
-            inflow                   the net inflow from interconnectors, not including losses, in MW
+            region                   unique identifier of a market \n
+                                     region, required (as `str`)
+            dispatch                 the net dispatch of units inside \n
+                                     a region i.e. generators dispatch \n
+                                     minus load dispatch, in MW. (as `np.float64`)
+            inflow                   the net inflow from interconnectors, \n
+                                     not including losses, in MW \n
                                      (as `np.float64`)
-            interconnector_losses    interconnector losses attributed to region, in MW, (as `np.float64`)
-            =====================    =================================================================
+            interconnector_losses    interconnector losses attributed \n
+                                     to region, in MW, (as `np.float64`)
+            =====================    =================================
         """
         dispatch_summary = self._get_net_unit_dispatch_by_region()
         if self._interconnectors_in_market():

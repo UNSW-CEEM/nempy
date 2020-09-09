@@ -249,22 +249,37 @@ def test_slack_in_generic_constraints_with_all_features():
 
 
 def test_hist_dispatch_values_meet_demand():
-    inputs_database = 'test_files/historical_all.db'
-    con = sqlite3.connect(inputs_database)
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
+    con = sqlite3.connect('test_files/historical_all.db')
+    mms_database = historical_inputs_from_mms_db.DBManager(con)
+    xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
+    raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
+                                               market_management_system_database=mms_database)
+
     for interval in get_test_intervals():
-        print(interval)
-        historical_inputs.load_interval(interval)
-        market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                      interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.set_unit_dispatch_to_historical_values()
-        market.set_interconnector_flow_to_historical_values()
-        market.dispatch()
-        test_passed = market.is_regional_demand_meet()
+        raw_inputs_loader.set_interval(interval)
+        unit_inputs = units.UnitData(raw_inputs_loader)
+        interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
+        market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                     interconnector_inputs=interconnector_inputs,
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
+        market_builder.add_unit_bids_to_market()
+        market_builder.add_interconnectors_to_market()
+        market = market_builder.get_market_object()
+        market_overrider = historical_market_builder.MarketOverrider(market=market,
+                                                                     mms_db=mms_database,
+                                                                     interval=interval)
+        market_overrider.set_unit_dispatch_to_historical_values()
+        market_overrider.set_interconnector_flow_to_historical_values()
+        market_builder.dispatch()
+        market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                 mms_db=mms_database,
+                                                                 xml_cache=xml_cache,
+                                                                 interval=interval)
+        test_passed = market_checker.is_regional_demand_meet()
         market.con.close()
         assert test_passed
 
@@ -311,31 +326,45 @@ def test_against_10_interval_benchmark():
 
 
 def test_against_100_interval_benchmark():
-    inputs_database = 'test_files/historical_all.db'
-    con = sqlite3.connect(inputs_database)
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
+    con = sqlite3.connect('test_files/historical_all.db')
+    mms_database = historical_inputs_from_mms_db.DBManager(con)
+    xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
+    raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
+                                               market_management_system_database=mms_database)
     outputs = []
     for interval in get_test_intervals(number=100):
-        historical_inputs.load_interval(interval)
-        market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                      interval=interval)
-        market.add_unit_bids_to_market()
-        market.add_interconnectors_to_market()
-        market.add_generic_constraints_fcas_requirements()
-        market.set_unit_fcas_constraints()
-        market.set_unit_limit_constraints()
-        market.set_region_demand_constraints()
-        market.set_ramp_rate_limits()
-        market.set_fast_start_constraints()
-        market.dispatch(calc_prices=True)
-        price_comp = market.get_price_comparison()
+        raw_inputs_loader.set_interval(interval)
+        unit_inputs = units.UnitData(raw_inputs_loader)
+        interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
+        market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                     interconnector_inputs=interconnector_inputs,
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
+        market_builder.add_unit_bids_to_market()
+        market_builder.add_interconnectors_to_market()
+        market_builder.add_generic_constraints_fcas_requirements()
+        market_builder.set_unit_fcas_constraints()
+        market_builder.set_unit_limit_constraints()
+        market_builder.set_region_demand_constraints()
+        market_builder.set_ramp_rate_limits()
+        market_builder.set_fast_start_constraints()
+        market_builder.dispatch(calc_prices=True)
+        market = market_builder.get_market_object()
+
+        market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                 mms_db=mms_database,
+                                                                 xml_cache=xml_cache,
+                                                                 interval=interval)
+        price_comp = market_checker.get_price_comparison()
         outputs.append(price_comp)
+
     outputs = pd.concat(outputs)
-    outputs.to_csv('latest_100_interval_run.csv', index=False)
-    benchmark = pd.read_csv('100_interval_benchmark.csv')
-    assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_less_precise=3)
+    outputs.to_csv('latest_1000_interval_run.csv', index=False)
+    benchmark = pd.read_csv('1000_interval_benchmark.csv')
+    assert_frame_equal(outputs.reset_index(drop=True), benchmark.reset_index(drop=True), check_less_precise=3)
 
 
 def test_against_1000_interval_benchmark():

@@ -13,7 +13,6 @@ Welcome to nempy's documentation!
    intro
    examples
    markets
-   historical_spot_market_inputs
 
 Indices and tables
 ==================

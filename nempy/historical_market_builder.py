@@ -118,7 +118,7 @@ class SpotMarketBuilder:
 
 
 class MarketOverrider:
-    def __init__(self, unit_inputs, interconnector_inputs, generic_constraint_inputs, mms_db, xml_cache, interval):
+    def __init__(self, market, mms_db, interval):
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
                          'LOWERREG', 'RAISEREG']
 
@@ -127,16 +127,10 @@ class MarketOverrider:
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
                                      'ENERGY': 'energy'}
 
-        self.unit_inputs = unit_inputs
-        self.interconnector_inputs = interconnector_inputs
-        self.generic_constraint_inputs = generic_constraint_inputs
-
         self.inputs_manager = mms_db
-        self.xml_inputs = xml_cache
         self.interval = interval
 
-        unit_info = self.unit_inputs.get_unit_info()
-        self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
+        self.market = market
 
     def set_unit_dispatch_to_historical_values(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
