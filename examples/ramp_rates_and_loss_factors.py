@@ -65,4 +65,3 @@ print(market.get_unit_dispatch())
 print(market.get_energy_prices())
 #   region  price
 # 0    NSW   57.89
-

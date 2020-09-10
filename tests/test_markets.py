@@ -45,7 +45,7 @@ def test_one_region_energy_market():
 
     expected_prices = pd.DataFrame({
         'region': ['NSW'],
-        'price': [53/0.9]
+        'price': [53 / 0.9]
     })
 
     expected_dispatch = pd.DataFrame({
@@ -100,7 +100,7 @@ def test_two_region_energy_market():
 
     expected_prices = pd.DataFrame({
         'region': ['NSW', 'VIC'],
-        'price': [53/0.9, 60/0.95]
+        'price': [53 / 0.9, 60 / 0.95]
     })
 
     expected_dispatch = pd.DataFrame({
@@ -185,13 +185,13 @@ def test_one_interconnector():
 
     expected_prices = pd.DataFrame({
         'region': ['NSW', 'VIC'],
-        'price': [50.0, 50.0 * (((90.0/0.975) + (90.0/0.975) * 0.025)/90)]
+        'price': [50., 50. * (((90. / 0.975) + (90. / 0.975) * 0.025) / 90)]
     })
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A'],
         'service': ['energy'],
-        'dispatch': [(90.0/0.975) + (90.0/0.975) * 0.025]
+        'dispatch': [(90.0 / 0.975) + (90.0 / 0.975) * 0.025]
     })
 
     expected_interconnector_flow = pd.DataFrame({

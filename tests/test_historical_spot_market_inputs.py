@@ -152,5 +152,3 @@ def test_create_loss_function_bass_link():
     expected_losses = (-3.92E-3) * flow + (1.0393E-4) * flow ** 2
 
     assert(pytest.approx(expected_losses, 0.0001) == output_losses)
-
-
