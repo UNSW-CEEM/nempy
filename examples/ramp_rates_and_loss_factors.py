@@ -40,26 +40,29 @@ demand = pd.DataFrame({
 })
 
 # Create the market model
-simple_market = markets.Spot(dispatch_interval=5)
-simple_market.set_unit_info(unit_info)
-simple_market.set_unit_volume_bids(volume_bids)
-simple_market.set_unit_price_bids(price_bids)
-simple_market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
-simple_market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-simple_market.set_unit_ramp_down_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
-simple_market.set_demand_constraints(demand)
+market = markets.SpotMarket(unit_info=unit_info,
+                            market_regions=['NSW'])
+market.set_unit_volume_bids(volume_bids)
+market.set_unit_price_bids(price_bids)
+market.set_unit_bid_capacity_constraints(
+    unit_limits.loc[:, ['unit', 'capacity']])
+market.set_unit_ramp_up_constraints(
+    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+market.set_unit_ramp_down_constraints(
+    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing
-simple_market.dispatch()
+market.dispatch()
 
 # Return the total dispatch of each unit in MW.
-print(simple_market.get_unit_dispatch())
+print(market.get_unit_dispatch())
 #   unit service  dispatch
 # 0    A  energy      20.0
 # 1    B  energy      80.0
 
 # Return the price of energy in each region.
-print(simple_market.get_energy_prices())
+print(market.get_energy_prices())
 #   region  price
 # 0    NSW   57.89
 

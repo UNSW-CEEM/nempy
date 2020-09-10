@@ -1,134 +1,129 @@
-import os
+# Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
+
 import sqlite3
 import pandas as pd
-from nempy import markets, historical_spot_market_inputs as hi
-from time import time
+from nempy import markets
+from nempy.historical import inputs, historical_inputs_from_mms_db, \
+    historical_inputs_from_xml, units, demand, interconnectors
 
-# Create a list of the historical dispatch intervals to be used.
-dispatch_intervals = hi.datetime_dispatch_sequence(start_time='2020/01/02 00:00:00',
-                                                   end_time='2020/01/03 00:00:00')
+con = sqlite3.connect('market_management_system.db')
+market_management_system_db_interface = \
+    historical_inputs_from_mms_db.DBManager(connection=con)
 
-# Build a database of historical inputs if it doesn't already exist.
-if not os.path.isfile('historical_inputs.db'):
-    con = sqlite3.connect('historical_inputs.db')
+nemde_xml_file_cache_interface = \
+    historical_inputs_from_xml.XMLCacheManager('cache_directory')
 
-    # Create a data base manager.
-    inputs_manager = hi.DBManager(connection=con)
+# The second time this example is run on a machine this flag can
+# be set to false to save downloading the data again.
+down_load_inputs = True
 
-    # This is the first time the database has been used so we need to add the tables.
-    inputs_manager.create_tables()
+if down_load_inputs:
+    # This requires approximately 5 GB of storage.
+    inputs.build_market_management_system_database(
+        market_management_system_db_interface,
+        start_year=2019, start_month=1,
+        end_year=2019, end_month=1)
 
-    # Download the relevant historical data from http://nemweb.com.au/#mms-data-model and into the database.
-    inputs_manager.DUDETAILSUMMARY.set_data(year=2020, month=1)  # Unit information
-    inputs_manager.BIDPEROFFER_D.add_data(year=2020, month=1)  # historical volume bids
-    inputs_manager.BIDDAYOFFER_D.add_data(year=2020, month=1)  # historical price bids
-    inputs_manager.DISPATCHLOAD.add_data(year=2020, month=1)  # unit operating limits
-    inputs_manager.DISPATCHREGIONSUM.add_data(year=2020, month=1)  # historical demand
-    inputs_manager.INTERCONNECTOR.set_data(year=2020, month=1)  # Regions connected by interconnector
-    inputs_manager.DISPATCHINTERCONNECTORRES.add_data(year=2020, month=1)  # Interconnectors in each dispatch interval
-    inputs_manager.INTERCONNECTORCONSTRAINT.set_data(year=2020, month=1)  # Interconnector data
-    inputs_manager.LOSSFACTORMODEL.set_data(year=2020, month=1)  # Regional demand coefficients in loss functions
-    inputs_manager.LOSSMODEL.set_data(year=2020, month=1)  # Break points for linear interpolation of loss functions
+    # This requires approximately 60 GB of storage.
+    inputs.build_xml_inputs_cache(
+        nemde_xml_file_cache_interface,
+        start_year=2019, start_month=1,
+        end_year=2019, end_month=1)
 
-    con.close()
+raw_inputs_loader = inputs.RawInputsLoader(
+    nemde_xml_cache_manager=nemde_xml_file_cache_interface,
+    market_management_system_database=market_management_system_db_interface)
 
-# Connect to the database of historical inputs
-con = sqlite3.connect('historical_inputs.db')
-inputs_manager = hi.DBManager(connection=con)
+# A list of intervals we want to recreate historical dispatch for.
+dispatch_intervals = ['2019/01/01 12:00:00',
+                      '2019/01/01 12:05:00',
+                      '2019/01/01 12:10:00',
+                      '2019/01/01 12:15:00',
+                      '2019/01/01 12:20:00',
+                      '2019/01/01 12:25:00',
+                      '2019/01/01 12:30:00']
 
-# List for saving inputs to.
+# List for saving outputs to.
 outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.
 for interval in dispatch_intervals:
-    # Transform the historical input data into the format accepted by the Spot market class.
-    # Unit info.
-    DUDETAILSUMMARY = inputs_manager.DUDETAILSUMMARY.get_data(interval)
-    DUDETAILSUMMARY = DUDETAILSUMMARY[DUDETAILSUMMARY['DISPATCHTYPE'] == 'GENERATOR']
-    unit_info = hi.format_unit_info(DUDETAILSUMMARY)
+    raw_inputs_loader.set_interval(interval)
+    unit_inputs = units.UnitData(raw_inputs_loader)
+    demand_inputs = demand.DemandData(raw_inputs_loader)
+    interconnector_inputs = \
+        interconnectors.InterconnectorData(raw_inputs_loader)
 
-    # Unit bids.
-    BIDPEROFFER_D = inputs_manager.BIDPEROFFER_D.get_data(interval)
-    BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
-    volume_bids = hi.format_volume_bids(BIDPEROFFER_D)
-    BIDDAYOFFER_D = inputs_manager.BIDDAYOFFER_D.get_data(interval)
-    BIDDAYOFFER_D = BIDDAYOFFER_D[BIDDAYOFFER_D['BIDTYPE'] == 'ENERGY']
-    price_bids = hi.format_price_bids(BIDDAYOFFER_D)
+    unit_info = unit_inputs.get_unit_info()
+    market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1',
+                                                'SA1', 'TAS1'],
+                                unit_info=unit_info)
 
-    # The unit operating conditions at the start of the historical interval.
-    DISPATCHLOAD = inputs_manager.DISPATCHLOAD.get_data(interval)
-    unit_limits = hi.determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+    volume_bids, price_bids = unit_inputs.get_processed_bids()
+    market.set_unit_volume_bids(volume_bids)
+    market.set_unit_price_bids(price_bids)
 
-    # Demand on regional basis.
-    DISPATCHREGIONSUM = inputs_manager.DISPATCHREGIONSUM.get_data(interval)
-    regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
+    unit_bid_limit = unit_inputs.get_unit_bid_availability()
+    market.set_unit_bid_capacity_constraints(unit_bid_limit)
 
-    # Interconnector details.
-    INTERCONNECTOR = inputs_manager.INTERCONNECTOR.get_data()
-    INTERCONNECTORCONSTRAINT = inputs_manager.INTERCONNECTORCONSTRAINT.get_data(interval)
-    interconnectors = hi.format_interconnector_definitions(INTERCONNECTOR,
-                                                           INTERCONNECTORCONSTRAINT)
-    interconnector_loss_coefficients = hi.format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT)
-    LOSSFACTORMODEL = inputs_manager.LOSSFACTORMODEL.get_data(interval)
-    interconnector_demand_coefficients = hi.format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL)
-    LOSSMODEL = inputs_manager.LOSSMODEL.get_data(interval)
-    interpolation_break_points = hi.format_interpolation_break_points(LOSSMODEL)
-    loss_functions = hi.create_loss_functions(interconnector_loss_coefficients, interconnector_demand_coefficients,
-                                              regional_demand.loc[:, ['region', 'loss_function_demand']])
+    unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
+    market.set_unconstrained_intermitent_generation_forecast_constraint(
+        unit_uigf_limit)
 
-    # Create a market instance.
-    market = markets.Spot()
+    regional_demand = demand_inputs.get_operational_demand()
+    market.set_demand_constraints(regional_demand)
 
-    # Add generators to the market.
-    market.set_unit_info(unit_info.loc[:, ['unit', 'region']])
+    interconnector_inputs.add_loss_model()
+    interconnectors_definitions = \
+        interconnector_inputs.get_interconnector_definitions()
+    loss_functions, interpolation_break_points = \
+        interconnector_inputs.get_interconnector_loss_model()
+    market.set_interconnectors(interconnectors_definitions)
+    market.set_interconnector_losses(loss_functions,
+                                     interpolation_break_points)
 
-    # Set volume of each bids.
-    volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
-    market.set_unit_volume_bids(volume_bids.loc[:, ['unit', '1', '2', '3', '4', '5',
-                                                    '6', '7', '8', '9', '10']])
-
-    # Set prices of each bid.
-    price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
-    market.set_unit_price_bids(price_bids.loc[:, ['unit', '1', '2', '3', '4', '5',
-                                                  '6', '7', '8', '9', '10']])
-
-    # Set unit operating limits.
-    market.set_unit_capacity_constraints(unit_limits.loc[:, ['unit', 'capacity']])
-    market.set_unit_ramp_up_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-    market.set_unit_ramp_down_constraints(unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
-
-    # Set regional demand.
-    market.set_demand_constraints(regional_demand.loc[:, ['region', 'demand']])
-
-    # Create the interconnectors.
-    market.set_interconnectors(interconnectors)
-
-    # Create loss functions on per interconnector basis.
-    market.set_interconnector_losses(loss_functions, interpolation_break_points)
-
-    # Calculate dispatch.
     market.dispatch()
-
-    print('Dispatch for interval {} complete.'.format(interval))
 
     # Save prices from this interval
     prices = market.get_energy_prices()
     prices['time'] = interval
-    outputs.append(prices)
+    outputs.append(prices.loc[:, ['time', 'region', 'price']])
 
 con.close()
 print(pd.concat(outputs))
-#    region      price                 time
-# 0    NSW1  61.114147  2020/01/02 15:05:00
-# 1    QLD1  58.130015  2020/01/02 15:05:00
-# 2     SA1  72.675411  2020/01/02 15:05:00
-# 3    TAS1  73.013327  2020/01/02 15:05:00
-# 4    VIC1  68.778493  2020/01/02 15:05:00
-# ..    ...        ...                  ...
-# 0    NSW1  54.630861  2020/01/02 21:00:00
-# 1    QLD1  55.885854  2020/01/02 21:00:00
-# 2     SA1  53.038412  2020/01/02 21:00:00
-# 3    TAS1  61.537939  2020/01/02 21:00:00
-# 4    VIC1  57.040000  2020/01/02 21:00:00
-#
-# [360 rows x 3 columns]
+#                   time region      price
+# 0  2019/01/01 12:00:00   NSW1  91.857666
+# 1  2019/01/01 12:00:00   QLD1  76.180429
+# 2  2019/01/01 12:00:00    SA1  85.126914
+# 3  2019/01/01 12:00:00   TAS1  85.948523
+# 4  2019/01/01 12:00:00   VIC1  83.250703
+# 0  2019/01/01 12:05:00   NSW1  88.357224
+# 1  2019/01/01 12:05:00   QLD1  72.255334
+# 2  2019/01/01 12:05:00    SA1  82.417720
+# 3  2019/01/01 12:05:00   TAS1  83.451561
+# 4  2019/01/01 12:05:00   VIC1  80.621103
+# 0  2019/01/01 12:10:00   NSW1  91.857666
+# 1  2019/01/01 12:10:00   QLD1  75.665675
+# 2  2019/01/01 12:10:00    SA1  85.680310
+# 3  2019/01/01 12:10:00   TAS1  86.715499
+# 4  2019/01/01 12:10:00   VIC1  83.774337
+# 0  2019/01/01 12:15:00   NSW1  88.343034
+# 1  2019/01/01 12:15:00   QLD1  71.746786
+# 2  2019/01/01 12:15:00    SA1  82.379539
+# 3  2019/01/01 12:15:00   TAS1  83.451561
+# 4  2019/01/01 12:15:00   VIC1  80.621103
+# 0  2019/01/01 12:20:00   NSW1  91.864122
+# 1  2019/01/01 12:20:00   QLD1  75.052319
+# 2  2019/01/01 12:20:00    SA1  85.722028
+# 3  2019/01/01 12:20:00   TAS1  86.576848
+# 4  2019/01/01 12:20:00   VIC1  83.859306
+# 0  2019/01/01 12:25:00   NSW1  91.864122
+# 1  2019/01/01 12:25:00   QLD1  75.696247
+# 2  2019/01/01 12:25:00    SA1  85.746024
+# 3  2019/01/01 12:25:00   TAS1  86.613642
+# 4  2019/01/01 12:25:00   VIC1  83.894945
+# 0  2019/01/01 12:30:00   NSW1  91.870167
+# 1  2019/01/01 12:30:00   QLD1  75.188735
+# 2  2019/01/01 12:30:00    SA1  85.694071
+# 3  2019/01/01 12:30:00   TAS1  86.560602
+# 4  2019/01/01 12:30:00   VIC1  83.843570

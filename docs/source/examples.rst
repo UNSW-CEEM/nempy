@@ -49,12 +49,23 @@ co-optimisation constraints as described in section 6.2 and 6.3 of
     :language: python
 
 
-Recreating historical dispatch with energy generators and interconnectors
--------------------------------------------------------------------------
-Demonstrates using the historical_spot_market_inputs module to access historical dispatch inputs on a 5 min interval
-basis, and using the Spot market class to calculate dispatch.
+Simple recreation of historical dispatch
+----------------------------------------
+Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market with unit bids,
+unit maximum capacity constraints and interconnector models, all sourced from historical data published by AEMO.
 
 .. literalinclude:: ../../examples/recreating_historical_dispatch.py
+    :linenos:
+    :language: python
+
+Detailed recreation of historical dispatch
+------------------------------------------
+Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market using all the
+features of the nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
+dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
+conditions of the next interval, rather the historical initial conditions are always used.
+
+.. literalinclude:: ../../examples/all_features_example.py
     :linenos:
     :language: python
 

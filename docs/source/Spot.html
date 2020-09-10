@@ -385,34 +385,34 @@ Unknown interpreted text role &quot;func&quot;.</div>
 later use.</li>
 </ul>
 <pre class="code python literal-block">
-<span class="name">simple_market</span> <span class="operator">=</span> <span class="name">markets</span><span class="operator">.</span><span class="name">Spot</span><span class="punctuation">(</span><span class="name">unit_info</span><span class="operator">=</span><span class="name">unit_info</span><span class="punctuation">)</span>
+<span class="name">market</span> <span class="operator">=</span> <span class="name">markets</span><span class="operator">.</span><span class="name">Spot</span><span class="punctuation">(</span><span class="name">unit_info</span><span class="operator">=</span><span class="name">unit_info</span><span class="punctuation">)</span>
 </pre>
 <ul class="simple">
 <li>Providing volume bids creates a set of n decision variables, where n is the number of bids with a volume greater
 than zero.</li>
 </ul>
 <pre class="code python literal-block">
-<span class="name">simple_market</span><span class="operator">.</span><span class="name">set_unit_energy_volume_bids</span><span class="punctuation">(</span><span class="name">volume_bids</span><span class="punctuation">)</span>
+<span class="name">market</span><span class="operator">.</span><span class="name">set_unit_energy_volume_bids</span><span class="punctuation">(</span><span class="name">volume_bids</span><span class="punctuation">)</span>
 </pre>
 <ul class="simple">
 <li>Providing price bids creates the objective function, i.e. units will be dispatch to minimise cost, as determined
 by the bid prices.</li>
 </ul>
 <pre class="code python literal-block">
-<span class="name">simple_market</span><span class="operator">.</span><span class="name">set_unit_energy_price_bids</span><span class="punctuation">(</span><span class="name">price_bids</span><span class="punctuation">)</span>
+<span class="name">market</span><span class="operator">.</span><span class="name">set_unit_energy_price_bids</span><span class="punctuation">(</span><span class="name">price_bids</span><span class="punctuation">)</span>
 </pre>
 <ul class="simple">
 <li>Providing unit capacities creates a constraint for each unit that caps its total dispatch at a set capacity</li>
 </ul>
 <pre class="code python literal-block">
-<span class="name">simple_market</span><span class="operator">.</span><span class="name">set_unit_capacity_constraints</span><span class="punctuation">(</span><span class="name">unit_limits</span><span class="punctuation">)</span>
+<span class="name">market</span><span class="operator">.</span><span class="name">set_unit_capacity_constraints</span><span class="punctuation">(</span><span class="name">unit_limits</span><span class="punctuation">)</span>
 </pre>
 <ul class="simple">
 <li>Providing regional energy demand creates a constraint for each region that forces supply from units and
 interconnectors to equal demand</li>
 </ul>
 <pre class="code python literal-block">
-<span class="name">simple_market</span><span class="operator">.</span><span class="name">set_demand_constraints</span><span class="punctuation">(</span><span class="name">demand</span><span class="punctuation">)</span>
+<span class="name">market</span><span class="operator">.</span><span class="name">set_demand_constraints</span><span class="punctuation">(</span><span class="name">demand</span><span class="punctuation">)</span>
 </pre>
 </div>
 <div class="section" id="reference">
