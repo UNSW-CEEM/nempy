@@ -139,5 +139,8 @@ tests/test_files/historical_xml_files
 *.ods
 
 *.csv
+!tests/10_interval_benchmark.csv
+!tests/100_interval_benchmark.csv
+!tests/1000_interval_benchmark.csv
 
 examples/cache_directory/*
