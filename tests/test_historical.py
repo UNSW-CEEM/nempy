@@ -10,7 +10,6 @@ from nempy import historical_market_builder
 
 ##### These tests require some additional clean up and will probably not run on your machine. ##########################
 
-
 # Define a set of random intervals to test
 def get_test_intervals(number=100):
     start_time = datetime(year=2019, month=1, day=1, hour=0, minute=0)
@@ -22,35 +21,6 @@ def get_test_intervals(number=100):
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
-
-
-def test_setup():
-    running_for_first_time = False
-
-    con = sqlite3.connect('test_files/historical_all.db')
-    historical_inputs = inputs.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
-
-    if running_for_first_time:
-        historical_inputs.build_market_management_system_database(start_year=2018, start_month=12,
-                                                                  end_year=2020, end_month=1)
-        historical_inputs.build_xml_inputs_cache(start_year=2019, start_month=1,
-                                                 end_year=2019, end_month=12)
-
-    get_violation_intervals = False
-
-    if get_violation_intervals:
-        interval_with_fast_start_violations = \
-            historical_inputs.find_intervals_with_violations(limit=1,
-                                                             start_year=2019, start_month=2,
-                                                             end_year=2019, end_month=2)
-
-        with open('interval_with_fast_start_violations.pickle', 'wb') as f:
-            pickle.dump(interval_with_fast_start_violations, f, pickle.HIGHEST_PROTOCOL)
-
-    con.close()
-
 
 def test_if_ramp_rates_calculated_correctly():
     inputs_database = 'test_files/historical.db'

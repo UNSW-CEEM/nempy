@@ -15,7 +15,7 @@ nemde_xml_file_cache_interface = \
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-down_load_inputs = True
+down_load_inputs = False
 
 if down_load_inputs:
     # This requires approximately 5 GB of storage.
@@ -81,7 +81,7 @@ for interval in dispatch_intervals:
     market.set_interconnectors(interconnectors_definitions)
     market.set_interconnector_losses(loss_functions,
                                      interpolation_break_points)
-
+    market.solver_name = 'GUROBI'
     market.dispatch()
 
     # Save prices from this interval
