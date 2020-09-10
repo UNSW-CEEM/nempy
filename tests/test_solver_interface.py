@@ -14,10 +14,10 @@ def test_dispatch():
         })
     }
     constraints_rhs_and_type = {
-            'capacity': pd.DataFrame({
-                'constraint_id': [0, 1],
-                'type': ['<=', '<='],
-                'rhs': [5, 15]
+        'capacity': pd.DataFrame({
+            'constraint_id': [0, 1],
+            'type': ['<=', '<='],
+            'rhs': [5, 15]
         })
     }
     market_rhs_and_type = {
@@ -28,9 +28,9 @@ def test_dispatch():
         })
     }
     constraints_lhs_coefficient = pd.DataFrame({
-            'constraint_id': [0, 0, 1, 1, 2, 2, 2, 2],
-            'variable_id': [4, 5, 6, 7, 4, 5, 6, 7],
-            'coefficient': [1, 1, 1, 1, 1, 1, 1, 1]
+        'constraint_id': [0, 0, 1, 1, 2, 2, 2, 2],
+        'variable_id': [4, 5, 6, 7, 4, 5, 6, 7],
+        'coefficient': [1, 1, 1, 1, 1, 1, 1, 1]
     })
     objective_function = {
         'energy_bids': pd.DataFrame({
@@ -48,7 +48,7 @@ def test_dispatch():
             'upper_bound': [1, 6, 5, 7],
             'variable_id': [4, 5, 6, 7],
             'lower_bound': [0.0, 0.0, 0.0, 0.0],
-            'type': ['continuous', 'continuous', 'continuous','continuous'],
+            'type': ['continuous', 'continuous', 'continuous', 'continuous'],
             'value': [1.0, 4.0, 5.0, 5.0]
         })
     }

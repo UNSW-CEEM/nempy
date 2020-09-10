@@ -200,6 +200,7 @@ def column_values_outside_range(name, column_ranges, arg=1):
 
     return decorator
 
+
 def table_exists(arg=1):
     def decorator(func):
         @keep_details(func)

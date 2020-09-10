@@ -1,8 +1,6 @@
 import numpy as np
 import pandas as pd
-from mip import Model, xsum, minimize, INTEGER, CONTINUOUS, OptimizationStatus, LinExpr, BINARY
-from nempy import check
-from time import time
+from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY
 
 
 def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, market_rhs_and_type,
@@ -89,7 +87,6 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
                                        list(objective_function.index)))
 
     # 3. Create the constraints
-    sos_constraints = []
     if len(constraints_rhs_and_type) > 0:
         constraints_rhs_and_type = pd.concat(list(constraints_rhs_and_type.values()))
     else:
@@ -116,28 +113,28 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
 
     rhs = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['rhs']))
     enq_type = dict(zip(rhs_and_type['constraint_id'], rhs_and_type['type']))
-    #var_list = np.asarray([lp_variables[k] for k in sorted(list(lp_variables))])
-    #t0 = time()
+    # var_list = np.asarray([lp_variables[k] for k in sorted(list(lp_variables))])
+    # t0 = time()
     for row, id in zip(constraint_matrix_np, row_ids):
         new_constraint = make_constraint(lp_variables, row, rhs[id], column_ids, enq_type[id])
         prob.add_constr(new_constraint, name=str(id))
-    #print(time() - t0)
-    # for row_index in sos_constraints:
-    #     sos_set = get_sos(var_list, constraint_matrix_np[row_index], column_ids)
-     #   prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 1)
+    # print(time() - t0)
+    #  for row_index in sos_constraints:
+    #      sos_set = get_sos(var_list, constraint_matrix_np[row_index], column_ids)
+    #    prob.add_sos(list(zip(sos_set, [0 for var in sos_set])), 1)
 
     # 4. Solve the problem
-    k = prob.add_var(var_type=BINARY, obj=1.0)
-    #tc = 0
-    #t0 = time()
+    prob.add_var(var_type=BINARY, obj=1.0)
+    # tc = 0
+    # t0 = time()
     status = prob.optimize()
-    #tc += time() - t0
-    #print(tc)
+    # tc += time() - t0
+    # print(tc)
     if status != OptimizationStatus.OPTIMAL:
         raise ValueError('Linear program infeasible')
 
     # 5. Retrieve optimal values of each variable
-    #t0 = time()
+    # t0 = time()
     decision_variables = decision_variables.droplevel(1)
     decision_variables['lp_variables'] = [lp_variables[i] for i in decision_variables['variable_id']]
     decision_variables['value'] = decision_variables['lp_variables'].apply(lambda x: x.x)
@@ -146,29 +143,29 @@ def dispatch(decision_variables, constraints_lhs, constraints_rhs_and_type, mark
     for variable_group in decision_variables.index.unique():
         split_decision_variables[variable_group] = \
             decision_variables[decision_variables.index == variable_group].reset_index(drop=True)
-    #print('get values {}'.format(time() - t0))
+    # print('get values {}'.format(time() - t0))
 
     # 6. Retrieve the shadow costs of market constraints
     start_obj = prob.objective.x
-    #initial_solution = [(v, v.x) for v in list(sos_variables['vars']) if v.x > 0.01]
-    #print(initial_solution)
-    #prob.start = initial_solution
-    #prob.validate_mip_start()
+    # initial_solution = [(v, v.x) for v in list(sos_variables['vars']) if v.x > 0.01]
+    # print(initial_solution)
+    # prob.start = initial_solution
+    # prob.validate_mip_start()
     for constraint_group in market_rhs_and_type.keys():
         cg = constraint_group
         market_rhs_and_type[cg]['price'] = 0.0
         for id in list(market_rhs_and_type[cg]['constraint_id']):
             constraint = prob.constr_by_name(str(id))
             constraint.rhs += 1.0
-            #t0 = time()
+            # t0 = time()
             prob.optimize()
-            #tc += time() - t0
+            # tc += time() - t0
             marginal_cost = prob.objective.x - start_obj
             market_rhs_and_type[cg].loc[market_rhs_and_type[cg]['constraint_id'] == id, 'price'] = marginal_cost
             constraint.rhs -= 1.0
         # market_rhs_and_type[constraint_group]['price'] = \
         #     market_rhs_and_type[constraint_group].apply(lambda x: get_price(x['constraint_id'], prob), axis=1)
-    #print(tc)
+    # print(tc)
     return split_decision_variables, market_rhs_and_type
 
 

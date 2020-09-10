@@ -48,9 +48,11 @@ interconnectors = pd.DataFrame({
 
 simple_market.set_interconnectors(interconnectors)
 
+
 # The interconnector loss function. In this case losses are always 5 % of line flow.
 def constant_losses(flow):
     return abs(flow) * 0.05
+
 
 # The loss function on a per interconnector basis. Also details how the losses should be proportioned to the
 # connected regions.

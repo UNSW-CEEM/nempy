@@ -125,7 +125,7 @@ def bids(volume_bids, unit_info, next_variable_id):
     # The variable specific contribution to these constraints is always zero.
     constraint_map['coefficient'] = 1.0
 
-    constraint_map = constraint_map.loc[:,  ['variable_id', 'unit', 'region', 'service', 'coefficient']]
+    constraint_map = constraint_map.loc[:, ['variable_id', 'unit', 'region', 'service', 'coefficient']]
     decision_variables = \
         decision_variables.loc[:, ['unit', 'capacity_band', 'service', 'variable_id', 'lower_bound', 'upper_bound',
                                    'type']]

@@ -1,12 +1,10 @@
 import sqlite3
 import pandas as pd
-from pandas._testing import assert_frame_equal
 import numpy as np
 import os.path
 from datetime import datetime, timedelta
 import random
 from nempy import historical_spot_market_inputs as hi, markets
-from time import time
 
 
 # Define a set of random intervals to test
@@ -17,7 +15,7 @@ def get_test_intervals():
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
     intervals = random.sample(range(1, difference_in_5_min_intervals), 100)
-    times = [start_time + timedelta(minutes=5*i) for i in intervals]
+    times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
 
@@ -28,7 +26,7 @@ def setup():
         # Create a database for the require inputs.
         con = sqlite3.connect('test_files/historical_inputs.db')
         inputs_manager = hi.DBManager(connection=con)
-        #inputs_manager.create_tables()
+        # inputs_manager.create_tables()
         inputs_manager.INTERCONNECTORCONSTRAINT.create_table_in_sqlite_db()
 
         # Download data were inputs are needed on a monthly basis.
@@ -57,6 +55,7 @@ def setup():
         inputs_manager.INTERCONNECTORCONSTRAINT.set_data(year=2020, month=3)
 
         con.close()
+
 
 setup()
 
@@ -133,7 +132,7 @@ def test_using_availability_and_ramp_rates():
         dispatch_load = dispatch_load[dispatch_load['DISPATCHMODE'] == 0.0]
         dispatch_load = dispatch_load.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPUPRATE', 'RAMPDOWNRATE',
                                               'TOTALCLEARED', 'DISPATCHMODE']]
-        dispatch_load['RAMPMAX'] = dispatch_load['INITIALMW'] + dispatch_load['RAMPUPRATE'] * (5/60)
+        dispatch_load['RAMPMAX'] = dispatch_load['INITIALMW'] + dispatch_load['RAMPUPRATE'] * (5 / 60)
         dispatch_load['RAMPMIN'] = dispatch_load['INITIALMW'] - dispatch_load['RAMPDOWNRATE'] * (5 / 60)
         dispatch_load['assumption'] = ((dispatch_load['RAMPMAX'] + 0.01 >= dispatch_load['TOTALCLEARED']) &
                                        (dispatch_load['AVAILABILITY'] + 0.01 >= dispatch_load['TOTALCLEARED'])) | \
@@ -153,7 +152,7 @@ def test_max_capacity_not_less_than_availability():
 
     for interval in get_test_intervals():
         dispatch_load = inputs_manager.DISPATCHLOAD.get_data(interval)
-        dispatch_load = dispatch_load.loc[:, ['DUID','AVAILABILITY']]
+        dispatch_load = dispatch_load.loc[:, ['DUID', 'AVAILABILITY']]
         unit_capacity = inputs_manager.DUDETAIL.get_data(interval)
         unit_capacity = pd.merge(unit_capacity, dispatch_load, 'inner', on='DUID')
         unit_capacity['assumption'] = unit_capacity['AVAILABILITY'] <= unit_capacity['MAXCAPACITY']
@@ -181,15 +180,10 @@ def test_determine_unit_limits():
         unit_limits = hi.determine_unit_limits(dispatch_load, unit_capacity)
         unit_limits = pd.merge(unit_limits, dispatch_load.loc[:, ['DUID', 'TOTALCLEARED', 'DISPATCHMODE']], 'inner',
                                left_on='unit', right_on='DUID')
-        unit_limits['ramp_max'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (5/60)
-        unit_limits['ramp_min'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (5/60)
+        unit_limits['ramp_max'] = unit_limits['initial_output'] + unit_limits['ramp_up_rate'] * (5 / 60)
+        unit_limits['ramp_min'] = unit_limits['initial_output'] - unit_limits['ramp_down_rate'] * (5 / 60)
         # Test the assumption that our calculated limits are not more restrictive then amount historically dispatched.
         unit_limits['assumption'] = ~((unit_limits['TOTALCLEARED'] > unit_limits['capacity'] + 0.01) |
-                                    (unit_limits['TOTALCLEARED'] > unit_limits['ramp_max'] + 0.01) |
-                                    (unit_limits['TOTALCLEARED'] < unit_limits['ramp_min'] - 0.01))
+                                      (unit_limits['TOTALCLEARED'] > unit_limits['ramp_max'] + 0.01) |
+                                      (unit_limits['TOTALCLEARED'] < unit_limits['ramp_min'] - 0.01))
         assert(unit_limits['assumption'].all())
-
-
-
-
-

@@ -27,8 +27,8 @@ def test_download_to_df():
 def test_download_to_df_raises_on_missing_data():
     server = subprocess.Popen('python -m http.server 8080 --bind 127.0.0.1')
     with pytest.raises(historical_spot_market_inputs._MissingData):
-        output = historical_spot_market_inputs._download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
-                                                               table_name='table_one', year=2020, month=3)
+        historical_spot_market_inputs._download_to_df(url='http://127.0.0.1:8080/test_files/{table}_{year}{month}01.zip',
+                                                      table_name='table_one', year=2020, month=3)
     server.terminate()
 
 
@@ -36,7 +36,7 @@ def test_download_to_df_raises_on_data_not_on_nemweb():
     with pytest.raises(historical_spot_market_inputs._MissingData):
         url = ('http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' +
                'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip')
-        output = historical_spot_market_inputs._download_to_df(
+        historical_spot_market_inputs._download_to_df(
             url=url,
             table_name='DISPATCHREGIONSUM', year=2050, month=3)
 
@@ -152,5 +152,3 @@ def test_create_loss_function_bass_link():
     expected_losses = (-3.92E-3) * flow + (1.0393E-4) * flow ** 2
 
     assert(pytest.approx(expected_losses, 0.0001) == output_losses)
-
-

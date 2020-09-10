@@ -96,7 +96,7 @@ def create(definitions, next_variable_id):
     # Define decision variable attributes.
     decision_variables['type'] = 'continuous'
     decision_variables = decision_variables.loc[:, ['interconnector', 'variable_id', 'min', 'max', 'type']]
-    decision_variables.columns = ['interconnector',  'variable_id', 'lower_bound', 'upper_bound', 'type']
+    decision_variables.columns = ['interconnector', 'variable_id', 'lower_bound', 'upper_bound', 'type']
 
     # Set positive coefficient for the to_region so the interconnector flowing in the nominal direction helps meet the
     # to_region demand constraint. Negative for the from_region, same logic.

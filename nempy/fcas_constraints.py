@@ -230,11 +230,11 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
 
     # Calculate the slope coefficients for the constraints.
     constraints_upper_slope['upper_slope_coefficient'] = ((constraints_upper_slope['enablement_max'] -
-                                                          constraints_upper_slope['high_break_point']) /
-                                                         constraints_upper_slope['max_availability'])
+                                                           constraints_upper_slope['high_break_point']) /
+                                                          constraints_upper_slope['max_availability'])
     constraints_lower_slope['lower_slope_coefficient'] = ((constraints_lower_slope['low_break_point'] -
-                                                          constraints_lower_slope['enablement_min']) /
-                                                         constraints_lower_slope['max_availability'])
+                                                           constraints_lower_slope['enablement_min']) /
+                                                          constraints_lower_slope['max_availability'])
 
     # Define the direction of the upper slope constraints and the rhs value.
     constraints_upper_slope['type'] = '<='
@@ -378,10 +378,10 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     # Calculate the slope coefficients for the constraints.
     constraints_upper_slope['upper_slope_coefficient'] = ((constraints_upper_slope['enablement_max'] -
                                                           constraints_upper_slope['high_break_point']) /
-                                                         constraints_upper_slope['max_availability'])
+                                                          constraints_upper_slope['max_availability'])
     constraints_lower_slope['lower_slope_coefficient'] = ((constraints_lower_slope['low_break_point'] -
-                                                          constraints_lower_slope['enablement_min']) /
-                                                         constraints_lower_slope['max_availability'])
+                                                           constraints_lower_slope['enablement_min']) /
+                                                          constraints_lower_slope['max_availability'])
 
     # Define the direction of the upper slope constraints and the rhs value.
     constraints_upper_slope['type'] = '<='
@@ -398,7 +398,7 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     energy_mapping_upper_slope['service'] = 'energy'
     energy_mapping_upper_slope['coefficient'] = 1.0
     regulation_mapping_upper_slope = constraints_upper_slope.loc[:, ['constraint_id', 'unit', 'service',
-                                                                      'upper_slope_coefficient']]
+                                                                     'upper_slope_coefficient']]
     regulation_mapping_upper_slope = \
         regulation_mapping_upper_slope.rename(columns={"upper_slope_coefficient": "coefficient"})
 
@@ -417,5 +417,3 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     variable_mapping = pd.concat([energy_mapping_upper_slope, regulation_mapping_upper_slope,
                                   energy_mapping_lower_slope, regulation_mapping_lower_slope])
     return type_and_rhs, variable_mapping
-
-

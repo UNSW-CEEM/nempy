@@ -2,12 +2,8 @@ import requests
 import zipfile
 import io
 import pandas as pd
-import sqlite3
 from datetime import datetime, timedelta
-import os
 import numpy as np
-
-from nempy import check
 
 
 def _download_to_df(url, table_name, year, month):
@@ -70,7 +66,7 @@ def _download_to_df(url, table_name, year, month):
     # Download the file.
     r = requests.get(url)
     if r.status_code != 200:
-        raise _MissingData(("""Requested data for table: {}, year: {}, month: {} 
+        raise _MissingData(("""Requested data for table: {}, year: {}, month: {}
                               not downloaded. Please check your internet connection. Also check
                               http://nemweb.com.au/#mms-data-model, to see if your requested
                               data is uploaded.""").format(table_name, year, month))
@@ -709,8 +705,8 @@ class InputsByMatchDispatchConstraints(_SingleDataSource):
         """
         columns = ','.join(['{}'.format(col) for col in self.table_columns])
         query = """Select {columns} from (
-                        {table} 
-                    inner join 
+                        {table}
+                    inner join
                         (Select * from DISPATCHCONSTRAINT where SETTLEMENTDATE == '{datetime}')
                     on GENCONID == CONSTRAINTID
                     and EFFECTIVEDATE == GENCONID_EFFECTIVEDATE
@@ -804,9 +800,9 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
             cur.execute("DROP TABLE IF EXISTS temp3;")
             cur.execute("DROP TABLE IF EXISTS temp4;")
             # Store just the unique sets of ids that came into effect before the the datetime in a temporary table.
-            query = """CREATE TEMPORARY TABLE temp AS 
-                              SELECT * 
-                                FROM {table} 
+            query = """CREATE TEMPORARY TABLE temp AS
+                              SELECT *
+                                FROM {table}
                                WHERE EFFECTIVEDATE <= '{datetime}';"""
             cur.execute(query.format(table=self.table_name, datetime=date_time))
             # For each unique set of ids and effective dates get the latest versionno and sore in temporary table.
@@ -823,17 +819,17 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
             cur.execute(query.format(id=id_columns))
             # Inner join the original table to the set of most recent effective dates and version no.
             query = """CREATE TEMPORARY TABLE temp4 AS
-                              SELECT * 
-                                FROM {table} 
-                                     INNER JOIN temp3 
+                              SELECT *
+                                FROM {table}
+                                     INNER JOIN temp3
                                      USING ({id}, VERSIONNO, EFFECTIVEDATE);"""
             cur.execute(query.format(table=self.table_name, id=id_columns))
         # Inner join the most recent data with the interconnectors used in the actual interval of interest.
-        query = """SELECT {cols} 
-                     FROM temp4 
-                          INNER JOIN (SELECT * 
-                                        FROM DISPATCHINTERCONNECTORRES 
-                                       WHERE SETTLEMENTDATE == '{datetime}') 
+        query = """SELECT {cols}
+                     FROM temp4
+                          INNER JOIN (SELECT *
+                                        FROM DISPATCHINTERCONNECTORRES
+                                       WHERE SETTLEMENTDATE == '{datetime}')
                           USING (INTERCONNECTORID);"""
         query = query.format(datetime=date_time, id=id_columns, cols=return_columns)
         data = pd.read_sql_query(query, con=self.con)
@@ -917,9 +913,9 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
             cur.execute("DROP TABLE IF EXISTS temp3;")
             cur.execute("DROP TABLE IF EXISTS temp4;")
             # Store just the unique sets of ids that came into effect before the the datetime in a temporary table.
-            query = """CREATE TEMPORARY TABLE temp AS 
-                              SELECT * 
-                                FROM {table} 
+            query = """CREATE TEMPORARY TABLE temp AS
+                              SELECT *
+                                FROM {table}
                                WHERE EFFECTIVEDATE <= '{datetime}';"""
             cur.execute(query.format(table=self.table_name, datetime=date_time))
             # For each unique set of ids and effective dates get the latest versionno and sore in temporary table.
@@ -936,9 +932,9 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
             cur.execute(query.format(id=id_columns))
             # Inner join the original table to the set of most recent effective dates and version no.
             query = """CREATE TEMPORARY TABLE temp4 AS
-                              SELECT * 
-                                FROM {table} 
-                                     INNER JOIN temp3 
+                              SELECT *
+                                FROM {table}
+                                     INNER JOIN temp3
                                      USING ({id}, VERSIONNO, EFFECTIVEDATE);"""
             cur.execute(query.format(table=self.table_name, id=id_columns))
         # Inner join the most recent data with the interconnectors used in the actual interval of interest.
@@ -1342,7 +1338,7 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
 
     demand_loss_factor_offset = pd.merge(demand_coefficients, demand, 'inner', on=['region'])
     demand_loss_factor_offset['offset'] = demand_loss_factor_offset['loss_function_demand'] * \
-                                          demand_loss_factor_offset['demand_coefficient']
+        demand_loss_factor_offset['demand_coefficient']
     demand_loss_factor_offset = demand_loss_factor_offset.groupby('interconnector', as_index=False)['offset'].sum()
     loss_functions = pd.merge(interconnector_coefficients, demand_loss_factor_offset, 'left', on=['interconnector'])
     loss_functions['loss_constant'] = loss_functions['loss_constant'] + loss_functions['offset'].fillna(0)
@@ -1444,7 +1440,7 @@ def format_unit_info(DUDETAILSUMMARY):
 
     # Combine loss factors.
     DUDETAILSUMMARY['LOSSFACTOR'] = DUDETAILSUMMARY['TRANSMISSIONLOSSFACTOR'] * \
-                                    DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
+        DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
     unit_info = DUDETAILSUMMARY.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
     unit_info.columns = ['unit', 'dispatch_type', 'connection_point', 'region', 'loss_factor']
     unit_info['dispatch_type'] = unit_info['dispatch_type'].apply(lambda x: dispatch_type_name_map[x])
@@ -1512,8 +1508,8 @@ def format_volume_bids(BIDPEROFFER_D):
     """
 
     volume_bids = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4',
-                                      'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
-                                      'BANDAVAIL10']]
+                                        'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
+                                        'BANDAVAIL10']]
     volume_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
     volume_bids['service'] = volume_bids['service'].apply(lambda x: service_name_mapping[x])
     return volume_bids

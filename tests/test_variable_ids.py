@@ -33,6 +33,7 @@ def test_energy_one_unit():
     assert_frame_equal(output_vars, expected_vars)
     assert_frame_equal(output_constraint_map, expected_constraint_map)
 
+
 def test_energy_two_units():
     bids = pd.DataFrame({
         'unit': ['A', 'B'],
