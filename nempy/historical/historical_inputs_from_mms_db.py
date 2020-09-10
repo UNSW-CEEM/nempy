@@ -5,7 +5,6 @@ import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 import os
-import numpy as np
 
 from nempy.help_functions import helper_functions as hf
 
