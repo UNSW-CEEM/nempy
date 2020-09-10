@@ -139,3 +139,5 @@ tests/test_files/historical_xml_files
 *.ods
 
 *.csv
+
+examples/cache_directory/*
