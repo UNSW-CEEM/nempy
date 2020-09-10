@@ -4,12 +4,11 @@ from pandas.testing import assert_frame_equal
 from datetime import datetime, timedelta
 import random
 import pickle
-import pytest
 from nempy.historical import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, interconnectors, \
     constraints, demand
 from nempy import historical_market_builder
 
-from time import time
+##### These tests require some additional clean up and will probably not run on your machine. ##########################
 
 
 # Define a set of random intervals to test

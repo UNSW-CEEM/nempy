@@ -15,7 +15,8 @@ are interested in collaborating or just want to discuss this project. You can co
 No stable version released yet.
 
 ## Install
-Not added to pypi yet, you need to download the source to use.
+Not added to pypi yet, you need to download the source code from the GitHub repo to use. To install the required 
+dependencies use `pip install -r requirements.txt` .
 
 ## Documentation
 Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
