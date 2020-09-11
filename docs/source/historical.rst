@@ -8,9 +8,11 @@ class.
 XMLCacheManager
 ---------------
 
-.. autoclass:: nempy.historical_inputs.historical_inputs_from_xml.XMLCacheManager
+.. automodule:: nempy.historical_inputs.historical_inputs_from_xml
     :autosummary:
     :members:
+    :inherited-members:
+    :exclude-members: timedelta,datetime,time,Path
 
 Market Management System Database classes
 -----------------------------------------
