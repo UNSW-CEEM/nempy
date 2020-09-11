@@ -819,8 +819,8 @@ def create_interconnector_generic_constraint_lhs(generic_constraint_interconnect
     1              1            1          0.9
     """
     interconnector_lhs = pd.merge(generic_constraint_interconnectors,
-                                  interconnector_variables.loc[:,
-                                  ['interconnector', 'variable_id', 'generic_constraint_factor']],
+                                  interconnector_variables.loc[:, ['interconnector', 'variable_id',
+                                                                   'generic_constraint_factor']],
                                   on=['interconnector'])
     interconnector_lhs = pd.merge(interconnector_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
     interconnector_lhs['coefficient'] = interconnector_lhs['coefficient'] * interconnector_lhs[

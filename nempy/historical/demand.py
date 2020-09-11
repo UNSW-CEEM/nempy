@@ -1,4 +1,3 @@
-import pandas as pd
 
 
 class DemandData:
@@ -61,6 +60,3 @@ def format_regional_demand(DISPATCHREGIONSUM):
     regional_demand = DISPATCHREGIONSUM.loc[:, ['REGIONID', 'TOTALDEMAND', 'loss_function_demand']]
     regional_demand.columns = ['region', 'demand', 'loss_function_demand']
     return regional_demand
-
-
-

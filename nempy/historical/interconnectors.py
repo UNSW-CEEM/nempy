@@ -86,17 +86,19 @@ class InterconnectorData:
         interconnector_demand_coefficients = format_interconnector_loss_demand_coefficient(LOSSFACTORMODEL)
         interpolation_break_points = format_interpolation_break_points(LOSSMODEL)
         loss_functions = create_loss_functions(interconnector_loss_coefficients,
-                                                    interconnector_demand_coefficients,
-                                                    regional_demand.loc[:, ['region', 'loss_function_demand']])
+                                               interconnector_demand_coefficients,
+                                               regional_demand.loc[:, ['region', 'loss_function_demand']])
 
         interconnectors = self.get_interconnector_definitions()
 
-        interpolation_break_points = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
+        interpolation_break_points = pd.merge(interconnectors.loc[:, ['interconnector', 'link',
+                                                                      'generic_constraint_factor']],
                                               interpolation_break_points, on='interconnector')
 
-        interpolation_break_points['break_point'] = interpolation_break_points['break_point'] * interpolation_break_points['generic_constraint_factor']
+        interpolation_break_points['break_point'] = interpolation_break_points['break_point'] * \
+            interpolation_break_points['generic_constraint_factor']
         interpolation_break_points['loss_segment'] = interpolation_break_points['loss_segment'] * \
-                                                    interpolation_break_points['generic_constraint_factor']
+            interpolation_break_points['generic_constraint_factor']
         self.interpolation_break_points = interpolation_break_points.drop('generic_constraint_factor', axis=1)
 
         loss_functions = pd.merge(interconnectors.loc[:, ['interconnector', 'link', 'generic_constraint_factor']],
@@ -108,7 +110,8 @@ class InterconnectorData:
             return wrapper
 
         loss_functions['loss_function'] = \
-            loss_functions.apply(lambda x: loss_function_adjuster(x['loss_function'], x['generic_constraint_factor']), axis=1)
+            loss_functions.apply(lambda x: loss_function_adjuster(x['loss_function'], x['generic_constraint_factor']),
+                                 axis=1)
 
         self.loss_functions = loss_functions.drop('generic_constraint_factor', axis=1)
 
@@ -154,7 +157,8 @@ class InterconnectorData:
         """
         regulated_interconnectors_series = \
             self.INTERCONNECTORCONSTRAINT[self.INTERCONNECTORCONSTRAINT['ICTYPE'] == 'REGULATED'].loc[:, 'INTERCONNECTORID']
-        regulated_interconnectors = self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors_series)].copy()
+        regulated_interconnectors = \
+            self.interconnectors[self.interconnectors['interconnector'].isin(regulated_interconnectors_series)].copy()
 
         regulated_interconnectors['link'] = regulated_interconnectors['interconnector']
         regulated_interconnectors['from_region_loss_factor'] = 1.0
@@ -230,7 +234,8 @@ class InterconnectorData:
         MNSP_INTERCONNECTOR = self.raw_input_loader.get_market_interconnectors()
         mnsp_transmission_loss_factors = format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
                                                                                self.INTERCONNECTORCONSTRAINT)
-        mnsp_transmission_loss_factors = pd.merge(mnsp_transmission_loss_factors, mnsp_bids, on=['interconnector', 'to_region'])
+        mnsp_transmission_loss_factors = \
+            pd.merge(mnsp_transmission_loss_factors, mnsp_bids, on=['interconnector', 'to_region'])
         mnsp_transmission_loss_factors['max'] = np.where(~mnsp_transmission_loss_factors['availability'].isna(),
                                                          mnsp_transmission_loss_factors['availability'],
                                                          mnsp_transmission_loss_factors['max'])
@@ -635,8 +640,10 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
         Columns:             Description:
         INTERCONNECTORID     unique identifier of a interconnector (as `str`)
         LOSSCONSTANT         the constant term in the interconnector loss factor equation (as np.float64)
-        LOSSFLOWCOEFFICIENT  the coefficient of the interconnector flow variable in the loss factor equation (as np.float64)
-        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainder is attributed to the to region (as np.float64)
+        LOSSFLOWCOEFFICIENT  the coefficient of the interconnector flow variable in the loss factor equation \n
+                             (as np.float64)
+        FROMREGIONLOSSSHARE  the proportion of loss attribute to the from region, remainder is attributed to the to \n
+                             region (as np.float64)
         ===================  =======================================================================================
 
     Returns
@@ -647,8 +654,10 @@ def format_interconnector_loss_coefficients(INTERCONNECTORCONSTRAINT):
         Columns:                Description:
         interconnector          unique identifier of a interconnector (as `str`)
         loss_constant           the constant term in the interconnector loss factor equation (as np.float64)
-        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation (as np.float64)
-        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the to region (as np.float64)
+        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation \n
+                                (as np.float64)
+        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the \n
+                                to region (as np.float64)
         ======================  ========================================================================================
     """
 
@@ -866,7 +875,7 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
 
     demand_loss_factor_offset = pd.merge(demand_coefficients, demand, 'inner', on=['region'])
     demand_loss_factor_offset['offset'] = demand_loss_factor_offset['loss_function_demand'] * \
-                                          demand_loss_factor_offset['demand_coefficient']
+        demand_loss_factor_offset['demand_coefficient']
     demand_loss_factor_offset = demand_loss_factor_offset.groupby('interconnector', as_index=False)['offset'].sum()
     loss_functions = pd.merge(interconnector_coefficients, demand_loss_factor_offset, 'left', on=['interconnector'])
     loss_functions['loss_constant'] = loss_functions['loss_constant'] + loss_functions['offset'].fillna(0)

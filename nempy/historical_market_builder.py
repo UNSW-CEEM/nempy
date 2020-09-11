@@ -175,7 +175,8 @@ class MarketOverrider:
         interconnector_flow.columns = ['interconnector', 'flow']
         interconnector_flow['link'] = interconnector_flow['interconnector']
         interconnector_flow['link'] = np.where(interconnector_flow['interconnector'] == 'T-V-MNSP1',
-            np.where(interconnector_flow['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC'), interconnector_flow['link'])
+                                               np.where(interconnector_flow['flow'] >= 0.0, 'BLNKTAS', 'BLNKVIC'),
+                                               interconnector_flow['link'])
 
         flow_variables = self.market._decision_variables['interconnectors']
         flow_variables = pd.merge(flow_variables, interconnector_flow, 'left', on=['interconnector', 'link'])
@@ -235,8 +236,7 @@ class MarketChecker:
         region_summary = self.market.get_region_dispatch_summary()
         region_summary = pd.merge(region_summary, regional_demand, on='region')
         region_summary['calc_demand'] = region_summary['dispatch'] + region_summary['inflow'] \
-                                        - region_summary['interconnector_losses'] - \
-                                        region_summary['transmission_losses']
+            - region_summary['interconnector_losses'] - region_summary['transmission_losses']
         region_summary['diff'] = region_summary['calc_demand'] - region_summary['demand']
         region_summary['no_error'] = region_summary['diff'].abs() < tolerance
         return region_summary['no_error'].all()
@@ -333,7 +333,8 @@ class MarketChecker:
         comp = pd.merge(bounds, nempy_dispatch, 'inner', on=['unit', 'service'])
         comp['diff'] = comp['dispatch'] - comp['dispatched']
         comp = pd.merge(comp, self.market._unit_info.loc[:, ['unit', 'dispatch_type']], on='unit')
-        comp['diff'] = np.where((comp['dispatch_type'] == 'load') & (comp['service'] == 'energy'), comp['diff'] * -1, comp['diff'])
+        comp['diff'] = np.where((comp['dispatch_type'] == 'load') & (comp['service'] == 'energy'), comp['diff'] * -1,
+                                comp['diff'])
         return comp
 
     def do_fcas_availabilities_match_historical(self):
@@ -390,6 +391,4 @@ class MarketChecker:
         for name in nempy_constraints:
             measured += self.market.get_elastic_constraints_violation_degree(name)
         historical = self.xml.get_non_intervention_violations()[historical_name]
-        if historical > 0.0 or measured > 0.0:
-            x=1
         return measured == pytest.approx(historical, abs=0.1)

@@ -78,7 +78,7 @@ for interval in dispatch_intervals:
         unit_uigf_limit)
     cost = constraint_inputs.get_constraint_violation_prices()['uigf']
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
-    
+
     # Set unit ramp rates.
     ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch()
     market.set_unit_ramp_up_constraints(
@@ -118,7 +118,7 @@ for interval in dispatch_intervals:
     market.set_interconnectors(interconnectors_definitions)
     market.set_interconnector_losses(loss_functions,
                                      interpolation_break_points)
-    
+
     # Add generic constraints and FCAS market constraints.
     fcas_requirements = constraint_inputs.get_fcas_requirements()
     market.set_fcas_requirements_constraints(fcas_requirements)
@@ -132,7 +132,7 @@ for interval in dispatch_intervals:
     interconnector_generic_lhs = constraint_inputs.get_interconnector_lhs()
     market.link_interconnectors_to_generic_constraints(
         interconnector_generic_lhs)
-    
+
     # Set the operational demand to be met by dispatch.
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)

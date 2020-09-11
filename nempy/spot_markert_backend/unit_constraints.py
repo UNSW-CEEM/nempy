@@ -417,7 +417,7 @@ def fast_start_mode_two_constraints(fast_start_profile):
 
 
 def fast_start_mode_three_constraints(fast_start_profile):
-    units_ending_in_mode_three = fast_start_profile[(fast_start_profile['end_mode'] == 3)]
+    units_ending_in_mode_three = fast_start_profile[(fast_start_profile['end_mode'] == 3)].copy()
     units_ending_in_mode_three['min'] = units_ending_in_mode_three['min_loading']
     units_ending_in_mode_three = units_ending_in_mode_three.loc[:, ['unit', 'min']]
     return units_ending_in_mode_three
@@ -428,7 +428,7 @@ def fast_start_mode_four_constraints(fast_start_profile):
     units_ending_in_mode_four['target'] = (units_ending_in_mode_four['min_loading'] -
                                            (((units_ending_in_mode_four['time_in_end_mode']) /
                                              units_ending_in_mode_four['mode_four_length']) *
-                                          units_ending_in_mode_four['min_loading']))
+                                            units_ending_in_mode_four['min_loading']))
     units_ending_in_mode_four['min'] = units_ending_in_mode_four['target']
     units_ending_in_mode_four['max'] = units_ending_in_mode_four['target']
     units_ending_in_mode_four = units_ending_in_mode_four.loc[:, ['unit', 'min', 'max']]

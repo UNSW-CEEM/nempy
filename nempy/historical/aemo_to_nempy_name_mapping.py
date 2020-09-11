@@ -39,4 +39,3 @@ def map_aemo_column_values_to_nempy_name(dataframe, column):
     dataframe[column] = dataframe[column].apply(lambda x: name_map[x])
     return dataframe
 
-

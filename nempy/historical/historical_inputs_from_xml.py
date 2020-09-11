@@ -10,24 +10,69 @@ from datetime import datetime, timedelta, time
 
 
 class XMLCacheManager:
+    """Class for accessing data stored in AEMO's NEMDE output files.
+
+    Examples
+    --------
+
+    A XMLCacheManager instance is created by providing the path to directory containing the cache of XML files.
+
+    >>> manager = XMLCacheManager('test_nemde_cache')
+
+    Parameters
+    ----------
+    cache_folder : str
+    """
     def __init__(self, cache_folder):
         self.cache_folder = cache_folder
         self.interval = None
         self.xml = None
-
         Path(cache_folder).mkdir(parents=False, exist_ok=True)
 
     def load_interval(self, interval):
+        """Load the data for particular 5 min dispatch interval into memory.
+
+        If the file intervals data is not on disk then an attempt to download it from AEMO's NEMweb portal is made.
+
+        Examples
+        --------
+
+        >>> manager = XMLCacheManager('test_nemde_cache')
+
+        >>> manager.load_interval('2019/01/01 00:00:00')
+
+        Parameters
+        ----------
+        interval : str
+        In the format '%Y/%m/%d %H:%M:%S'
+
+        Raises
+        ------
+        MissingDataError
+            If the data for an interval is not in the cache and cannot be downloaded from NEMWeb.
+        """
         self.interval = interval
         if not self.interval_inputs_in_cache():
             self.download_xml_from_nemweb()
             if not self.interval_inputs_in_cache():
-                raise ValueError('File not downloaded.')
+                raise MissingDataError('File not downloaded, check internet connection and that NEMWeb contains data for the requested interval.')
         with open(self.get_file_path()) as file:
             read = file.read()
             self.xml = xmltodict.parse(read)
 
     def interval_inputs_in_cache(self):
+        """Check if the cache contains the data for the loaded interval, primarily for debugging.
+
+        Examples
+        --------
+
+        >>> manager = XMLCacheManager('test_nemde_cache')
+
+        >>> manager.load_interval('2019/01/01 00:00:00')
+
+        >>> manager.interval_inputs_in_cache()
+        True
+        """
         return os.path.exists(self.get_file_path())
 
     def get_file_path(self):
@@ -478,5 +523,5 @@ class XMLCacheManager:
         return bid_availability
 
 
-
-
+class MissingDataError(Exception):
+    """Raise for unable to downloaded data from NEMWeb."""

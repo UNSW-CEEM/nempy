@@ -8,7 +8,7 @@ pd.options.display.width = 0
 # Volume of each bid.
 volume_bids = pd.DataFrame({
     'unit': ['A', 'A', 'B', 'B', 'B'],
-    'service': ['energy', 'raise_6s', 'energy', 
+    'service': ['energy', 'raise_6s', 'energy',
                 'raise_6s', 'raise_reg'],
     '1': [100.0, 10.0, 110.0, 15.0, 15.0],  # MW
 })
@@ -24,7 +24,7 @@ print(volume_bids)
 # Price of each bid.
 price_bids = pd.DataFrame({
     'unit': ['A', 'A', 'B', 'B', 'B'],
-    'service': ['energy', 'raise_6s', 'energy', 
+    'service': ['energy', 'raise_6s', 'energy',
                 'raise_6s', 'raise_reg'],
     '1': [50.0, 35.0, 60.0, 20.0, 30.0],  # $/MW
 })

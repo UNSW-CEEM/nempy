@@ -13,6 +13,7 @@ Welcome to nempy's documentation!
    intro
    examples
    markets
+   historical
 
 Indices and tables
 ==================

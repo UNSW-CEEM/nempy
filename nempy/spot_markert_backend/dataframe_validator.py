@@ -2,8 +2,6 @@ import numpy as np
 import pandas as pd
 
 
-
-
 class DataFrameSchema:
     def __init__(self, name, primary_keys=None, row_monatonic_increasing=None):
         self.name = name
@@ -64,7 +62,6 @@ class SeriesSchema:
         self._check_allowed_values(series)
         self._check_is_real_number(series)
         self._check_is_not_negtaive(series)
-        #self._check_greater_than_or_equal_to_min
 
     def _check_data_type(self, series):
         if self.data_type == str:

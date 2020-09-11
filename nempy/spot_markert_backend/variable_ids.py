@@ -141,7 +141,7 @@ def bids(volume_bids, unit_info, next_variable_id):
     constraint_map = pd.merge(constraint_map, unit_info.loc[:, ['unit', 'region', 'dispatch_type']], 'inner', on='unit')
     regional_constraint_map = constraint_map.loc[:,  ['variable_id', 'region', 'service', 'dispatch_type']]
     regional_constraint_map['coefficient'] = np.where((regional_constraint_map['dispatch_type'] == 'load') &
-                                             (regional_constraint_map['service'] == 'energy'), -1.0, 1.0)
+                                                      (regional_constraint_map['service'] == 'energy'), -1.0, 1.0)
     regional_constraint_map = regional_constraint_map.drop('dispatch_type', axis=1)
     unit_level_constraint_map = constraint_map.loc[:,  ['variable_id', 'unit', 'service']]
     unit_level_constraint_map['coefficient'] = 1.0

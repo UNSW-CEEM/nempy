@@ -77,7 +77,8 @@ def create(definitions, next_variable_id):
                                              1.0 * constraint_map['loss_factor'],
                                              -1.0 * constraint_map['loss_factor'])
     constraint_map['service'] = 'energy'
-    constraint_map = constraint_map.loc[:, ['variable_id', 'interconnector', 'link', 'region', 'service', 'coefficient']]
+    constraint_map = constraint_map.loc[:, ['variable_id', 'interconnector', 'link',
+                                            'region', 'service', 'coefficient']]
 
     return decision_variables, constraint_map
 
@@ -397,7 +398,8 @@ def create_loss_variables(inter_variables, inter_constraint_map, loss_shares, ne
     """
 
     # Preserve the interconnector variable id for merging later.
-    columns_for_loss_variables = inter_variables.loc[:, ['interconnector', 'link', 'lower_bound', 'upper_bound', 'type']]
+    columns_for_loss_variables = inter_variables.loc[:, ['interconnector', 'link', 'lower_bound',
+                                                         'upper_bound', 'type']]
     columns_for_loss_variables['upper_bound'] = \
         columns_for_loss_variables.loc[:, ['lower_bound', 'upper_bound']].abs().max(axis=1)
     columns_for_loss_variables['lower_bound'] = -1 * columns_for_loss_variables['upper_bound']
@@ -420,6 +422,7 @@ def create_loss_variables(inter_variables, inter_constraint_map, loss_shares, ne
                                              - 1 * constraint_map['from_region_loss_share'],
                                              - 1 * (1 - constraint_map['from_region_loss_share']))
 
-    loss_variables = loss_variables.loc[:, ['interconnector', 'link', 'variable_id', 'lower_bound', 'upper_bound', 'type']]
+    loss_variables = loss_variables.loc[:, ['interconnector', 'link', 'variable_id',
+                                            'lower_bound', 'upper_bound', 'type']]
     constraint_map = constraint_map.loc[:, ['variable_id', 'region', 'service', 'coefficient']]
     return loss_variables, constraint_map

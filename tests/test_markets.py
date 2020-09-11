@@ -462,7 +462,7 @@ def test_two_region_energy_market_with_regional_generic_constraints():
         'min': [-120.0]
     })
 
-    market = markets.SpotMarket(unit_info=unit_info,market_regions=['VIC', 'NSW'])
+    market = markets.SpotMarket(unit_info=unit_info, market_regions=['VIC', 'NSW'])
     market.set_interconnectors(interconnectors)
     market.set_unit_volume_bids(volume_bids)
     market.set_unit_bid_capacity_constraints(unit_limits)
@@ -783,16 +783,4 @@ def test_one_region_energy_market_with_elastic_unit_generic_constraints():
 
     assert_frame_equal(market.get_energy_prices(), expected_prices)
     assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
-
-
-
-
-
-
-
-
-
-
-
-
 

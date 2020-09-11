@@ -2,9 +2,7 @@ import requests
 import zipfile
 import io
 import pandas as pd
-import sqlite3
 from datetime import datetime, timedelta
-import os
 
 from nempy.help_functions import helper_functions as hf
 
@@ -1738,7 +1736,3 @@ def format_generic_interconnector_lhs(SPDINTERCONNECTORCONSTRAINT):
     interconnector_generic_lhs = interconnector_generic_lhs.loc[:, ['GENCONID', 'INTERCONNECTORID', 'FACTOR']]
     interconnector_generic_lhs.columns = ['set', 'interconnector', 'coefficient']
     return interconnector_generic_lhs
-
-
-
-

@@ -20,4 +20,3 @@ interval_with_violations = \
 
 with open('interval_with_violations.pickle', 'wb') as f:
     pickle.dump(interval_with_violations, f, pickle.HIGHEST_PROTOCOL)
-

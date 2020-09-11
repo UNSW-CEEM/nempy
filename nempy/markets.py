@@ -362,8 +362,8 @@ class SpotMarket:
                           optional=True)
         schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True))
         for bid_band in range(2, 11):
-            schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True)
-                              , optional=True)
+            schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True),
+                              optional=True)
         schema.validate(price_bids)
 
     def _check_unit_volume_bids_set(self):
@@ -2658,7 +2658,7 @@ class SpotMarket:
         if allow_over_constrained_dispatch_re_run:
             if (energy_market_ceiling_price is None or energy_market_floor_price is None or
                     fcas_market_ceiling_price is None):
-                raise ValueError("""If allow_over_constrained_dispatch_re_run is set to True then values must \n 
+                raise ValueError("""If allow_over_constrained_dispatch_re_run is set to True then values must \n
                                     be provided for energy_market_ceiling_price, energy_market_floor_price, and \n
                                     fcas_market_ceiling_price.""")
 
@@ -2844,7 +2844,7 @@ class SpotMarket:
                 lhs = pd.concat([self._lhs_coefficients['generic_deficit'], self._lhs_coefficients['fcas_deficit']])
                 variables_and_cons = pd.merge(active_violation_variables, lhs, on='variable_id')
                 variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.0001) * \
-                                                 variables_and_cons['coefficient'] * -1
+                    variables_and_cons['coefficient'] * -1
                 variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
                 si.linear_mip_model.optimize()
 
@@ -2870,7 +2870,8 @@ class SpotMarket:
 
     def _remove_unused_interpolation_weights(self, si):
         vars = pd.merge(self._decision_variables['interconnectors'].loc[:, ['interconnector', 'link', 'value']],
-                        self._decision_variables['interpolation_weights'].loc[:, ['interconnector', 'link', 'break_point', 'variable_id']],
+                        self._decision_variables['interpolation_weights'].loc[:, ['interconnector', 'link',
+                                                                                  'break_point', 'variable_id']],
                         on=['interconnector', 'link'])
         vars['distance'] = (vars['value'] - vars['break_point']).abs()
 
@@ -3348,8 +3349,8 @@ class SpotMarket:
         regions = self._interconnector_directions.loc[:, ['interconnector', 'link', region_type]]
         regions = regions.rename(columns={region_type: 'region'})
         from_region_loss_share = pd.merge(from_region_loss_share, regions, on=['interconnector', 'link'])
-        from_region_loss_share = from_region_loss_share.loc[:,
-                                 ['interconnector', 'link', 'region', 'from_region_loss_share']]
+        from_region_loss_share = from_region_loss_share.loc[:, ['interconnector', 'link', 'region',
+                                                                'from_region_loss_share']]
         return from_region_loss_share
 
     def _get_transmission_losses(self):
@@ -3414,13 +3415,13 @@ class SpotMarket:
         ...   'unit': ['A', 'B'],
         ...   'region': ['NSW', 'NSW']})
 
-        The demand in the region\s being dispatched.
+        The demand in the regions being dispatched.
 
         >>> demand = pd.DataFrame({
         ...   'region': ['NSW'],
         ...   'demand': [195.0]})
 
-        FCAS requirement in the region\s being dispatched.
+        FCAS requirement in the regions being dispatched.
 
         >>> fcas_requirements = pd.DataFrame({
         ...   'set': ['nsw_regulation_requirement',
@@ -3493,8 +3494,8 @@ class SpotMarket:
             if constraint_type in self._constraints_rhs_and_type.keys():
                 service_coefficients = self._constraint_to_variable_map['unit_level'][constraint_type]
                 service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit', 'service', 'coefficient']]
-                constraint_slack = self._constraints_rhs_and_type[constraint_type].loc[:,
-                                   ['constraint_id', 'slack', 'type']]
+                constraint_slack = self._constraints_rhs_and_type[constraint_type].loc[:, ['constraint_id', 'slack',
+                                                                                           'type']]
                 slack_temp = pd.merge(service_coefficients, constraint_slack, on='constraint_id')
                 fcas_variable_slack.append(slack_temp)
 

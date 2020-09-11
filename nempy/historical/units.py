@@ -1,7 +1,6 @@
 import pandas as pd
 import numpy as np
 from nempy.historical import aemo_to_nempy_name_mapping as an
-from time import time
 
 
 class UnitData:
@@ -54,8 +53,8 @@ class UnitData:
     def _get_minimum_of_bid_and_scada_telemetered_ramp_rates(self):
         bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
         bid_ramp_rates = self._remove_non_energy_bids(bid_ramp_rates)
-        scada_telemetered_ramp_rates = self.initial_conditions.loc[:,
-                                       ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        scada_telemetered_ramp_rates = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE',
+                                                                       'RAMPUPRATE']]
         ramp_rates = pd.merge(bid_ramp_rates, scada_telemetered_ramp_rates, 'left', on='DUID')
         ramp_rates['RAMPDOWNRATE'] = np.fmin(ramp_rates['RAMPDOWNRATE_x'], ramp_rates['RAMPDOWNRATE_y'])
         ramp_rates['RAMPUPRATE'] = np.fmin(ramp_rates['RAMPUPRATE_x'], ramp_rates['RAMPUPRATE_y'])
@@ -84,7 +83,7 @@ class UnitData:
     def _fast_start_mode_two_initial_mw(fast_start_profile):
         """Calculates the initial conditions of the unit had it adhering to the dispatch inflexibility profile."""
         units_in_mode_two = \
-            fast_start_profile[(fast_start_profile['current_mode'] == 2)]
+            fast_start_profile[(fast_start_profile['current_mode'] == 2)].copy()
         units_in_mode_two['fast_start_initial_mw'] = (((units_in_mode_two['time_in_current_mode'])
                                                        / units_in_mode_two['mode_two_length']) *
                                                       units_in_mode_two['min_loading'])
@@ -99,8 +98,7 @@ class UnitData:
         fast_start_end_condition = pd.merge(ramp_rates, fast_start_end_condition, left_on='DUID', right_on='unit')
         fast_start_end_condition['ramp_mw_per_min'] = fast_start_end_condition['RAMPUPRATE'] / 60
         fast_start_end_condition['ramp_max'] = fast_start_end_condition['time_after_mode_two'] * \
-                                               fast_start_end_condition['ramp_mw_per_min'] + \
-                                               fast_start_end_condition['min_loading']
+            fast_start_end_condition['ramp_mw_per_min'] + fast_start_end_condition['min_loading']
         fast_start_end_condition['new_ramp_up_rate'] = (fast_start_end_condition['ramp_max'] -
                                                         fast_start_end_condition['fast_start_initial_mw']) * \
                                                        (60 / dispatch_interval)
@@ -108,8 +106,8 @@ class UnitData:
 
     def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
         profiles = self.get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
-        return profiles.loc[:,
-               ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length', 'min_loading']]
+        return profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+                                'mode_four_length', 'min_loading']]
 
     def get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.fast_start_profiles
@@ -545,7 +543,7 @@ def format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
 
     # Combine loss factors.
     DUDETAILSUMMARY['LOSSFACTOR'] = DUDETAILSUMMARY['TRANSMISSIONLOSSFACTOR'] * \
-                                    DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
+        DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
     unit_info = DUDETAILSUMMARY.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
     unit_info.columns = ['unit', 'dispatch_type', 'connection_point', 'region', 'loss_factor']
     unit_info['dispatch_type'] = unit_info['dispatch_type'].apply(lambda x: dispatch_type_name_map[x])

@@ -4,13 +4,13 @@ from pandas.testing import assert_frame_equal
 from datetime import datetime, timedelta
 import random
 import pickle
-from nempy.historical import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, interconnectors, \
-    constraints, demand
+from nempy.historical import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, \
+    interconnectors, constraints, demand
 from nempy import historical_market_builder
 
-##### These tests require some additional clean up and will probably not run on your machine. ##########################
+# These tests require some additional clean up and will probably not run on your machine. ##############################
 
-# Define a set of random intervals to test
+
 def get_test_intervals(number=100):
     start_time = datetime(year=2019, month=1, day=1, hour=0, minute=0)
     end_time = datetime(year=2019, month=12, day=31, hour=0, minute=0)
@@ -21,6 +21,7 @@ def get_test_intervals(number=100):
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
+
 
 def test_if_ramp_rates_calculated_correctly():
     inputs_database = 'test_files/historical.db'
@@ -218,9 +219,9 @@ def test_slack_in_generic_constraints_with_all_features():
 
 
 def test_hist_dispatch_values_meet_demand():
-    con = sqlite3.connect('test_files/historical_all.db')
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
     mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
+    xml_cache = historical_inputs_from_xml.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
     raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
                                                market_management_system_database=mms_database)
 
@@ -254,9 +255,9 @@ def test_hist_dispatch_values_meet_demand():
 
 
 def test_against_10_interval_benchmark():
-    con = sqlite3.connect('test_files/historical_all.db')
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
     mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
+    xml_cache = historical_inputs_from_xml.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
     raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
                                                market_management_system_database=mms_database)
     outputs = []
@@ -291,7 +292,7 @@ def test_against_10_interval_benchmark():
     outputs = pd.concat(outputs)
     outputs.to_csv('latest_10_interval_run.csv', index=False)
     benchmark = pd.read_csv('10_interval_benchmark.csv')
-    assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_less_precise=3)
+    assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_exact=False, atol=1e-3)
 
 
 def test_against_100_interval_benchmark():
@@ -337,9 +338,9 @@ def test_against_100_interval_benchmark():
 
 
 def test_against_1000_interval_benchmark():
-    con = sqlite3.connect('test_files/historical_all.db')
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
     mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
+    xml_cache = historical_inputs_from_xml.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
     raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
                                                market_management_system_database=mms_database)
     outputs = []

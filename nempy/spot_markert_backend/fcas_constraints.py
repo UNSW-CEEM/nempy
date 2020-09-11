@@ -4,12 +4,14 @@ from nempy.help_functions import helper_functions as hf
 
 
 def joint_ramping_constraints_raise_reg(unit_limits, unit_info, dispatch_interval, next_constraint_id):
-    constraint_settings = {'generator':
-                               {'type': '<=', 'reg_lhs_coefficient': 1.0, 'ramp_direction': 1.0,
-                                'reg_service': 'raise_reg'},
-                           'load':
-                               {'type': '>=', 'reg_lhs_coefficient': -1.0, 'ramp_direction': -1.0,
-                                'reg_service': 'raise_reg'}
+    constraint_settings = {'generator': {'type': '<=',
+                                         'reg_lhs_coefficient': 1.0,
+                                         'ramp_direction': 1.0,
+                                         'reg_service': 'raise_reg'},
+                           'load': {'type': '>=',
+                                    'reg_lhs_coefficient': -1.0,
+                                    'ramp_direction': -1.0,
+                                    'reg_service': 'raise_reg'}
                            }
     rhs_and_type, variable_mapping = \
         joint_ramping_constraints_load_and_generator_constructor(unit_limits, unit_info, dispatch_interval,
@@ -18,12 +20,14 @@ def joint_ramping_constraints_raise_reg(unit_limits, unit_info, dispatch_interva
 
 
 def joint_ramping_constraints_lower_reg(unit_limits, unit_info, dispatch_interval, next_constraint_id):
-    constraint_settings = {'generator':
-                               {'type': '>=', 'reg_lhs_coefficient': -1.0, 'ramp_direction': -1.0,
-                                'reg_service': 'lower_reg'},
-                           'load':
-                               {'type': '<=', 'reg_lhs_coefficient': 1.0, 'ramp_direction': 1.0,
-                                'reg_service': 'lower_reg'}
+    constraint_settings = {'generator': {'type': '>=',
+                                         'reg_lhs_coefficient': -1.0,
+                                         'ramp_direction': -1.0,
+                                         'reg_service': 'lower_reg'},
+                           'load':  {'type': '<=',
+                                     'reg_lhs_coefficient': 1.0,
+                                     'ramp_direction': 1.0,
+                                     'reg_service': 'lower_reg'}
                            }
     rhs_and_type, variable_mapping = \
         joint_ramping_constraints_load_and_generator_constructor(unit_limits, unit_info, dispatch_interval,

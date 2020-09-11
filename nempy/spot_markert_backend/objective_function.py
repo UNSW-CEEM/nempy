@@ -22,7 +22,7 @@ def bids(variable_ids, price_bids, unit_info):
     objective_function = pd.merge(objective_function, unit_info.loc[:, ['unit', 'dispatch_type']], how='inner',
                                   on=['unit'])
     objective_function['cost'] = np.where((objective_function['dispatch_type'] == 'load') &
-                                             (objective_function['service'] == 'energy'),
+                                          (objective_function['service'] == 'energy'),
                                           -1.0 * objective_function['cost'], objective_function['cost'])
     return objective_function
 

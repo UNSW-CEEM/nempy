@@ -102,7 +102,6 @@ def create_deficit_variables(constraint_rhs, next_variable_id):
         equalities_down_lhs['coefficient'] = 1.0
         equalities_down_lhs = equalities_down_lhs.loc[:, ['variable_id', 'constraint_id', 'coefficient']]
 
-
         deficit_variables = pd.concat([inequalities_deficit_variables, equalities_up_deficit_variables,
                                        equalities_down_deficit_variables])
 

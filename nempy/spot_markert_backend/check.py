@@ -249,4 +249,3 @@ class BidsNotMonotonicIncreasing(Exception):
 class MissingTable(Exception):
     """Raise for trying to access missing table."""
 
-
