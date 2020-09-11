@@ -144,5 +144,5 @@ tests/test_files/historical_xml_files
 !tests/1000_interval_benchmark.csv
 
 examples/cache_directory/*
-nempy/historical/test_nemde_cache/
+nempy/historical_inputs/test_nemde_cache/
 venv_docs_build/*

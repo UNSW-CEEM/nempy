@@ -4,7 +4,7 @@ from pandas.testing import assert_frame_equal
 from datetime import datetime, timedelta
 import random
 import pickle
-from nempy.historical import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, \
+from nempy.historical_inputs import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, \
     interconnectors, constraints, demand
 from nempy import historical_market_builder
 

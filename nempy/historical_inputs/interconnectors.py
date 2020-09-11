@@ -5,7 +5,7 @@ from nempy.historical_inputs import demand
 
 
 class InterconnectorData:
-    """Class for creating interconnector inputs for historical_inputs dispatch intervals.
+    """Class for creating interconnector inputs for historical dispatch intervals.
 
     Examples
     --------

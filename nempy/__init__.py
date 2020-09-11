@@ -1,2 +1,2 @@
 from nempy import markets
-from nempy.historical import historical_inputs_from_mms_db
+from nempy.historical_inputs import historical_inputs_from_mms_db

@@ -2,7 +2,7 @@ import pytest
 import pandas as pd
 import subprocess
 from pandas._testing import assert_frame_equal
-from nempy.historical import historical_inputs_from_mms_db
+from nempy.historical_inputs import historical_inputs_from_mms_db
 
 
 def test_download_to_df():

@@ -3,7 +3,7 @@
 import sqlite3
 import pandas as pd
 from nempy import markets
-from nempy.historical import inputs, historical_inputs_from_mms_db, \
+from nempy.historical_inputs import inputs, historical_inputs_from_mms_db, \
     historical_inputs_from_xml, units, demand, interconnectors
 
 con = sqlite3.connect('market_management_system.db')
@@ -15,7 +15,7 @@ nemde_xml_file_cache_interface = \
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-down_load_inputs = False
+down_load_inputs = True
 
 if down_load_inputs:
     # This requires approximately 5 GB of storage.
@@ -81,7 +81,7 @@ for interval in dispatch_intervals:
     market.set_interconnectors(interconnectors_definitions)
     market.set_interconnector_losses(loss_functions,
                                      interpolation_break_points)
-    market.solver_name = 'GUROBI'
+    market.solver_name = 'CBC'
     market.dispatch()
 
     # Save prices from this interval

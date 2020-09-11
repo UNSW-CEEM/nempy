@@ -1,7 +1,7 @@
 import pickle
 import sqlite3
 
-from nempy.historical import inputs
+from nempy.historical_inputs import inputs
 
 import os
 cwd = os.getcwd()

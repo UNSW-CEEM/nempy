@@ -85,7 +85,7 @@ modelling tools for accessing historical market data published by AEMO and prepr
 import sqlite3
 import pandas as pd
 from nempy import markets
-from nempy.historical import inputs, historical_inputs_from_mms_db, \
+from nempy.historical_inputs import inputs, historical_inputs_from_mms_db, \
     historical_inputs_from_xml, units, demand, interconnectors, \
     constraints
 

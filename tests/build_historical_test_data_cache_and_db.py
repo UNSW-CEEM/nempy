@@ -1,6 +1,6 @@
 import sqlite3
 import pickle
-from nempy.historical import historical_inputs_from_mms_db, historical_inputs_from_xml, inputs
+from nempy.historical_inputs import historical_inputs_from_mms_db, historical_inputs_from_xml, inputs
 
 
 running_for_first_time = True

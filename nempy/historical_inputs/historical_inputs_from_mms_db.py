@@ -4,7 +4,257 @@ import io
 import pandas as pd
 from datetime import datetime, timedelta
 
-from nempy.help_functions import helper_functions as hf
+
+class DBManager:
+    """Constructs and manages a sqlite database for accessing historical inputs for NEM spot market dispatch.
+
+    Constructs a database if none exists, otherwise connects to an existing database. Specific datasets can be added
+    to the database from AEMO nemweb portal and inputs can be retrieved on a 5 min dispatch interval basis.
+
+    Examples
+    --------
+    Create the database or connect to an existing one.
+
+    >>> import sqlite3
+
+    >>> con = sqlite3.connect('historical.db')
+
+    Create the database manager.
+
+    >>> historical = DBManager(con)
+
+    Create a set of default table in the database.
+
+    >>> historical.create_tables()
+
+    Add data from AEMO nemweb data portal. In this case we are adding data from the table BIDDAYOFFER_D which contains
+    unit's volume bids on 5 min basis, the data comes in monthly chunks.
+
+    >>> historical.BIDDAYOFFER_D.add_data(year=2020, month=1)
+
+    >>> historical.BIDDAYOFFER_D.add_data(year=2020, month=2)
+
+    This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
+    If you need data for multiple months then multiple add_data calls can be made.
+
+    Data for a specific 5 min dispatch interval can then be retrieved.
+
+    >>> print(historical.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
+            SETTLEMENTDATE     DUID     BIDTYPE  ...    T3   T4  MINIMUMLOAD
+    0  2020/01/10 00:00:00   AGLHAL      ENERGY  ...  10.0  2.0          2.0
+    1  2020/01/10 00:00:00   AGLSOM      ENERGY  ...  35.0  2.0         16.0
+    2  2020/01/10 00:00:00  ANGAST1      ENERGY  ...   0.0  0.0         46.0
+    3  2020/01/10 00:00:00    APD01   LOWER5MIN  ...   0.0  0.0          0.0
+    4  2020/01/10 00:00:00    APD01  LOWER60SEC  ...   0.0  0.0          0.0
+    <BLANKLINE>
+    [5 rows x 18 columns]
+
+    Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
+    provided by AEMO contains all historical data for this table. In this case if multiple calls to the set_data method
+    are made the new data replaces the old.
+
+    >>> historical.DUDETAILSUMMARY.set_data(year=2020, month=2)
+
+    Data for a specific 5 min dispatch interval can then be retrieved.
+
+    >>> print(historical.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
+           DUID           START_DATE  ... DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
+    0    AGLHAL  2019/07/01 00:00:00  ...                 1.0000      SCHEDULED
+    1   AGLNOW1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
+    2  AGLSITA1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
+    3    AGLSOM  2019/07/01 00:00:00  ...                 0.9891      SCHEDULED
+    4   ANGAST1  2019/07/01 00:00:00  ...                 0.9890      SCHEDULED
+    <BLANKLINE>
+    [5 rows x 9 columns]
+
+    Parameters
+    ----------
+    con : sqlite3.connection
+
+
+    Attributes
+    ----------
+    BIDPEROFFER_D : InputsByIntervalDateTime
+        Unit volume bids by 5 min dispatch intervals.
+    BIDDAYOFFER_D : InputsByDay
+        Unit price bids by market day.
+    DISPATCHREGIONSUM : InputsBySettlementDate
+        Regional demand terms by 5 min dispatch intervals.
+    DISPATCHLOAD : InputsBySettlementDate
+        Unit operating conditions by 5 min dispatch intervals.
+    DUDETAILSUMMARY : InputsStartAndEnd
+        Unit information by the start and end times of when the information is applicable.
+    DISPATCHCONSTRAINT : InputsBySettlementDate
+        The generic constraints that were used in each 5 min interval dispatch.
+    GENCONDATA : InputsByMatchDispatchConstraints
+        The generic constraints information, their applicability to a particular dispatch interval is determined by
+        reference to DISPATCHCONSTRAINT.
+    SPDREGIONCONSTRAINT : InputsByMatchDispatchConstraints
+        The regional lhs terms in generic constraints, their applicability to a particular dispatch interval is
+        determined by reference to DISPATCHCONSTRAINT.
+    SPDCONNECTIONPOINTCONSTRAINT : InputsByMatchDispatchConstraints
+        The connection point lhs terms in generic constraints, their applicability to a particular dispatch interval is
+        determined by reference to DISPATCHCONSTRAINT.
+    SPDINTERCONNECTORCONSTRAINT : InputsByMatchDispatchConstraints
+        The interconnector lhs terms in generic constraints, their applicability to a particular dispatch interval is
+        determined by reference to DISPATCHCONSTRAINT.
+    INTERCONNECTOR : InputsNoFilter
+        The the regions that each interconnector links.
+    INTERCONNECTORCONSTRAINT : InputsByEffectiveDateVersionNoAndDispatchInterconnector
+        Interconnector properties FROMREGIONLOSSSHARE, LOSSCONSTANT, LOSSFLOWCOEFFICIENT, MAXMWIN, MAXMWOUT by
+        EFFECTIVEDATE and VERSIONNO.
+    LOSSMODEL : InputsByEffectiveDateVersionNoAndDispatchInterconnector
+        Break points used in linearly interpolating interconnector loss funtctions by EFFECTIVEDATE and VERSIONNO.
+    LOSSFACTORMODEL : InputsByEffectiveDateVersionNoAndDispatchInterconnector
+        Coefficients of demand terms in interconnector loss functions.
+    DISPATCHINTERCONNECTORRES : InputsBySettlementDate
+        Record of which interconnector were used in a particular dispatch interval.
+
+    """
+
+    def __init__(self, connection):
+        self.con = connection
+        self.BIDPEROFFER_D = InputsByIntervalDateTime(
+            table_name='BIDPEROFFER_D', table_columns=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE', 'BANDAVAIL1',
+                                                       'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5',
+                                                       'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
+                                                       'BANDAVAIL10', 'MAXAVAIL', 'ENABLEMENTMIN', 'ENABLEMENTMAX',
+                                                       'LOWBREAKPOINT', 'HIGHBREAKPOINT'],
+            table_primary_keys=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE'], con=self.con)
+        self.BIDDAYOFFER_D = InputsByDay(
+            table_name='BIDDAYOFFER_D', table_columns=['SETTLEMENTDATE', 'DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2',
+                                                       'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5', 'PRICEBAND6',
+                                                       'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10', 'T1',
+                                                       'T2', 'T3', 'T4', 'MINIMUMLOAD'],
+            table_primary_keys=['SETTLEMENTDATE', 'DUID', 'BIDTYPE'], con=self.con)
+        self.DISPATCHREGIONSUM = InputsBySettlementDate(
+            table_name='DISPATCHREGIONSUM', table_columns=['SETTLEMENTDATE', 'REGIONID', 'TOTALDEMAND',
+                                                           'DEMANDFORECAST', 'INITIALSUPPLY'],
+            table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
+        self.DISPATCHLOAD = InputsBySettlementDate(
+            table_name='DISPATCHLOAD', table_columns=['SETTLEMENTDATE', 'DUID', 'DISPATCHMODE', 'AGCSTATUS',
+                                                      'INITIALMW', 'TOTALCLEARED', 'RAMPDOWNRATE', 'RAMPUPRATE',
+                                                      'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
+                                                      'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN',
+                                                      'SEMIDISPATCHCAP', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC',
+                                                      'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'LOWERREG', 'RAISEREG',
+                                                      'RAISEREGAVAILABILITY', 'RAISE6SECACTUALAVAILABILITY',
+                                                      'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
+                                                      'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
+                                                      'LOWER60SECACTUALAVAILABILITY', 'LOWER5MINACTUALAVAILABILITY',
+                                                      'LOWERREGACTUALAVAILABILITY'],
+            table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
+        self.DISPATCHPRICE = InputsBySettlementDate(
+            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
+                                                       'RAISE60SECROP', 'RAISE5MINROP', 'RAISEREGROP',
+                                                       'LOWER6SECROP', 'LOWER60SECROP', 'LOWER5MINROP',
+                                                       'LOWERREGROP'],
+            table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
+        self.DUDETAILSUMMARY = InputsStartAndEnd(
+            table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
+                                                         'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
+                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
+            table_primary_keys=['START_DATE', 'DUID'], con=self.con)
+        self.DUDETAIL = InputsByEffectiveDateVersionNo(
+            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY'],
+            table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.DISPATCHCONSTRAINT = InputsBySettlementDate(
+            table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
+                                                            'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO',
+                                                            'LHS', 'VIOLATIONDEGREE', 'MARGINALVALUE'],
+            table_primary_keys=['SETTLEMENTDATE', 'CONSTRAINTID'], con=self.con)
+        self.GENCONDATA = InputsByMatchDispatchConstraints(
+            table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE',
+                                                    'GENERICCONSTRAINTWEIGHT'],
+            table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.SPDREGIONCONSTRAINT = InputsByMatchDispatchConstraints(
+            table_name='SPDREGIONCONSTRAINT', table_columns=['REGIONID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID',
+                                                             'BIDTYPE', 'FACTOR'],
+            table_primary_keys=['REGIONID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
+        self.SPDCONNECTIONPOINTCONSTRAINT = InputsByMatchDispatchConstraints(
+            table_name='SPDCONNECTIONPOINTCONSTRAINT', table_columns=['CONNECTIONPOINTID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                                      'GENCONID', 'BIDTYPE', 'FACTOR'],
+            table_primary_keys=['CONNECTIONPOINTID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
+        self.SPDINTERCONNECTORCONSTRAINT = InputsByMatchDispatchConstraints(
+            table_name='SPDINTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                                     'GENCONID', 'FACTOR'],
+            table_primary_keys=['INTERCONNECTORID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.INTERCONNECTOR = InputsNoFilter(
+            table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
+            table_primary_keys=['INTERCONNECTORID'], con=self.con)
+        self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
+            table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                                  'FROMREGIONLOSSSHARE', 'LOSSCONSTANT', 'ICTYPE',
+                                                                  'LOSSFLOWCOEFFICIENT', 'IMPORTLIMIT', 'EXPORTLIMIT'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.LOSSMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
+            table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
+                                                   'MWBREAKPOINT'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.LOSSFACTORMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
+            table_name='LOSSFACTORMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGIONID',
+                                                         'DEMANDCOEFFICIENT'],
+            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
+            table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE', 'MWFLOW',
+                                                                   'MWLOSSES'],
+            table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
+        self.MNSP_INTERCONNECTOR = InputsByEffectiveDateVersionNo(
+            table_name='MNSP_INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO',
+                                                             'FROMREGION', 'TOREGION', 'FROM_REGION_TLF',
+                                                             'TO_REGION_TLF', 'LHSFACTOR', 'MAXCAPACITY'],
+            table_primary_keys=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+
+    def create_tables(self):
+        """Drops any existing default tables and creates new ones, this method is generally called a new database.
+
+        Examples
+        --------
+        Create the database or connect to an existing one.
+
+        >>> import sqlite3
+
+        >>> con = sqlite3.connect('historical.db')
+
+        Create the database manager.
+
+        >>> historical = DBManager(con)
+
+        Create a set of default table in the database.
+
+        >>> historical.create_tables()
+
+        Default tables will now exist, but will be empty.
+
+        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
+        Empty DataFrame
+        Columns: [SETTLEMENTDATE, REGIONID, TOTALDEMAND, DEMANDFORECAST, INITIALSUPPLY]
+        Index: []
+
+        If you added data and then call create_tables again then any added data will be emptied.
+
+        >>> historical.DISPATCHREGIONSUM.add_data(year=2020, month=1)
+
+        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM limit 3", con=con))
+                SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
+        0  2020/01/01 00:05:00     NSW1      7245.31       -26.35352     7284.32178
+        1  2020/01/01 00:05:00     QLD1      6095.75       -24.29639     6129.36279
+        2  2020/01/01 00:05:00      SA1      1466.53         1.47190     1452.25647
+
+        >>> historical.create_tables()
+
+        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
+        Empty DataFrame
+        Columns: [SETTLEMENTDATE, REGIONID, TOTALDEMAND, DEMANDFORECAST, INITIALSUPPLY]
+        Index: []
+
+        Returns
+        -------
+        None
+        """
+        for name, attribute in self.__dict__.items():
+            if hasattr(attribute, 'create_table_in_sqlite_db'):
+                attribute.create_table_in_sqlite_db()
 
 
 def _download_to_df(url, table_name, year, month):
@@ -98,9 +348,13 @@ class _MMSTable:
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -110,7 +364,7 @@ class _MMSTable:
         Clean up by deleting database created.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -173,9 +427,13 @@ class _MMSTable:
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -197,7 +455,7 @@ class _MMSTable:
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         """
         with self.con:
@@ -226,9 +484,13 @@ class _SingleDataSource(_MMSTable):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -264,7 +526,7 @@ class _SingleDataSource(_MMSTable):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -299,9 +561,13 @@ class _MultiDataSource(_MMSTable):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -337,7 +603,7 @@ class _MultiDataSource(_MMSTable):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -375,9 +641,13 @@ class _AllHistDataSource(_MMSTable):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -413,7 +683,7 @@ class _AllHistDataSource(_MMSTable):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -464,9 +734,13 @@ class InputsBySettlementDate(_MultiDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -477,7 +751,7 @@ class InputsBySettlementDate(_MultiDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -495,7 +769,7 @@ class InputsBySettlementDate(_MultiDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -523,9 +797,13 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -536,7 +814,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -554,7 +832,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -587,9 +865,13 @@ class InputsByDay(_MultiDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -600,7 +882,7 @@ class InputsByDay(_MultiDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -631,7 +913,7 @@ class InputsByDay(_MultiDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -672,9 +954,13 @@ class InputsStartAndEnd(_SingleDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -685,7 +971,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -716,7 +1002,7 @@ class InputsStartAndEnd(_SingleDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -747,9 +1033,13 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -761,7 +1051,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the set_data method to add historical_inputs data, but here we will add data directly to the
+        Normally you would use the set_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -798,7 +1088,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -835,6 +1125,10 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
         >>> con = sqlite3.connect('historical_inputs.db')
@@ -956,9 +1250,13 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical_inputs.db')
+        >>> con = sqlite3.connect('historical.db')
 
         Create the table object.
 
@@ -970,7 +1268,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the set_data method to add historical_inputs data, but here we will add data directly to the
+        Normally you would use the set_data method to add historical data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -999,7 +1297,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical_inputs.db')
+        >>> os.remove('historical.db')
 
         Parameters
         ----------
@@ -1061,6 +1359,10 @@ class InputsNoFilter(_SingleDataSource):
 
         Examples
         --------
+
+        >>> import sqlite3
+        >>> import os
+
         Set up a database or connect to an existing one.
 
         >>> con = sqlite3.connect('historical_inputs.db')
@@ -1103,636 +1405,9 @@ class InputsNoFilter(_SingleDataSource):
         return pd.read_sql_query("Select * from {table}".format(table=self.table_name), con=self.con)
 
 
-class DBManager:
-    """Constructs and manages a sqlite database for accessing historical_inputs inputs for NEM spot market dispatch.
 
-    Constructs a database if none exists, otherwise connects to an existing database. Specific datasets can be added
-    to the database from AEMO nemweb portal and inputs can be retrieved on a 5 min dispatch interval basis.
 
-    Examples
-    --------
-    Create the database or connect to an existing one.
 
-    >>> con = sqlite3.connect('historical_inputs.db')
 
-    Create the database manager.
 
-    >>> historical_inputs = DBManager(con)
 
-    Create a set of default table in the database.
-
-    >>> historical_inputs.create_tables()
-
-    Add data from AEMO nemweb data portal. In this case we are adding data from the table BIDDAYOFFER_D which contains
-    unit's volume bids on 5 min basis, the data comes in monthly chunks.
-
-    >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=1)
-
-    >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=2)
-
-    This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
-    If you need data for multiple months then multiple add_data calls can be made.
-
-    Data for a specific 5 min dispatch interval can then be retrieved.
-
-    >>> print(historical_inputs.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
-            SETTLEMENTDATE     DUID     BIDTYPE  ...    T3   T4  MINIMUMLOAD
-    0  2020/01/10 00:00:00   AGLHAL      ENERGY  ...  10.0  2.0          2.0
-    1  2020/01/10 00:00:00   AGLSOM      ENERGY  ...  35.0  2.0         16.0
-    2  2020/01/10 00:00:00  ANGAST1      ENERGY  ...   0.0  0.0         46.0
-    3  2020/01/10 00:00:00    APD01   LOWER5MIN  ...   0.0  0.0          0.0
-    4  2020/01/10 00:00:00    APD01  LOWER60SEC  ...   0.0  0.0          0.0
-    <BLANKLINE>
-    [5 rows x 18 columns]
-
-    Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
-    provided by AEMO contains all historical_inputs data for this table. In this case if multiple calls to the set_data method
-    are made the new data replaces the old.
-
-    >>> historical_inputs.DUDETAILSUMMARY.set_data(year=2020, month=2)
-
-    Data for a specific 5 min dispatch interval can then be retrieved.
-
-    >>> print(historical_inputs.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
-           DUID           START_DATE  ... DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
-    0    AGLHAL  2019/07/01 00:00:00  ...                 1.0000      SCHEDULED
-    1   AGLNOW1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
-    2  AGLSITA1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
-    3    AGLSOM  2019/07/01 00:00:00  ...                 0.9891      SCHEDULED
-    4   ANGAST1  2019/07/01 00:00:00  ...                 0.9890      SCHEDULED
-    <BLANKLINE>
-    [5 rows x 9 columns]
-
-    Parameters
-    ----------
-    con : sqlite3.connection
-
-
-    Attributes
-    ----------
-    BIDPEROFFER_D : InputsByIntervalDateTime
-        Unit volume bids by 5 min dispatch intervals.
-    BIDDAYOFFER_D : InputsByDay
-        Unit price bids by market day.
-    DISPATCHREGIONSUM : InputsBySettlementDate
-        Regional demand terms by 5 min dispatch intervals.
-    DISPATCHLOAD : InputsBySettlementDate
-        Unit operating conditions by 5 min dispatch intervals.
-    DUDETAILSUMMARY : InputsStartAndEnd
-        Unit information by the start and end times of when the information is applicable.
-    DISPATCHCONSTRAINT : InputsBySettlementDate
-        The generic constraints that were used in each 5 min interval dispatch.
-    GENCONDATA : InputsByMatchDispatchConstraints
-        The generic constraints information, their applicability to a particular dispatch interval is determined by
-        reference to DISPATCHCONSTRAINT.
-    SPDREGIONCONSTRAINT : InputsByMatchDispatchConstraints
-        The regional lhs terms in generic constraints, their applicability to a particular dispatch interval is
-        determined by reference to DISPATCHCONSTRAINT.
-    SPDCONNECTIONPOINTCONSTRAINT : InputsByMatchDispatchConstraints
-        The connection point lhs terms in generic constraints, their applicability to a particular dispatch interval is
-        determined by reference to DISPATCHCONSTRAINT.
-    SPDINTERCONNECTORCONSTRAINT : InputsByMatchDispatchConstraints
-        The interconnector lhs terms in generic constraints, their applicability to a particular dispatch interval is
-        determined by reference to DISPATCHCONSTRAINT.
-    INTERCONNECTOR : InputsNoFilter
-        The the regions that each interconnector links.
-    INTERCONNECTORCONSTRAINT : InputsByEffectiveDateAndVersionNo
-        Interconnector properties FROMREGIONLOSSSHARE, LOSSCONSTANT, LOSSFLOWCOEFFICIENT, MAXMWIN, MAXMWOUT by
-        EFFECTIVEDATE and VERSIONNO.
-    LOSSMODEL : InputsByEffectiveDateAndVersionNo
-        Break points used in linearly interpolating interconnector loss funtctions by EFFECTIVEDATE and VERSIONNO.
-    LOSSFACTORMODEL : InputsByEffectiveDateAndVersionNo
-        Coefficients of demand terms in interconnector loss functions.
-    DISPATCHINTERCONNECTORRES : InputsBySettlementDate
-        Record of which interconnector were used in a particular dispatch interval.
-
-    """
-
-    def __init__(self, connection):
-        self.con = connection
-        self.BIDPEROFFER_D = InputsByIntervalDateTime(
-            table_name='BIDPEROFFER_D', table_columns=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE', 'BANDAVAIL1',
-                                                       'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5',
-                                                       'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
-                                                       'BANDAVAIL10', 'MAXAVAIL', 'ENABLEMENTMIN', 'ENABLEMENTMAX',
-                                                       'LOWBREAKPOINT', 'HIGHBREAKPOINT'],
-            table_primary_keys=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE'], con=self.con)
-        self.BIDDAYOFFER_D = InputsByDay(
-            table_name='BIDDAYOFFER_D', table_columns=['SETTLEMENTDATE', 'DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2',
-                                                       'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5', 'PRICEBAND6',
-                                                       'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10', 'T1',
-                                                       'T2', 'T3', 'T4', 'MINIMUMLOAD'],
-            table_primary_keys=['SETTLEMENTDATE', 'DUID', 'BIDTYPE'], con=self.con)
-        self.DISPATCHREGIONSUM = InputsBySettlementDate(
-            table_name='DISPATCHREGIONSUM', table_columns=['SETTLEMENTDATE', 'REGIONID', 'TOTALDEMAND',
-                                                           'DEMANDFORECAST', 'INITIALSUPPLY'],
-            table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
-        self.DISPATCHLOAD = InputsBySettlementDate(
-            table_name='DISPATCHLOAD', table_columns=['SETTLEMENTDATE', 'DUID', 'DISPATCHMODE', 'AGCSTATUS',
-                                                      'INITIALMW', 'TOTALCLEARED', 'RAMPDOWNRATE', 'RAMPUPRATE',
-                                                      'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
-                                                      'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN',
-                                                      'SEMIDISPATCHCAP', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC',
-                                                      'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'LOWERREG', 'RAISEREG',
-                                                      'RAISEREGAVAILABILITY', 'RAISE6SECACTUALAVAILABILITY',
-                                                      'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
-                                                      'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
-                                                      'LOWER60SECACTUALAVAILABILITY', 'LOWER5MINACTUALAVAILABILITY',
-                                                      'LOWERREGACTUALAVAILABILITY'],
-            table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
-        self.DISPATCHPRICE = InputsBySettlementDate(
-            table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
-                                                       'RAISE60SECROP', 'RAISE5MINROP', 'RAISEREGROP',
-                                                       'LOWER6SECROP', 'LOWER60SECROP', 'LOWER5MINROP',
-                                                       'LOWERREGROP'],
-            table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
-        self.DUDETAILSUMMARY = InputsStartAndEnd(
-            table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
-                                                         'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
-                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
-            table_primary_keys=['START_DATE', 'DUID'], con=self.con)
-        self.DUDETAIL = InputsByEffectiveDateVersionNo(
-            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY'],
-            table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.DISPATCHCONSTRAINT = InputsBySettlementDate(
-            table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
-                                                            'GENCONID_EFFECTIVEDATE', 'GENCONID_VERSIONNO',
-                                                            'LHS', 'VIOLATIONDEGREE', 'MARGINALVALUE'],
-            table_primary_keys=['SETTLEMENTDATE', 'CONSTRAINTID'], con=self.con)
-        self.GENCONDATA = InputsByMatchDispatchConstraints(
-            table_name='GENCONDATA', table_columns=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'CONSTRAINTTYPE',
-                                                    'GENERICCONSTRAINTWEIGHT'],
-            table_primary_keys=['GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.SPDREGIONCONSTRAINT = InputsByMatchDispatchConstraints(
-            table_name='SPDREGIONCONSTRAINT', table_columns=['REGIONID', 'EFFECTIVEDATE', 'VERSIONNO', 'GENCONID',
-                                                             'BIDTYPE', 'FACTOR'],
-            table_primary_keys=['REGIONID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
-        self.SPDCONNECTIONPOINTCONSTRAINT = InputsByMatchDispatchConstraints(
-            table_name='SPDCONNECTIONPOINTCONSTRAINT', table_columns=['CONNECTIONPOINTID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                                      'GENCONID', 'BIDTYPE', 'FACTOR'],
-            table_primary_keys=['CONNECTIONPOINTID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO', 'BIDTYPE'], con=self.con)
-        self.SPDINTERCONNECTORCONSTRAINT = InputsByMatchDispatchConstraints(
-            table_name='SPDINTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                                     'GENCONID', 'FACTOR'],
-            table_primary_keys=['INTERCONNECTORID', 'GENCONID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.INTERCONNECTOR = InputsNoFilter(
-            table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
-            table_primary_keys=['INTERCONNECTORID'], con=self.con)
-        self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
-            table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                                  'FROMREGIONLOSSSHARE', 'LOSSCONSTANT', 'ICTYPE',
-                                                                  'LOSSFLOWCOEFFICIENT', 'IMPORTLIMIT', 'EXPORTLIMIT'],
-            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.LOSSMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
-            table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
-                                                   'MWBREAKPOINT'],
-            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.LOSSFACTORMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
-            table_name='LOSSFACTORMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGIONID',
-                                                         'DEMANDCOEFFICIENT'],
-            table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-        self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
-            table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE', 'MWFLOW',
-                                                                   'MWLOSSES'],
-            table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
-        self.MNSP_INTERCONNECTOR = InputsByEffectiveDateVersionNo(
-            table_name='MNSP_INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                             'FROMREGION', 'TOREGION', 'FROM_REGION_TLF',
-                                                             'TO_REGION_TLF', 'LHSFACTOR', 'MAXCAPACITY'],
-            table_primary_keys=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
-
-    def create_tables(self):
-        """Drops any existing default tables and creates new ones, this method is generally called a new database.
-
-        Examples
-        --------
-        Create the database or connect to an existing one.
-
-        >>> con = sqlite3.connect('historical_inputs.db')
-
-        Create the database manager.
-
-        >>> historical_inputs = DBManager(con)
-
-        Create a set of default table in the database.
-
-        >>> historical_inputs.create_tables()
-
-        Default tables will now exist, but will be empty.
-
-        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
-        Empty DataFrame
-        Columns: [SETTLEMENTDATE, REGIONID, TOTALDEMAND, DEMANDFORECAST, INITIALSUPPLY]
-        Index: []
-
-        If you added data and then call create_tables again then any added data will be emptied.
-
-        >>> historical_inputs.DISPATCHREGIONSUM.add_data(year=2020, month=1)
-
-        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM limit 3", con=con))
-                SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
-        0  2020/01/01 00:05:00     NSW1      7245.31       -26.35352     7284.32178
-        1  2020/01/01 00:05:00     QLD1      6095.75       -24.29639     6129.36279
-        2  2020/01/01 00:05:00      SA1      1466.53         1.47190     1452.25647
-
-        >>> historical_inputs.create_tables()
-
-        >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
-        Empty DataFrame
-        Columns: [SETTLEMENTDATE, REGIONID, TOTALDEMAND, DEMANDFORECAST, INITIALSUPPLY]
-        Index: []
-
-        Returns
-        -------
-        None
-        """
-        for name, attribute in self.__dict__.items():
-            if hasattr(attribute, 'create_table_in_sqlite_db'):
-                attribute.create_table_in_sqlite_db()
-
-
-def datetime_dispatch_sequence(start_time, end_time):
-    """Creates a list of datetimes in the string format '%Y/%m/%d %H:%M:%S', in 5 min intervals.
-
-    Examples
-    --------
-
-    >>> date_times = datetime_dispatch_sequence(start_time='2020/01/01 12:00:00', end_time='2020/01/01 12:20:00')
-
-    >>> print(date_times)
-    ['2020/01/01 12:05:00', '2020/01/01 12:10:00', '2020/01/01 12:15:00', '2020/01/01 12:20:00']
-
-    Parameters
-    ----------
-    start_time : str
-        In the datetime in the format '%Y/%m/%d %H:%M:%S' e.g. '2020/01/01 12:00:00'
-    end_time : str
-        In the datetime in the format '%Y/%m/%d %H:%M:%S' e.g. '2020/01/01 12:00:00'
-    """
-    delta = timedelta(minutes=5)
-    start_time = datetime.strptime(start_time, '%Y/%m/%d %H:%M:%S')
-    end_time = datetime.strptime(end_time, '%Y/%m/%d %H:%M:%S')
-    date_times = []
-    curr = start_time + delta
-    while curr <= end_time:
-        # Change the datetime object to a timestamp and modify its format by replacing characters.
-        date_times.append(curr.isoformat().replace('T', ' ').replace('-', '/'))
-        curr += delta
-    return date_times
-
-
-dispatch_type_name_map = {'GENERATOR': 'generator', 'LOAD': 'load'}
-
-service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg', 'RAISE6SEC': 'raise_6s',
-                        'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min', 'LOWER6SEC': 'lower_6s',
-                        'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
-
-
-def use_historical_actual_availability_to_filter_fcas_bids(BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD):
-    """Where AEMO determined zero actual availability of an FCAS offer filter it from the set of bids.
-
-    Note there is an additional condition that the historical_inputs dispatch of the service must be zero, sometimes
-    the MMS table dispatch load records a zero availability when there was a non-zero dispatch.
-
-    Also energy bids are excluded from filtering.
-
-    Parameters
-    ----------
-    BIDPEROFFER_D : pd.DataFrame
-
-        ================  ====================================================
-        Columns:          Description:
-        DUID              unique identifier of a unit (as `str`)
-        BIDTYPE           the service being provided (as `str`)
-        others optional
-        ================  ====================================================
-
-    BIDDAYOFFER_D : pd.DataFrame
-
-        ================  ====================================================
-        Columns:          Description:
-        DUID              unique identifier of a unit (as `str`)
-        BIDTYPE           the service being provided (as `str`)
-        others optional
-        ================  ====================================================
-
-    DISPATCHLOAD : pd.DataFrame
-
-        ============================  ====================================================
-        Columns:                      Description:
-        RAISE6SECACTUALAVAILABILITY   calculated availabity after consider all unit based
-                                      constraints on FCAS dispatch and assuming other
-                                      service offered by the unit are at their dispatch level
-        RAISE60SECACTUALAVAILABILITY
-        RAISE5MINACTUALAVAILABILITY
-        RAISEREGACTUALAVAILABILITY
-        LOWER6SECACTUALAVAILABILITY
-        LOWER60SECACTUALAVAILABILITY
-        LOWER5MINACTUALAVAILABILITY
-        LOWERREGACTUALAVAILABILITY
-        LOWER5MIN                     dispatched volume of FCAS
-        LOWER60SEC
-        LOWER6SEC
-        RAISE5MIN
-        RAISE60SEC
-        RAISE6SEC
-        LOWERREG
-        RAISEREG
-        ============================  ====================================================
-
-    Returns
-    -------
-    BIDPEROFFER_D : pd.DataFrame
-
-    BIDDAYOFFER_D : pd.DataFrame
-
-    """
-
-    # The columns in DISPATCHLOAD containing post constraint availability of FCAS.
-    availabilities = ['RAISE6SECACTUALAVAILABILITY', 'RAISE60SECACTUALAVAILABILITY',
-                      'RAISE5MINACTUALAVAILABILITY', 'RAISEREGACTUALAVAILABILITY',
-                      'LOWER6SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
-                      'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY']
-
-    # The columns in DISPATCHLOAD containing the dispatch volume of each FCAS.
-    bid_types = ['LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'LOWERREG', 'RAISEREG']
-
-    # Reshape the data frame so the availability values are by row rather than in different columns.
-    availabilities = hf.stack_columns(DISPATCHLOAD, cols_to_keep=['DUID'], cols_to_stack=availabilities,
-                                      type_name='BIDTYPE', value_name='availability')
-
-    # Change BIDTYPE column to exclude the suffix ACTUALAVAILABILITY
-    availabilities['BIDTYPE'] = availabilities['BIDTYPE'].apply(lambda x: x.replace('ACTUALAVAILABILITY', ''))
-
-    # Reshape the data frame so the dispatch values are by row rather than in different columns.
-    dispatch = hf.stack_columns(DISPATCHLOAD, cols_to_keep=['DUID'], cols_to_stack=bid_types,
-                                type_name='BIDTYPE', value_name='dispatch')
-
-    # Combine dispatch and availabilities into a single data frame.
-    availabilities = pd.merge(availabilities, dispatch, 'inner', on=['DUID', 'BIDTYPE'])
-
-    # Only retain bids that either have non
-    availabilities = availabilities[(availabilities['availability'] > 0.0) |
-                                    (availabilities['dispatch']) > 0.0]
-
-    BIDPEROFFER_D_energy = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
-    BIDDAYOFFER_D_energy = BIDDAYOFFER_D[BIDDAYOFFER_D['BIDTYPE'] == 'ENERGY']
-
-    BIDPEROFFER_D = pd.merge(BIDPEROFFER_D, availabilities.loc[:, ['DUID', 'BIDTYPE']], 'inner',
-                             on=['DUID', 'BIDTYPE'])
-    BIDPEROFFER_D = pd.concat([BIDPEROFFER_D, BIDPEROFFER_D_energy])
-
-    BIDDAYOFFER_D = pd.merge(BIDDAYOFFER_D, availabilities.loc[:, ['DUID', 'BIDTYPE']], 'inner',
-                             on=['DUID', 'BIDTYPE'])
-    BIDDAYOFFER_D = pd.concat([BIDDAYOFFER_D, BIDDAYOFFER_D_energy])
-
-    return BIDPEROFFER_D, BIDDAYOFFER_D
-
-
-def format_fcas_market_requirements(SPDREGIONCONSTRAINT, DISPATCHCONSTRAINT, GENCONDATA):
-    """
-
-    Parameters
-    ----------
-    SPDREGIONCONSTRAINT
-
-    Returns
-    -------
-
-    """
-    # Assume we only use constraints with rhs greater than zero, and the that the rest are swamped
-    DISPATCHCONSTRAINT = DISPATCHCONSTRAINT[DISPATCHCONSTRAINT['RHS'] > 0.0]
-    fcas_market_requirements = pd.merge(SPDREGIONCONSTRAINT, DISPATCHCONSTRAINT, left_on='GENCONID',
-                                        right_on='CONSTRAINTID')
-    fcas_market_requirements = pd.merge(fcas_market_requirements, GENCONDATA, on='GENCONID')
-    fcas_market_requirements = fcas_market_requirements.loc[:, ['GENCONID', 'BIDTYPE', 'REGIONID', 'RHS',
-                                                                'CONSTRAINTTYPE']]
-    fcas_market_requirements.columns = ['set', 'service', 'region', 'volume', 'type']
-    fcas_market_requirements['service'] = fcas_market_requirements['service'].apply(lambda x: service_name_mapping[x])
-    return fcas_market_requirements
-
-
-def format_generic_constraints_rhs_and_type(DISPATCHCONSTRAINT, GENCONDATA):
-    """Re-format AEMO MSS tables DISPATCHCONSTRAINT and GENCONDATA to provide inputs compatible to Spot market class.
-
-    Examples
-    --------
-
-    >>> DISPATCHCONSTRAINT = pd.DataFrame({
-    ...   'CONSTRAINTID': ['A', 'B'],
-    ...   'RHS': [10.0, -20.0]})
-
-    >>> GENCONDATA = pd.DataFrame({
-    ...   'GENCONID': ['A', 'B'],
-    ...   'CONSTRAINTTYPE': ['<=', '>=']})
-
-    >>> generic_type_and_rhs = format_generic_constraints_rhs_and_type(DISPATCHCONSTRAINT, GENCONDATA)
-
-    >>> print(generic_type_and_rhs)
-      set type   rhs
-    0   A   <=  10.0
-    1   B   >= -20.0
-
-    Parameters
-    ----------
-    DISPATCHCONSTRAINT : pd.DataFrame
-
-        ============  ====================================================
-        Columns:      Description:
-        CONSTRAINTID  unique identifier of a constraint (as `str`)
-        RHS           the rhs value of the constraint used in dispatch (as `np.float64`)
-        ============  ====================================================
-
-    GENCONDATA : pd.DataFrame
-
-        ==============  ====================================================
-        Columns:        Description:
-        GENCONID        unique identifier of a constraint (as `str`)
-        CONSTRAINTTYPE  the constraint type '>=', '<=' or '=' (as `str`)
-        ==============  ====================================================
-
-    Returns
-    -------
-    pd.DataFrame
-
-        ==============  ====================================================
-        Columns:        Description:
-        set             unique identifier of a constraint (as `str`)
-        type            the constraint type '>=', '<=' or '=' (as `str`)
-        rhs             the rhs value of the constraint (as `np.float64`)
-        ==============  ====================================================
-    """
-    generic_rhs = DISPATCHCONSTRAINT.loc[:, ['CONSTRAINTID', 'RHS']]
-    generic_rhs.columns = ['set', 'rhs']
-    generic_type = GENCONDATA.loc[:, ['GENCONID', 'CONSTRAINTTYPE']]
-    generic_type.columns = ['set', 'type']
-    generic_constraints_type_and_rhs = pd.merge(generic_type, generic_rhs, 'inner', on='set')
-    return generic_constraints_type_and_rhs
-
-
-def format_generic_unit_lhs(SPDCONNECTIONPOINTCONSTRAINT, DUDETAILSUMMARY):
-    """Re-format AEMO MSS tables SPDCONNECTIONPOINTCONSTRAINT and DUDETAILSUMMARY to provide inputs to Spot market class.
-
-    Examples
-    --------
-
-    >>> SPDCONNECTIONPOINTCONSTRAINT = pd.DataFrame({
-    ...   'GENCONID': ['A', 'B'],
-    ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
-    ...   'CONNECTIONPOINTID': ['XA1', 'Y2'],
-    ...   'FACTOR': [1.0, 0.9]})
-
-    >>> DUDETAILSUMMARY = pd.DataFrame({
-    ...   'DUID': ['X', 'Y'],
-    ...   'CONNECTIONPOINTID': ['XA1', 'Y2']})
-
-    >>> generic_unit_lhs = format_generic_unit_lhs(SPDCONNECTIONPOINTCONSTRAINT, DUDETAILSUMMARY)
-
-    >>> print(generic_unit_lhs)
-      set unit    service  coefficient
-    0   A    X     energy          1.0
-    1   B    Y  raise_reg          0.9
-
-    Parameters
-    ----------
-    SPDCONNECTIONPOINTCONSTRAINT : pd.DataFrame
-
-        =================  ==================================================================
-        Columns:           Description:
-        GENCONID           unique identifier of a generic constraint (as `str`)
-        BIDTYPE            the serivce type of the variables being constrained (as `str`)
-        CONNECTIONPOINTID  the location in the grid of the variables being constrainted (as `str`)
-        FACTOR             the coefficient of the variables being constrained, note if multiple
-                           coefficients are provided for a generic constraint then the final
-                           coeffficient used is the sum (as `np.float64`)
-        =================  ==================================================================
-
-    DUDETAILSUMMARY : pd.DataFrame
-
-        =================  ==================================================================
-        Columns:           Description:
-        DUID               unique identifier of a unit (as `str`)
-        CONNECTIONPOINTID  the location in the grid of the unit (as `str`)
-        =================  ==================================================================
-
-    Returns
-    -------
-    pd.DataFrame
-
-        ==============  =====================================================================
-        Columns:        Description:
-        set             unique identifier of a generic constraint (as `str`)
-        unit            the unit whoes variables are being constrained (as `str`)
-        service         the serivce type of the variables being constrained (as `str`)
-        coefficient     the coefficient of the variables being constrained (as `np.float64`)
-        ==============  =====================================================================
-    """
-    unit_generic_lhs = SPDCONNECTIONPOINTCONSTRAINT.loc[:, ['GENCONID', 'BIDTYPE', 'CONNECTIONPOINTID', 'FACTOR']]
-    unit_generic_lhs = pd.merge(unit_generic_lhs, DUDETAILSUMMARY.loc[:, ['DUID', 'CONNECTIONPOINTID']],
-                                on='CONNECTIONPOINTID')
-    unit_generic_lhs = unit_generic_lhs.loc[:, ['GENCONID', 'DUID', 'BIDTYPE', 'FACTOR']]
-    unit_generic_lhs.columns = ['set', 'unit', 'service', 'coefficient']
-    unit_generic_lhs['service'] = unit_generic_lhs['service'].apply(lambda x: service_name_mapping[x])
-    return unit_generic_lhs
-
-
-def format_generic_region_lhs(SPDREGIONCONSTRAINT):
-    """Re-format AEMO MSS table SPDREGIONCONSTRAINT to provide inputs to Spot market class.
-
-    Examples
-    --------
-
-    >>> SPDREGIONCONSTRAINT = pd.DataFrame({
-    ...   'GENCONID': ['A', 'B'],
-    ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
-    ...   'REGIONID': ['NSW', 'VIC'],
-    ...   'FACTOR': [1.0, 0.9]})
-
-    >>> generic_region_lhs = format_generic_region_lhs(SPDREGIONCONSTRAINT)
-
-    >>> print(generic_region_lhs)
-      set region    service  coefficient
-    0   A    NSW     energy          1.0
-    1   B    VIC  raise_reg          0.9
-
-    Parameters
-    ----------
-    SPDREGIONCONSTRAINT : pd.DataFrame
-
-        =================  ==================================================================
-        Columns:           Description:
-        GENCONID           unique identifier of a generic constraint (as `str`)
-        BIDTYPE            the serivce type of the variables being constrained (as `str`)
-        REGIONID           the region whoes variables are being constrained, acting as shorthand
-                           for all the units in this region (as `str`)
-        FACTOR             the coefficient of the variables being constrained, note if multiple
-                           coefficients are provided for a generic constraint then the final
-                           coeffficient used is the sum (as `np.float64`)
-        =================  ==================================================================
-
-    Returns
-    -------
-    pd.DataFrame
-
-        ==============  =====================================================================
-        Columns:        Description:
-        set             unique identifier of a generic constraint (as `str`)
-        region          the region whoes variables are being constrained, acting as shorthand
-                        for all the units in this region (as `str`)
-        service         the serivce type of the variables being constrained (as `str`)
-        coefficient     the coefficient of the variables being constrained (as `np.float64`)
-        ==============  =====================================================================
-    """
-    region_generic_lhs = SPDREGIONCONSTRAINT.loc[:, ['GENCONID', 'BIDTYPE', 'REGIONID', 'FACTOR']]
-    region_generic_lhs = region_generic_lhs.loc[:, ['GENCONID', 'REGIONID', 'BIDTYPE', 'FACTOR']]
-    region_generic_lhs.columns = ['set', 'region', 'service', 'coefficient']
-    region_generic_lhs['service'] = region_generic_lhs['service'].apply(lambda x: service_name_mapping[x])
-    return region_generic_lhs
-
-
-def format_generic_interconnector_lhs(SPDINTERCONNECTORCONSTRAINT):
-    """Re-format AEMO MSS table SPDINTERCONNECTORCONSTRAINT to provide inputs to Spot market class.
-
-    Examples
-    --------
-
-    >>> SPDINTERCONNECTORCONSTRAINT = pd.DataFrame({
-    ...   'GENCONID': ['A', 'B'],
-    ...   'INTERCONNECTORID': ['L1', 'L2'],
-    ...   'FACTOR': [1.0, 0.9]})
-
-    >>> generic_region_lhs = format_generic_interconnector_lhs(SPDINTERCONNECTORCONSTRAINT)
-
-    >>> print(generic_region_lhs)
-      set interconnector  coefficient
-    0   A             L1          1.0
-    1   B             L2          0.9
-
-    Parameters
-    ----------
-    SPDINTERCONNECTORCONSTRAINT : pd.DataFrame
-
-        =================  ==================================================================
-        Columns:           Description:
-        GENCONID           unique identifier of a generic constraint (as `str`)
-        INTERCONNECTORID   the interconnector whoes variables are being constrained (as `str`)
-        FACTOR             the coefficient of the variables being constrained, note if multiple
-                           coefficients are provided for a generic constraint then the final
-                           coeffficient used is the sum (as `np.float64`)
-        =================  ==================================================================
-
-    Returns
-    -------
-    pd.DataFrame
-
-        ==============  =====================================================================
-        Columns:        Description:
-        set             unique identifier of a generic constraint (as `str`)
-        interconnector  the interconnector whoes variables are being constrained (as `str`)
-        coefficient     the coefficient of the variables being constrained (as `np.float64`)
-        ==============  =====================================================================
-    """
-    interconnector_generic_lhs = SPDINTERCONNECTORCONSTRAINT.loc[:, ['GENCONID', 'INTERCONNECTORID', 'FACTOR']]
-    interconnector_generic_lhs = interconnector_generic_lhs.loc[:, ['GENCONID', 'INTERCONNECTORID', 'FACTOR']]
-    interconnector_generic_lhs.columns = ['set', 'interconnector', 'coefficient']
-    return interconnector_generic_lhs

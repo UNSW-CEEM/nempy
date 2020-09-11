@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, time
 
 pd.set_option('display.width', None)
 
+
 class XMLCacheManager:
     """Class for accessing data stored in AEMO's NEMDE output files.
 

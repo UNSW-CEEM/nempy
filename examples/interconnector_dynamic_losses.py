@@ -1,6 +1,6 @@
 import pandas as pd
 from nempy import markets
-from nempy.historical import interconnectors as interconnector_inputs
+from nempy.historical_inputs import interconnectors as interconnector_inputs
 
 
 # The only generator is located in NSW.
