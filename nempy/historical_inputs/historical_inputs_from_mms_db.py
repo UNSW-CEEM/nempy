@@ -100,7 +100,7 @@ class _MMSTable:
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -110,7 +110,7 @@ class _MMSTable:
         Clean up by deleting database created.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -175,7 +175,7 @@ class _MMSTable:
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -197,7 +197,7 @@ class _MMSTable:
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         """
         with self.con:
@@ -228,7 +228,7 @@ class _SingleDataSource(_MMSTable):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -264,7 +264,7 @@ class _SingleDataSource(_MMSTable):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -301,7 +301,7 @@ class _MultiDataSource(_MMSTable):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -337,7 +337,7 @@ class _MultiDataSource(_MMSTable):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -377,7 +377,7 @@ class _AllHistDataSource(_MMSTable):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -413,7 +413,7 @@ class _AllHistDataSource(_MMSTable):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -466,7 +466,7 @@ class InputsBySettlementDate(_MultiDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -477,7 +477,7 @@ class InputsBySettlementDate(_MultiDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -495,7 +495,7 @@ class InputsBySettlementDate(_MultiDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -525,7 +525,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -536,7 +536,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -554,7 +554,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -589,7 +589,7 @@ class InputsByDay(_MultiDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -600,7 +600,7 @@ class InputsByDay(_MultiDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -631,7 +631,7 @@ class InputsByDay(_MultiDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -674,7 +674,7 @@ class InputsStartAndEnd(_SingleDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -685,7 +685,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the add_data method to add historical data, but here we will add data directly to the
+        Normally you would use the add_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -716,7 +716,7 @@ class InputsStartAndEnd(_SingleDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -749,7 +749,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -761,7 +761,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        Normally you would use the set_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -798,7 +798,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -837,7 +837,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -849,7 +849,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        Normally you would use the set_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -886,7 +886,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -958,7 +958,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -970,7 +970,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        Normally you would use the set_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -999,7 +999,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Parameters
         ----------
@@ -1063,7 +1063,7 @@ class InputsNoFilter(_SingleDataSource):
         --------
         Set up a database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the table object.
 
@@ -1074,7 +1074,7 @@ class InputsNoFilter(_SingleDataSource):
 
         >>> table.create_table_in_sqlite_db()
 
-        Normally you would use the set_data method to add historical data, but here we will add data directly to the
+        Normally you would use the set_data method to add historical_inputs data, but here we will add data directly to the
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
@@ -1093,7 +1093,7 @@ class InputsNoFilter(_SingleDataSource):
         Clean up by closing the database and deleting if its no longer needed.
 
         >>> con.close()
-        >>> os.remove('historical.db')
+        >>> os.remove('historical_inputs.db')
 
         Returns
         -------
@@ -1104,7 +1104,7 @@ class InputsNoFilter(_SingleDataSource):
 
 
 class DBManager:
-    """Constructs and manages a sqlite database for accessing historical inputs for NEM spot market dispatch.
+    """Constructs and manages a sqlite database for accessing historical_inputs inputs for NEM spot market dispatch.
 
     Constructs a database if none exists, otherwise connects to an existing database. Specific datasets can be added
     to the database from AEMO nemweb portal and inputs can be retrieved on a 5 min dispatch interval basis.
@@ -1113,29 +1113,29 @@ class DBManager:
     --------
     Create the database or connect to an existing one.
 
-    >>> con = sqlite3.connect('historical.db')
+    >>> con = sqlite3.connect('historical_inputs.db')
 
     Create the database manager.
 
-    >>> historical = DBManager(con)
+    >>> historical_inputs = DBManager(con)
 
     Create a set of default table in the database.
 
-    >>> historical.create_tables()
+    >>> historical_inputs.create_tables()
 
     Add data from AEMO nemweb data portal. In this case we are adding data from the table BIDDAYOFFER_D which contains
     unit's volume bids on 5 min basis, the data comes in monthly chunks.
 
-    >>> historical.BIDDAYOFFER_D.add_data(year=2020, month=1)
+    >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=1)
 
-    >>> historical.BIDDAYOFFER_D.add_data(year=2020, month=2)
+    >>> historical_inputs.BIDDAYOFFER_D.add_data(year=2020, month=2)
 
     This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
     If you need data for multiple months then multiple add_data calls can be made.
 
     Data for a specific 5 min dispatch interval can then be retrieved.
 
-    >>> print(historical.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
+    >>> print(historical_inputs.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
             SETTLEMENTDATE     DUID     BIDTYPE  ...    T3   T4  MINIMUMLOAD
     0  2020/01/10 00:00:00   AGLHAL      ENERGY  ...  10.0  2.0          2.0
     1  2020/01/10 00:00:00   AGLSOM      ENERGY  ...  35.0  2.0         16.0
@@ -1146,14 +1146,14 @@ class DBManager:
     [5 rows x 18 columns]
 
     Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
-    provided by AEMO contains all historical data for this table. In this case if multiple calls to the set_data method
+    provided by AEMO contains all historical_inputs data for this table. In this case if multiple calls to the set_data method
     are made the new data replaces the old.
 
-    >>> historical.DUDETAILSUMMARY.set_data(year=2020, month=2)
+    >>> historical_inputs.DUDETAILSUMMARY.set_data(year=2020, month=2)
 
     Data for a specific 5 min dispatch interval can then be retrieved.
 
-    >>> print(historical.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
+    >>> print(historical_inputs.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
            DUID           START_DATE  ... DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
     0    AGLHAL  2019/07/01 00:00:00  ...                 1.0000      SCHEDULED
     1   AGLNOW1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
@@ -1308,15 +1308,15 @@ class DBManager:
         --------
         Create the database or connect to an existing one.
 
-        >>> con = sqlite3.connect('historical.db')
+        >>> con = sqlite3.connect('historical_inputs.db')
 
         Create the database manager.
 
-        >>> historical = DBManager(con)
+        >>> historical_inputs = DBManager(con)
 
         Create a set of default table in the database.
 
-        >>> historical.create_tables()
+        >>> historical_inputs.create_tables()
 
         Default tables will now exist, but will be empty.
 
@@ -1327,7 +1327,7 @@ class DBManager:
 
         If you added data and then call create_tables again then any added data will be emptied.
 
-        >>> historical.DISPATCHREGIONSUM.add_data(year=2020, month=1)
+        >>> historical_inputs.DISPATCHREGIONSUM.add_data(year=2020, month=1)
 
         >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM limit 3", con=con))
                 SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
@@ -1335,7 +1335,7 @@ class DBManager:
         1  2020/01/01 00:05:00     QLD1      6095.75       -24.29639     6129.36279
         2  2020/01/01 00:05:00      SA1      1466.53         1.47190     1452.25647
 
-        >>> historical.create_tables()
+        >>> historical_inputs.create_tables()
 
         >>> print(pd.read_sql("Select * from DISPATCHREGIONSUM", con=con))
         Empty DataFrame
@@ -1391,7 +1391,7 @@ service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG':
 def use_historical_actual_availability_to_filter_fcas_bids(BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD):
     """Where AEMO determined zero actual availability of an FCAS offer filter it from the set of bids.
 
-    Note there is an additional condition that the historical dispatch of the service must be zero, sometimes
+    Note there is an additional condition that the historical_inputs dispatch of the service must be zero, sometimes
     the MMS table dispatch load records a zero availability when there was a non-zero dispatch.
 
     Also energy bids are excluded from filtering.

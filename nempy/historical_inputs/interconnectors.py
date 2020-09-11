@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 
-from nempy.historical import demand
+from nempy.historical_inputs import demand
 
 
 class InterconnectorData:
-    """Class for creating interconnector inputs for historical dispatch intervals.
+    """Class for creating interconnector inputs for historical_inputs dispatch intervals.
 
     Examples
     --------

@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from nempy.historical import aemo_to_nempy_name_mapping as an
+from nempy.historical_inputs import aemo_to_nempy_name_mapping as an
 
 
 class UnitData:
@@ -1289,11 +1289,11 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
 
 def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
-    """Approximates the unit limits used in historical dispatch, returns inputs compatible with the Spot market class.
+    """Approximates the unit limits used in historical_inputs dispatch, returns inputs compatible with the Spot market class.
 
-    The exact method for determining unit limits in historical dispatch is not known. This function first assumes the
+    The exact method for determining unit limits in historical_inputs dispatch is not known. This function first assumes the
     limits are set by the AVAILABILITY, INITIALMW, RAMPUPRATE and RAMPDOWNRATE columns in the MMS table DISPATCHLOAD.
-    Then if the historical dispatch amount recorded in TOTALCLEARED is outside these limits the limits are extended.
+    Then if the historical_inputs dispatch amount recorded in TOTALCLEARED is outside these limits the limits are extended.
     This occurs in the following circumstances:
 
     * For units operating in fast start mode, i.e. dispatch mode not equal to 0.0, if the TOTALCLEARED is outside
