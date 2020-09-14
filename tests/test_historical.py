@@ -4,7 +4,7 @@ from pandas.testing import assert_frame_equal
 from datetime import datetime, timedelta
 import random
 import pickle
-from nempy.historical_inputs import inputs, historical_inputs_from_xml, historical_inputs_from_mms_db, units, \
+from nempy.historical_inputs import loaders, xml_cache, mms_db, units, \
     interconnectors, constraints, demand
 from nempy import historical_market_builder
 
@@ -26,7 +26,7 @@ def get_test_intervals(number=100):
 def test_if_ramp_rates_calculated_correctly():
     inputs_database = 'test_files/historical.db'
     con = sqlite3.connect(inputs_database)
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
 
@@ -60,7 +60,7 @@ def test_if_ramp_rates_calculated_correctly():
 def test_fast_start_constraints():
     inputs_database = 'test_files/historical.db'
     con = sqlite3.connect(inputs_database)
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
 
@@ -94,7 +94,7 @@ def test_fast_start_constraints():
 def test_capacity_constraints():
     inputs_database = 'test_files/historical_all.db'
     con = sqlite3.connect(inputs_database)
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
 
@@ -113,7 +113,7 @@ def test_capacity_constraints():
 def test_fcas_trapezium_scaled_availability():
     inputs_database = 'test_files/historical_all.db'
     con = sqlite3.connect('test_files/historical_all.db')
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
@@ -140,7 +140,7 @@ def test_fcas_trapezium_scaled_availability():
 def test_all_units_and_service_dispatch_historically_present_in_market():
     inputs_database = 'test_files/historical_all.db'
     con = sqlite3.connect('test_files/historical_all.db')
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
@@ -154,7 +154,7 @@ def test_all_units_and_service_dispatch_historically_present_in_market():
 def test_slack_in_generic_constraints():
     inputs_database = 'test_files/historical.db'
     con = sqlite3.connect('test_files/historical.db')
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
@@ -173,7 +173,7 @@ def test_slack_in_generic_constraints():
 def test_slack_in_generic_constraints_use_fcas_requirements_interface():
     inputs_database = 'test_files/historical_all.db'
     con = sqlite3.connect('test_files/historical_all.db')
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
@@ -196,7 +196,7 @@ def test_slack_in_generic_constraints_use_fcas_requirements_interface():
 def test_slack_in_generic_constraints_with_all_features():
     inputs_database = 'test_files/historical_all.db'
     con = sqlite3.connect('test_files/historical_all.db')
-    historical_inputs = inputs.HistoricalInputs(
+    historical_inputs = loaders.HistoricalInputs(
         market_management_system_database_connection=con,
         nemde_xml_cache_folder='test_files/historical_xml_files')
     for interval in get_test_intervals():
@@ -220,10 +220,10 @@ def test_slack_in_generic_constraints_with_all_features():
 
 def test_hist_dispatch_values_meet_demand():
     con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
-    mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
-    raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
-                                               market_management_system_database=mms_database)
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
 
     for interval in get_test_intervals():
         raw_inputs_loader.set_interval(interval)
@@ -256,10 +256,10 @@ def test_hist_dispatch_values_meet_demand():
 
 def test_against_10_interval_benchmark():
     con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
-    mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
-    raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
-                                               market_management_system_database=mms_database)
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
     outputs = []
     for interval in get_test_intervals(number=10):
         raw_inputs_loader.set_interval(interval)
@@ -297,10 +297,10 @@ def test_against_10_interval_benchmark():
 
 def test_against_100_interval_benchmark():
     con = sqlite3.connect('test_files/historical_all.db')
-    mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('test_files/historical_xml_files')
-    raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
-                                               market_management_system_database=mms_database)
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('test_files/historical_xml_files')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
     outputs = []
     for interval in get_test_intervals(number=100):
         raw_inputs_loader.set_interval(interval)
@@ -339,10 +339,10 @@ def test_against_100_interval_benchmark():
 
 def test_against_1000_interval_benchmark():
     con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
-    mms_database = historical_inputs_from_mms_db.DBManager(con)
-    xml_cache = historical_inputs_from_xml.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
-    raw_inputs_loader = inputs.RawInputsLoader(nemde_xml_cache_manager=xml_cache,
-                                               market_management_system_database=mms_database)
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
     outputs = []
     for interval in get_test_intervals(number=1000):
         raw_inputs_loader.set_interval(interval)

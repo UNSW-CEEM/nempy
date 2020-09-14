@@ -4,7 +4,7 @@ import numpy as np
 
 from nempy import markets
 from nempy.help_functions import helper_functions as hf
-from nempy.historical_inputs import historical_inputs_from_mms_db as hi
+from nempy.historical_inputs import mms_db as hi
 
 
 class SpotMarketBuilder:

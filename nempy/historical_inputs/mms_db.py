@@ -256,6 +256,58 @@ class DBManager:
             if hasattr(attribute, 'create_table_in_sqlite_db'):
                 attribute.create_table_in_sqlite_db()
 
+    def populate(self, start_year, start_month, end_year, end_month, verbose=True):
+
+        self.create_tables()
+
+        if start_month == 1:
+            start_year -= 1
+            start_month = 12
+        else:
+            start_month -= 1
+
+        # Download data were inputs are needed on a monthly basis.
+        finished = False
+        for year in range(start_year, end_year + 1):
+            for month in range(start_month, 13):
+                if year == end_year and month == end_month + 1:
+                    finished = True
+                    break
+
+                if verbose:
+                    print('Downloading MMS table for year={} month={}'.format(year, month))
+
+                self.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
+                self.DISPATCHREGIONSUM.add_data(year=year, month=month)
+                self.DISPATCHLOAD.add_data(year=year, month=month)
+                self.BIDPEROFFER_D.add_data(year=year, month=month)
+                self.BIDDAYOFFER_D.add_data(year=year, month=month)
+                self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
+                self.DISPATCHPRICE.add_data(year=year, month=month)
+
+            if finished:
+                break
+
+            start_month = 1
+
+        # Download data where inputs are just needed from the latest month.
+        self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        self.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
+        self.LOSSMODEL.set_data(year=end_year, month=end_month)
+        self.DUDETAILSUMMARY.create_table_in_sqlite_db()
+        self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
+        self.DUDETAIL.set_data(year=end_year, month=end_month)
+        self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        self.GENCONDATA.set_data(year=end_year, month=end_month)
+        self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
+        self.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
+        self.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        self.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
+        self.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        self.DUDETAIL.create_table_in_sqlite_db()
+        self.DUDETAIL.set_data(year=end_year, month=end_month)
+
 
 def _download_to_df(url, table_name, year, month):
     """Downloads a zipped csv file and converts it to a pandas DataFrame, returns the DataFrame.
@@ -1403,6 +1455,8 @@ class InputsNoFilter(_SingleDataSource):
         """
 
         return pd.read_sql_query("Select * from {table}".format(table=self.table_name), con=self.con)
+
+
 
 
 

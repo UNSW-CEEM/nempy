@@ -80,21 +80,17 @@ print(market.get_energy_prices())
 The example demonstrates the broad range of market features that can be implemented with nempy and the use of auxiliary 
 modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with nempy.
 ```python
-# Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
-
 import sqlite3
 import pandas as pd
 from nempy import markets
-from nempy.historical_inputs import inputs, historical_inputs_from_mms_db, \
-    historical_inputs_from_xml, units, demand, interconnectors, \
+from nempy.historical_inputs import loaders, mms_db, \
+    xml_cache, units, demand, interconnectors, \
     constraints
 
 con = sqlite3.connect('market_management_system.db')
-market_management_system_db_interface = \
-    historical_inputs_from_mms_db.DBManager(connection=con)
+mms_db_manager = mms_db.DBManager(connection=con)
 
-nemde_xml_file_cache_interface = \
-    historical_inputs_from_xml.XMLCacheManager('cache_directory')
+xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
@@ -102,20 +98,16 @@ down_load_inputs = True
 
 if down_load_inputs:
     # This requires approximately 5 GB of storage.
-    inputs.build_market_management_system_database(
-        market_management_system_db_interface,
-        start_year=2019, start_month=1,
-        end_year=2019, end_month=1)
+    mms_db_manager.populate(start_year=2019, start_month=1,
+                            end_year=2019, end_month=1)
 
     # This requires approximately 60 GB of storage.
-    inputs.build_xml_inputs_cache(
-        nemde_xml_file_cache_interface,
-        start_year=2019, start_month=1,
-        end_year=2019, end_month=1)
+    xml_cache_manager.populate(start_year=2019, start_month=1,
+                               end_year=2019, end_month=1)
 
-raw_inputs_loader = inputs.RawInputsLoader(
-    nemde_xml_cache_manager=nemde_xml_file_cache_interface,
-    market_management_system_database=market_management_system_db_interface)
+raw_inputs_loader = loaders.RawInputsLoader(
+    nemde_xml_cache_manager=xml_cache_manager,
+    market_management_system_database=mms_db_manager)
 
 # A list of intervals we want to recreate historical dispatch for.
 dispatch_intervals = ['2019/01/01 12:00:00',
@@ -160,7 +152,7 @@ for interval in dispatch_intervals:
         unit_uigf_limit)
     cost = constraint_inputs.get_constraint_violation_prices()['uigf']
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
-    
+
     # Set unit ramp rates.
     ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch()
     market.set_unit_ramp_up_constraints(
@@ -200,7 +192,7 @@ for interval in dispatch_intervals:
     market.set_interconnectors(interconnectors_definitions)
     market.set_interconnector_losses(loss_functions,
                                      interpolation_break_points)
-    
+
     # Add generic constraints and FCAS market constraints.
     fcas_requirements = constraint_inputs.get_fcas_requirements()
     market.set_fcas_requirements_constraints(fcas_requirements)
@@ -214,7 +206,7 @@ for interval in dispatch_intervals:
     interconnector_generic_lhs = constraint_inputs.get_interconnector_lhs()
     market.link_interconnectors_to_generic_constraints(
         interconnector_generic_lhs)
-    
+
     # Set the operational demand to be met by dispatch.
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)

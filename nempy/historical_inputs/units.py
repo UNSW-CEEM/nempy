@@ -1,9 +1,68 @@
 import pandas as pd
 import numpy as np
+import doctest
 from nempy.historical_inputs import aemo_to_nempy_name_mapping as an
 
 
+def _test_setup():
+    import sqlite3
+    from nempy.historical_inputs import mms_db
+    from nempy.historical_inputs import xml_cache
+    from nempy.historical_inputs import loaders
+    con = sqlite3.connect('market_management_system.db')
+    mms_db_manager = mms_db.DBManager(connection=con)
+    xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
+    inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
+    inputs_loader.set_interval('2019/01/01 00:00:00')
+    return inputs_loader
+
+
+class MethodCallOrderError(Exception):
+    """Raise for calling methods in incompatible order."""
+
+
 class UnitData:
+    """Loads unit related raw inputs and preprocess them for compatibility with :class:`nempy.markets.SpotMarket`
+
+    Examples
+    --------
+
+    This example shows the setup used for the examples in the class methods.
+
+    >>> import sqlite3
+    >>> from nempy.historical_inputs import mms_db
+    >>> from nempy.historical_inputs import xml_cache
+    >>> from nempy.historical_inputs import loaders
+
+    The UnitData class requries a RawInputsLoader instance.
+
+    >>> con = sqlite3.connect('market_management_system.db')
+    >>> mms_db_manager = mms_db.DBManager(connection=con)
+    >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
+    >>> inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
+    >>> inputs_loader.set_interval('2019/01/01 00:00:00')
+
+    Create the UnitData instance.
+
+    >>> unit_data = UnitData(inputs_loader)
+
+    >>> unit_data.get_unit_bid_availability()
+              unit  capacity
+    0       AGLHAL     173.0
+    1       AGLSOM     160.0
+    2      ANGAST1      43.0
+    23      BALBG1       4.0
+    33      BALBL1       0.0
+    ...        ...       ...
+    989   YARWUN_1     140.0
+    990      YWPS1     370.0
+    999      YWPS2     380.0
+    1008     YWPS3       0.0
+    1017     YWPS4     370.0
+    <BLANKLINE>
+    [218 rows x 2 columns]
+    """
+
     def __init__(self, raw_input_loader):
         self.raw_input_loader = raw_input_loader
         self.dispatch_interval = 5  # minutes
@@ -15,13 +74,53 @@ class UnitData:
 
         self.volume_bids = self.raw_input_loader.get_unit_volume_bids()
         self.fast_start_profiles = self.raw_input_loader.get_unit_fast_start_parameters()
-        self.initial_conditions = self.raw_input_loader.get_unit_initial_conditions_dataframe()
+        self.initial_conditions = self.raw_input_loader.get_unit_initial_conditions()
         self.uigf_values = self.raw_input_loader.get_UIGF_values()
 
         self.price_bids = self.raw_input_loader.get_unit_price_bids()
         self.unit_details = self.raw_input_loader.get_unit_details()
 
+        self.BIDPEROFFER_D = None
+        self.fcas_trapeziums = None
+
     def get_unit_bid_availability(self):
+        """Get the bid in maximum availability for scheduled units.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_unit_bid_availability()
+                  unit  capacity
+        0       AGLHAL     173.0
+        1       AGLSOM     160.0
+        2      ANGAST1      43.0
+        23      BALBG1       4.0
+        33      BALBL1       0.0
+        ...        ...       ...
+        989   YARWUN_1     140.0
+        990      YWPS1     370.0
+        999      YWPS2     380.0
+        1008     YWPS3       0.0
+        1017     YWPS4     370.0
+        <BLANKLINE>
+        [218 rows x 2 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            capacity          unit bid in max availability, in MW, \n
+                              (as `str`)
+            ================  ========================================
+
+        """
         bid_availability = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL']]
         bid_availability = self._remove_non_energy_bids(bid_availability)
         bid_availability = bid_availability.loc[:, ['DUID', 'MAXAVAIL']]
@@ -39,10 +138,95 @@ class UnitData:
         return dataframe
 
     def get_unit_uigf_limits(self):
+        """Get the maximum availability predicted by the unconstrained intermittent generation forecast.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_unit_uigf_limits()
+                unit  capacity
+        0      ARWF1    56.755
+        1   BALDHWF1     9.160
+        2      BANN1     0.000
+        3     BLUFF1     4.833
+        4     BNGSF1     0.000
+        ..       ...       ...
+        57     WGWF1    25.445
+        58   WHITSF1     0.000
+        59  WOODLWN1     0.075
+        60     WRSF1     0.000
+        61     WRWF1    15.760
+        <BLANKLINE>
+        [62 rows x 2 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            capacity          the forecast max availability, in MW, \n
+                              (as `str`)
+            ================  ========================================
+
+        """
         uigf = an.map_aemo_column_names_to_nempy_names(self.uigf_values)
         return uigf
 
     def get_ramp_rates_used_for_energy_dispatch(self):
+        """Get ramp rates used for constraining energy dispatch.
+
+        The minimum of bid in ramp rates and scada telemetered ramp rates are used. If a unit is ending the interval
+        in fast start dispatch mode two then ramp rates are not returned for that unit as its ramp is strictly set by
+        the dispatch inflexibility profile. If a unit starts in mode two, but ends the interval past mode two, then
+        its ramp up rate is adjusted to reflect the fact it was constrained by the inflexibility profile for part of the
+        interval.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_ramp_rates_used_for_energy_dispatch()
+                 unit  initial_output  ramp_up_rate  ramp_down_rate
+        0      AGLHAL        0.000000    720.000000      720.000000
+        1      AGLSOM        0.000000    480.000000      480.000000
+        2     ANGAST1        0.000000    840.000000      840.000000
+        3       ARWF1       54.500000   1200.000000      600.000000
+        4      BALBG1        3.810000   6000.000000     6000.000000
+        ..        ...             ...           ...             ...
+        275  YARWUN_1      140.360001      0.000000        0.000000
+        276     YWPS1      366.665833    177.750006      177.750006
+        277     YWPS2      374.686066    180.000000      180.000000
+        278     YWPS3        0.000000    180.000000      180.000000
+        279     YWPS4      368.139252    180.000000      180.000000
+        <BLANKLINE>
+        [280 rows x 4 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            initial_output    the output/consumption of the unit at \n
+                              the start of the dispatch interval, \n
+                              in MW, (as `np.float64`)
+            ramp_up_rate      the ramp up rate, in MW/h, \n
+                              (as `np.float64`)
+            ramp_down_rate    the ramp down rate, in MW/h, \n
+                              (as `np.float64`)
+            ================  ========================================
+
+        """
         ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
         ramp_rates = self._remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates)
         ramp_rates = self._adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(ramp_rates)
@@ -61,13 +245,13 @@ class UnitData:
         return ramp_rates
 
     def _remove_fast_start_units_ending_dispatch_interval_in_mode_two(self, dataframe):
-        fast_start_profiles = self.get_fast_start_profiles()
+        fast_start_profiles = self._get_fast_start_profiles()
         units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
         dataframe = dataframe[~dataframe['DUID'].isin(units_ending_in_mode_two)]
         return dataframe
 
     def _adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(self, ramp_rates):
-        fast_start_profiles = self.get_fast_start_profiles()
+        fast_start_profiles = self._get_fast_start_profiles()
         if not fast_start_profiles.empty:
             fast_start_profiles = self._fast_start_mode_two_initial_mw(fast_start_profiles)
             fast_start_target = self._fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_profiles,
@@ -105,11 +289,61 @@ class UnitData:
         return fast_start_end_condition.loc[:, ['unit', 'fast_start_initial_mw', 'new_ramp_up_rate']]
 
     def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
-        profiles = self.get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
+        """Get the parameters needed to construct the fast dispatch inflexibility profiles used for dispatch.
+
+        If the results of an non fast start constrained dispatch run are provided then these are used to commit fast
+        start units starting the interval in mode zero, when the they have a non-zero dispatch result.
+
+        For more info on fast start dispatch inflexibility profiles :download:`see AEMO docs <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_fast_start_profiles_for_dispatch()
+                unit  end_mode  time_in_end_mode  mode_two_length  mode_four_length  min_loading
+        0     AGLHAL         0               5.0              3.0               2.0          2.0
+        1     AGLSOM         0               5.0              2.0               2.0         16.0
+        2   BARCALDN         0               5.0              4.0               4.0         12.0
+        3   BARRON-1         5               5.0              3.0               1.0          5.0
+        4   BARRON-2         5               5.0              3.0               1.0          5.0
+        ..       ...       ...               ...              ...               ...          ...
+        69     VPGS5         0               5.0              3.0               0.0         48.0
+        70     VPGS6         0               5.0              3.0               0.0         48.0
+        71   W/HOE#1         0               5.0              0.0               0.0        160.0
+        72   W/HOE#2         0               5.0              0.0               0.0        160.0
+        73    YABULU         0               5.0              6.0               6.0         83.0
+        <BLANKLINE>
+        [74 rows x 6 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            end_mode          the fast start mode the unit will end \n
+                              the dispatch interval in, (as `np.int64`)
+            time_in_end_mode  the amount of time the unit will have \n
+                              spend in the end mode at the end of the \n
+                              dispatch interval, (as `np.float64`)
+            mode_two_length   the length the units mode two, in minutes \n
+                              (as `np.float64`)
+            mode_four_length  the length the units mode four, in minutes \n
+                              (as `np.float64`)
+            min_loading       the mininum opperating level of the unit \n
+                              during mode three, in MW, (as `no.float64`)
+            ================  ========================================
+        """
+        profiles = self._get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
         return profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
                                 'mode_four_length', 'min_loading']]
 
-    def get_fast_start_profiles(self, unconstrained_dispatch=None):
+    def _get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.fast_start_profiles
         fast_start_profiles = an.map_aemo_column_names_to_nempy_names(fast_start_profiles)
         fast_start_profiles = self._commit_fast_start_units_in_mode_zero_if_they_have_non_zero_unconstrained_dispatch(
@@ -194,10 +428,48 @@ class UnitData:
                                           'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
                                           'mode_four_length', 'time_after_mode_two']]
 
-    def get_fast_start_violation(self):
-        return self.raw_input_loader.get_violations()['fast_start']
-
     def get_unit_info(self):
+        """Get unit information.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_unit_info()
+                 unit region dispatch_type  loss_factor
+        0      AGLHAL    SA1     generator     0.971500
+        1     AGLNOW1   NSW1     generator     1.003700
+        2    AGLSITA1   NSW1     generator     1.002400
+        3      AGLSOM   VIC1     generator     0.984743
+        4     ANGAST1    SA1     generator     1.005674
+        ..        ...    ...           ...          ...
+        477     YWNL1   VIC1     generator     0.957300
+        478     YWPS1   VIC1     generator     0.969600
+        479     YWPS2   VIC1     generator     0.957300
+        480     YWPS3   VIC1     generator     0.957300
+        481     YWPS4   VIC1     generator     0.957300
+        <BLANKLINE>
+        [482 rows x 4 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`)
+            region            the market region in which the unit is \n
+                              located, (as `str`)
+            dispatch_type     whether the unit is a 'generator' or \n
+                              'load', (as `str`)
+            loss_factor       the combined unit transmission and \n
+                              distribution loss_factor, (as np.float64)
+            ================  ========================================
+
+        """
         unit_details = self.unit_details
         unit_details['LOSSFACTOR'] = unit_details['TRANSMISSIONLOSSFACTOR'] * unit_details['DISTRIBUTIONLOSSFACTOR']
         unit_details = unit_details.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
@@ -205,29 +477,105 @@ class UnitData:
         unit_details = an.map_aemo_column_values_to_nempy_name(unit_details, column='dispatch_type')
         return unit_details.loc[:, ['unit', 'region', 'dispatch_type', 'loss_factor']]
 
-    def get_unit_availability(self):
+    def _get_unit_availability(self):
         bid_availability = self.get_unit_bid_availability()
         ugif_availability = self.get_unit_uigf_limits()
         return pd.concat([bid_availability, ugif_availability])
 
     def get_processed_bids(self):
+        """Get processed unit bids.
+
+        The bids are processed by scaling for AGC enablement limits, scaling for scada ramp rates, scaling for
+        the unconstrained intermittent generation forecast and enforcing the preconditions for enabling FCAS bids. For
+        more info on these process :download:`see AEMO docs  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> volume_bids, price_bids = unit_data.get_processed_bids()
+
+        >>> volume_bids
+                unit    service     1      2    3     4    5     6     7     8    9     10
+        0     AGLHAL     energy   0.0    0.0  0.0   0.0  0.0   0.0  60.0   0.0  0.0  160.0
+        1     AGLSOM     energy   0.0    0.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0  170.0
+        2    ANGAST1     energy   0.0    0.0  0.0   0.0  0.0  50.0   0.0   0.0  0.0   50.0
+        9      ARWF1     energy   0.0  241.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0    0.0
+        23    BALBG1     energy   4.0    0.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0   26.0
+        ..       ...        ...   ...    ...  ...   ...  ...   ...   ...   ...  ...    ...
+        340    YWPS4   lower_6s  15.0   10.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0    0.0
+        341    YWPS4  raise_60s   0.0    0.0  0.0   0.0  0.0   5.0   5.0   0.0  0.0   10.0
+        342    YWPS4   raise_6s   0.0    0.0  0.0  10.0  5.0   0.0   0.0   0.0  0.0   10.0
+        343    YWPS4  lower_reg   0.0    0.0  0.0   0.0  0.0   0.0   0.0  20.0  0.0    0.0
+        344    YWPS4  raise_reg   0.0    0.0  0.0   0.0  0.0   0.0   5.0  10.0  0.0    5.0
+        <BLANKLINE>
+        [569 rows x 12 columns]
+
+        >>> price_bids
+                unit    service        1      2       3       4       5       6       7        8         9        10
+        0     AGLHAL     energy  -971.50   0.00  270.86  358.30  406.87  484.59  562.31  1326.64  10277.37  13600.02
+        1     AGLSOM     energy  -984.74   0.00   83.70  108.32  142.79  279.67  444.12   985.73  13097.94  14278.73
+        2    ANGAST1     energy -1005.67   0.00  125.71  201.34  300.89  382.14  593.34  1382.65  10678.25  14582.27
+        9      ARWF1     energy  -969.10 -63.00    2.00    4.00    8.00   16.00   32.00    64.00    128.00  14051.95
+        23    BALBG1     energy  -994.80   0.00   19.92   47.37   75.18  109.45  298.44   443.13  10047.49  14424.60
+        ..       ...        ...      ...    ...     ...     ...     ...     ...     ...      ...       ...       ...
+        284    YWPS4   lower_6s     0.03   0.05    0.16    0.30    1.90   25.04   30.04    99.00   4600.00   9899.00
+        285    YWPS4  lower_reg     0.05   1.90    4.78    9.40   14.00   29.00   64.90   240.90  11990.00  13050.00
+        286    YWPS4  raise_60s     0.17   1.80    4.80   10.01   21.00   39.00   52.00   102.00   4400.00  11999.00
+        287    YWPS4   raise_6s     0.48   1.75    4.90   20.70   33.33   99.90  630.00  1999.00   6000.00  12299.00
+        288    YWPS4  raise_reg     0.05   2.70    9.99   19.99   49.00   95.50  240.00   450.50    950.50  11900.00
+        <BLANKLINE>
+        [569 rows x 12 columns]
+
+        Multiple Returns
+        ---------------
+        volume_bids : pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`)
+            service           the service the bid applies to, (as `str`)
+            1                 the volume bid the first bid band, in MW, \n
+                              (as `np.float64`)
+            :
+            10                the volume in the tenth bid band, in MW, \n
+                              (as `np.float64`)
+            ================  ========================================
+
+        price_bids : pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`)
+            service           the service the bid applies to, (as `str`)
+            1                 the price of the first bid band, in MW, \n
+                              (as `np.float64`)
+            :
+            10                the price of the the tenth bid band, in MW, \n
+                              (as `np.float64`)
+            ================  ========================================
+
+        """
         uigf_values = self.raw_input_loader.get_UIGF_values()
         BIDPEROFFER_D = self.volume_bids.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
         initial_conditions = self.initial_conditions
 
         BIDDAYOFFER_D = self.price_bids
         unit_info = self.get_unit_info()
-        unit_availability = self.get_unit_availability()
+        unit_availability = self._get_unit_availability()
 
         agc_enablement_limits = self.raw_input_loader.get_agc_enablement_limits()
-        BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, agc_enablement_limits)
-        BIDPEROFFER_D = scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
-        BIDPEROFFER_D = scaling_for_uigf(BIDPEROFFER_D, uigf_values)
-        self.BIDPEROFFER_D, BIDDAYOFFER_D = enforce_preconditions_for_enabling_fcas(
+        BIDPEROFFER_D = _scaling_for_agc_enablement_limits(BIDPEROFFER_D, agc_enablement_limits)
+        BIDPEROFFER_D = _scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
+        BIDPEROFFER_D = _scaling_for_uigf(BIDPEROFFER_D, uigf_values)
+        self.BIDPEROFFER_D, BIDDAYOFFER_D = _enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, initial_conditions, unit_availability)
 
-        volume_bids = format_volume_bids(self.BIDPEROFFER_D, self.service_name_mapping)
-        price_bids = format_price_bids(BIDDAYOFFER_D, self.service_name_mapping)
+        volume_bids = _format_volume_bids(self.BIDPEROFFER_D, self.service_name_mapping)
+        price_bids = _format_price_bids(BIDDAYOFFER_D, self.service_name_mapping)
         volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
         volume_bids = volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
                                           '6', '7', '8', '9', '10']]
@@ -237,15 +585,197 @@ class UnitData:
         return volume_bids, price_bids
 
     def add_fcas_trapezium_constraints(self):
-        self.fcas_trapeziums = format_fcas_trapezium_constraints(self.BIDPEROFFER_D, self.service_name_mapping)
+        """Load the fcas trapezium constraints into the UnitData class so subsequent method calls can access them.
+
+        Examples
+        --------
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+
+        If we try and call add_fcas_trapezium_constraints before calling get_processed_bids we get an error.
+
+        >>> unit_data.add_fcas_trapezium_constraints()
+        Traceback (most recent call last):
+           ...
+        units.MethodCallOrderError: Call get_processed_bids before add_fcas_trapezium_constraints.
+
+        After calling get_processed_bids it goes away.
+
+        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
+
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        If we try and access the trapezium constraints before calling this method we get an error.
+
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+        >>> unit_data.get_fcas_max_availability()
+        Traceback (most recent call last):
+           ...
+        units.MethodCallOrderError: Call add_fcas_trapezium_constraints before get_fcas_max_availability.
+
+        After calling it the error goes away.
+
+        >>> volume_bids, price_bids = unit_data.get_processed_bids()
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        >>> unit_data.get_fcas_max_availability()
+                unit     service  max_availability
+        0      APD01  raise_5min           34.0000
+        1      APD01   raise_60s           34.0000
+        2      APD01    raise_6s           17.0000
+        3    ASNENC1  raise_5min           72.0000
+        4    ASNENC1   raise_60s           49.0000
+        ..       ...         ...               ...
+        340    YWPS4    lower_6s           25.0000
+        341    YWPS4   raise_60s           10.0000
+        342    YWPS4    raise_6s           15.0000
+        343    YWPS4   lower_reg           15.1875
+        344    YWPS4   raise_reg           15.0000
+        <BLANKLINE>
+        [289 rows x 3 columns]
+
+        Returns
+        -------
+        None
+
+
+        Raises
+        ------
+        MethodCallOrderError
+            if called before get_processed_bids
+
+        """
+
+        if self.BIDPEROFFER_D is None:
+            raise MethodCallOrderError('Call get_processed_bids before add_fcas_trapezium_constraints.')
+        self.fcas_trapeziums = _format_fcas_trapezium_constraints(self.BIDPEROFFER_D, self.service_name_mapping)
 
     def get_fcas_max_availability(self):
+        """Get the unit bid maximum availability of each service.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+
+        Required calls before calling get_fcas_max_availability.
+
+        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        Now facs max availibility can be accessed.
+
+        >>> unit_data.get_fcas_max_availability()
+                unit     service  max_availability
+        0      APD01  raise_5min           34.0000
+        1      APD01   raise_60s           34.0000
+        2      APD01    raise_6s           17.0000
+        3    ASNENC1  raise_5min           72.0000
+        4    ASNENC1   raise_60s           49.0000
+        ..       ...         ...               ...
+        340    YWPS4    lower_6s           25.0000
+        341    YWPS4   raise_60s           10.0000
+        342    YWPS4    raise_6s           15.0000
+        343    YWPS4   lower_reg           15.1875
+        344    YWPS4   raise_reg           15.0000
+        <BLANKLINE>
+        [289 rows x 3 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`)
+            service           the service the bid applies to, (as `str`)
+            max_availability  the unit bid maximum availability, in MW, \n
+                              (as `np.float64`)
+            ================  ========================================
+
+        Raises
+        ------
+        MethodCallOrderError
+            if the method is called before add_fcas_trapezium_constraints.
+        """
+        if self.fcas_trapeziums is None:
+            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_fcas_max_availability.')
         return self.fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
 
     def get_fcas_regulation_trapeziums(self):
+        """Get the unit bid FCAS trapeziums for regulation services.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+
+        Required calls before calling get_fcas_regulation_trapeziums.
+
+        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        Now facs max availibility can be accessed.
+
+        >>> unit_data.get_fcas_regulation_trapeziums()
+                 unit    service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
+        19       BW01  lower_reg         35.015640       280.01013       315.025770        445.010250       445.01025
+        20       BW01  raise_reg         35.015640       280.01013       280.010130        409.994610       445.01025
+        27       BW02  lower_reg         28.390656       297.05151       325.442166        633.239010       633.23901
+        28       BW02  raise_reg         28.390656       297.05151       297.051510        604.848354       633.23901
+        35   CALL_B_1  lower_reg         15.000000       192.00000       207.000000        354.100010       354.10001
+        ..        ...        ...               ...             ...              ...               ...             ...
+        295  TUNGATIN  raise_reg         77.000000         3.00003         3.000030          1.000000        78.00000
+        311       VP6  lower_reg         30.125000       250.00000       280.125000        660.000000       660.00000
+        312       VP6  raise_reg         30.125000       250.00000       250.000000        629.875000       660.00000
+        343     YWPS4  lower_reg         15.187500       250.00000       265.187500        370.687500       370.68750
+        344     YWPS4  raise_reg         15.000000       250.00000       250.000000        355.687500       370.68750
+        <BLANKLINE>
+        [64 rows x 7 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================   =======================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit, \n
+                               (as `str`)
+            service            the regulation service being offered, \n
+                               (as `str`)
+            max_availability   the maximum volume of the contingency \n
+                               service, in MW, (as `np.float64`)
+            enablement_min     the energy dispatch level at which \n
+                               the unit can begin to provide \n
+                               the regulation service, in MW, \n
+                               (as `np.float64`)
+            low_break_point    the energy dispatch level at which \n
+                               the unit can provide the full \n
+                               regulation service offered, in MW, \n
+                               (as `np.float64`)
+            high_break_point   the energy dispatch level at which the \n
+                               unit can no longer provide the \n
+                               full regulation service offered, in MW, \n
+                               (as `np.float64`)
+            enablement_max     the energy dispatch level at which the \n
+                               unit can no longer provide any \n
+                               regulation service, in MW, \n
+                               (as `np.float64`)
+            ================   =======================================
+
+        Raises
+        ------
+        MethodCallOrderError
+            if the method is called before add_fcas_trapezium_constraints.
+        """
+        if self.fcas_trapeziums is None:
+            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_fcas_max_availability.')
         return self.fcas_trapeziums[self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
 
-    def get_scada_ramp_up_rates(self):
+    def _get_scada_ramp_up_rates(self):
         initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
         initial_cons.columns = ['unit', 'initial_output', 'ramp_up_rate']
         units_with_scada_ramp_rates = list(
@@ -253,7 +783,7 @@ class UnitData:
         initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
         return initial_cons
 
-    def get_scada_ramp_down_rates(self):
+    def _get_scada_ramp_down_rates(self):
         initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
         initial_cons.columns = ['unit', 'initial_output', 'ramp_down_rate']
         units_with_scada_ramp_rates = list(
@@ -261,39 +791,199 @@ class UnitData:
         initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
         return initial_cons
 
-    def get_raise_reg_units_with_scada_ramp_rates(self):
+    def _get_raise_reg_units_with_scada_ramp_rates(self):
         reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
-        reg_units = pd.merge(self.get_scada_ramp_up_rates(), reg_units, 'inner', on='unit')
+        reg_units = pd.merge(self._get_scada_ramp_up_rates(), reg_units, 'inner', on='unit')
         reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_up_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
-    def get_lower_reg_units_with_scada_ramp_rates(self):
+    def _get_lower_reg_units_with_scada_ramp_rates(self):
         reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
-        reg_units = pd.merge(self.get_scada_ramp_down_rates(), reg_units, 'inner', on='unit')
+        reg_units = pd.merge(self._get_scada_ramp_down_rates(), reg_units, 'inner', on='unit')
         reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_down_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
     def get_scada_ramp_down_rates_of_lower_reg_units(self):
-        lower_reg_units = self.get_lower_reg_units_with_scada_ramp_rates()
-        scada_ramp_down_rates = self.get_scada_ramp_down_rates()
+        """Get the scada ramp down rates for unit with a lower regulation bid.
+
+        Only units with scada ramp rates and a lower regulation bid that passes enablement criteria are returned.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+
+        Required calls before calling get_scada_ramp_down_rates_of_lower_reg_units.
+
+        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        Now the method can be called.
+
+        >>> unit_data.get_scada_ramp_down_rates_of_lower_reg_units().head()
+                unit  initial_output  ramp_down_rate
+        36      BW01      433.425049      420.187683
+        37      BW02      532.075073      340.687866
+        40  CALL_B_1      344.100006      240.000000
+        41  CALL_B_2      349.100006      240.000000
+        74      ER01      542.699951      298.875275
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            initial_output    the output/consumption of the unit at \n
+                              the start of the dispatch interval, \n
+                              in MW, (as `np.float64`)
+            ramp_down_rate    the ramp down rate, in MW/h, \n
+                              (as `np.float64`)
+            ================  ========================================
+
+        Raises
+        ------
+        MethodCallOrderError
+            if the method is called before add_fcas_trapezium_constraints.
+        """
+        if self.fcas_trapeziums is None:
+            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_scada_ramp_down_rates_of_lower_reg_units.')
+        lower_reg_units = self._get_lower_reg_units_with_scada_ramp_rates()
+        scada_ramp_down_rates = self._get_scada_ramp_down_rates()
         scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['unit'].isin(lower_reg_units['unit'])]
         return scada_ramp_down_rates
 
     def get_scada_ramp_up_rates_of_raise_reg_units(self):
-        scada_ramp_up_rates = self.get_scada_ramp_up_rates()
-        raise_reg_units = self.get_raise_reg_units_with_scada_ramp_rates()
+        """Get the scada ramp up rates for unit with a raise regulation bid.
+
+        Only units with scada ramp rates and a raise regulation bid that passes enablement criteria are returned.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+
+        Required calls before calling get_scada_ramp_up_rates_of_raise_reg_units.
+
+        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        Now the method can be called.
+
+        >>> unit_data.get_scada_ramp_up_rates_of_raise_reg_units().head()
+                unit  initial_output  ramp_up_rate
+        36      BW01      433.425049    420.187683
+        37      BW02      532.075073    340.687866
+        40  CALL_B_1      344.100006    240.000000
+        41  CALL_B_2      349.100006    240.000000
+        74      ER01      542.699951    299.999542
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            initial_output    the output/consumption of the unit at \n
+                              the start of the dispatch interval, \n
+                              in MW, (as `np.float64`)
+            ramp_up_rate      the ramp up rate, in MW/h, \n
+                              (as `np.float64`)
+            ================  ========================================
+
+        Raises
+        ------
+        MethodCallOrderError
+            if the method is called before add_fcas_trapezium_constraints.
+        """
+        if self.fcas_trapeziums is None:
+            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_scada_ramp_up_rates_of_raise_reg_units.')
+        scada_ramp_up_rates = self._get_scada_ramp_up_rates()
+        raise_reg_units = self._get_raise_reg_units_with_scada_ramp_rates()
         scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['unit'].isin(raise_reg_units['unit'])]
         return scada_ramp_up_rates
 
     def get_contingency_services(self):
+        """Get the unit bid FCAS trapeziums for contingency services.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+        >>> unit_data = UnitData(inputs_loader)
+
+        Required calls before calling get_contingency_services.
+
+        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
+        >>> unit_data.add_fcas_trapezium_constraints()
+
+        Now facs max availibility can be accessed.
+
+        >>> unit_data.get_contingency_services()
+                unit     service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
+        0      APD01  raise_5min              34.0             0.0              0.0               0.0             0.0
+        1      APD01   raise_60s              34.0             0.0              0.0               0.0             0.0
+        2      APD01    raise_6s              17.0             0.0              0.0               0.0             0.0
+        3    ASNENC1  raise_5min              72.0             0.0              0.0               0.0             0.0
+        4    ASNENC1   raise_60s              49.0             0.0              0.0               0.0             0.0
+        ..       ...         ...               ...             ...              ...               ...             ...
+        338    YWPS4  lower_5min              15.0           250.0            265.0             385.0           385.0
+        339    YWPS4   lower_60s              20.0           250.0            270.0             385.0           385.0
+        340    YWPS4    lower_6s              25.0           250.0            275.0             385.0           385.0
+        341    YWPS4   raise_60s              10.0           220.0            220.0             390.0           400.0
+        342    YWPS4    raise_6s              15.0           220.0            220.0             390.0           405.0
+        <BLANKLINE>
+        [225 rows x 7 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================   =======================================
+            Columns:           Description:
+            unit               unique identifier of a dispatch unit, \n
+                               (as `str`)
+            service            the contingency service being offered, \n
+                               (as `str`)
+            max_availability   the maximum volume of the contingency \n
+                               service, in MW, (as `np.float64`)
+            enablement_min     the energy dispatch level at which \n
+                               the unit can begin to provide \n
+                               the regulation service, in MW, \n
+                               (as `np.float64`)
+            low_break_point    the energy dispatch level at which \n
+                               the unit can provide the full \n
+                               regulation service offered, in MW, \n
+                               (as `np.float64`)
+            high_break_point   the energy dispatch level at which the \n
+                               unit can no longer provide the \n
+                               full regulation service offered, in MW, \n
+                               (as `np.float64`)
+            enablement_max     the energy dispatch level at which the \n
+                               unit can no longer provide any \n
+                               regulation service, in MW, \n
+                               (as `np.float64`)
+            ================   =======================================
+
+        Raises
+        ------
+        MethodCallOrderError
+            if the method is called before add_fcas_trapezium_constraints.
+        """
+
+        if self.fcas_trapeziums is None:
+            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_contingency_services.')
         return self.fcas_trapeziums[~self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
 
 
-def format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
-    """Extracts and re-formats the fcas trapezium data from the AEMO MSS table BIDDAYOFFER_D.
-
+def _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
+    """
     Examples
     --------
 
@@ -306,53 +996,13 @@ def format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
     ... 'HIGHBREAKPOINT': [60.0, 0.0],
     ... 'ENABLEMENTMAX': [80.0, 0.0]})
 
-    >>> fcas_trapeziums = format_fcas_trapezium_constraints(BIDPEROFFER_D)
+    >>> fcas_trapeziums = _format_fcas_trapezium_constraints(BIDPEROFFER_D)
 
     >>> print(fcas_trapeziums)
       unit    service  ...  high_break_point  enablement_max
     0    A  raise_60s  ...              60.0            80.0
     <BLANKLINE>
     [1 rows x 7 columns]
-
-    Parameters
-    ----------
-    BIDPEROFFER_D : pd.DataFrame
-
-        ==============  ====================================================
-        Columns:        Description:
-        DUID            unique identifier of a unit (as `str`)
-        BIDTYPE         the service being provided (as `str`)
-        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
-        ENABLEMENTMIN   the energy dispatch level at which the unit can begin to
-                        provide the FCAS service, in MW (as `np.float64`)
-        LOWBREAKPOINT   the energy dispatch level at which the unit can provide
-                        the full FCAS offered, in MW (as `np.float64`)
-        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
-                        longer provide the full FCAS service offered,
-                        in MW (as `np.float64`)
-        ENABLEMENTMAX   the energy dispatch level at which the unit can
-                        no longer provide any FCAS service,
-                        in MW (as `np.float64`)
-        ==============  ====================================================
-
-    Returns
-    ----------
-    fcas_trapeziums : pd.DataFrame
-
-            ================   ======================================================================
-            Columns:           Description:
-            unit               unique identifier of a dispatch unit (as `str`)
-            service            the contingency service being offered (as `str`)
-            max_availability   the maximum volume of the contingency service in MW (as `np.float64`)
-            enablement_min     the energy dispatch level at which the unit can begin to provide the
-                               contingency service, in MW (as `np.float64`)
-            low_break_point    the energy dispatch level at which the unit can provide the full
-                               contingency service offered, in MW (as `np.float64`)
-            high_break_point   the energy dispatch level at which the unit can no longer provide the
-                               full contingency service offered, in MW (as `np.float64`)
-            enablement_max     the energy dispatch level at which the unit can no longer begin
-                               the contingency service, in MW (as `np.float64`)
-            ================   ======================================================================
     """
     BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
     trapezium_cons = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'ENABLEMENTMIN', 'LOWBREAKPOINT',
@@ -363,7 +1013,7 @@ def format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
     return trapezium_cons
 
 
-def format_volume_bids(BIDPEROFFER_D, service_name_mapping):
+def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     """Re-formats the AEMO MSS table BIDDAYOFFER_D to be compatible with the Spot market class.
 
     Examples
@@ -383,7 +1033,7 @@ def format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     ...   'BANDAVAIL9': [0.0, 0.0],
     ...   'BANDAVAIL10': [0.0, 0.0]})
 
-    >>> volume_bids = format_volume_bids(BIDPEROFFER_D)
+    >>> volume_bids = _format_volume_bids(BIDPEROFFER_D)
 
     >>> print(volume_bids)
       unit    service      1     2    3     4     5     6     7    8    9   10
@@ -428,7 +1078,7 @@ def format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     return volume_bids
 
 
-def format_price_bids(BIDDAYOFFER_D, service_name_mapping):
+def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     """Re-formats the AEMO MSS table BIDDAYOFFER_D to be compatible with the Spot market class.
 
     Examples
@@ -448,7 +1098,7 @@ def format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     ...   'PRICEBAND9': [0.0, 0.0],
     ...   'PRICEBAND10': [0.0, 0.0]})
 
-    >>> price_bids = format_price_bids(BIDDAYOFFER_D)
+    >>> price_bids = _format_price_bids(BIDDAYOFFER_D)
 
     >>> print(price_bids)
       unit    service      1     2    3     4     5     6     7    8    9   10
@@ -490,7 +1140,7 @@ def format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     return price_bids
 
 
-def format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
+def _format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
     """Re-formats the AEMO MSS table DUDETAILSUMMARY to be compatible with the Spot market class.
 
     Loss factors get combined into a single value.
@@ -506,7 +1156,7 @@ def format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
     ...   'TRANSMISSIONLOSSFACTOR': [0.9, 0.85],
     ...   'DISTRIBUTIONLOSSFACTOR': [0.9, 0.99]})
 
-    >>> unit_info = format_unit_info(DUDETAILSUMMARY)
+    >>> unit_info = _format_unit_info(DUDETAILSUMMARY)
 
     >>> print(unit_info)
       unit dispatch_type connection_point region  loss_factor
@@ -550,7 +1200,7 @@ def format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
     return unit_info
 
 
-def scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
+def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
     """Scale regulating FCAS enablement and break points where AGC enablement limits are more restrictive than offers.
 
     The scaling is caried out as per the
@@ -575,7 +1225,7 @@ def scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
     ...   'LOWERREGENABLEMENTMAX': [80.0],
     ...   'LOWERREGENABLEMENTMIN': [40.0]})
 
-    >>> BIDPEROFFER_D_out = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+    >>> BIDPEROFFER_D_out = _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
 
     >>> print(BIDPEROFFER_D_out)
       DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
@@ -593,7 +1243,7 @@ def scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
     ...   'LOWERREGENABLEMENTMAX': [100.0],
     ...   'LOWERREGENABLEMENTMIN': [20.0]})
 
-    >>> BIDPEROFFER_D = scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
+    >>> BIDPEROFFER_D = _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD)
 
     >>> print(BIDPEROFFER_D)
       DUID   BIDTYPE  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
@@ -685,7 +1335,7 @@ def scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
     return BIDPEROFFER_D
 
 
-def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
+def _scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     """Scale regulating FCAS max availability and break points where AGC ramp rates are less than offered availability.
 
     The scaling is caried out as per the
@@ -712,7 +1362,7 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     ...   'LOWERREGACTUALAVAILABILITY': [10.0],
     ...   'RAISEREGACTUALAVAILABILITY': [10.0]})
 
-    >>> BIDPEROFFER_D_out = scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
+    >>> BIDPEROFFER_D_out = _scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
 
     >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'LOWBREAKPOINT', 'HIGHBREAKPOINT']])
       DUID   BIDTYPE  MAXAVAIL  LOWBREAKPOINT  HIGHBREAKPOINT
@@ -731,7 +1381,7 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     ...   'LOWERREGACTUALAVAILABILITY': [30.0],
     ...   'RAISEREGACTUALAVAILABILITY': [30.0]})
 
-    >>> BIDPEROFFER_D_out = scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
+    >>> BIDPEROFFER_D_out = _scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD)
 
     >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'LOWBREAKPOINT', 'HIGHBREAKPOINT']])
       DUID   BIDTYPE  MAXAVAIL  LOWBREAKPOINT  HIGHBREAKPOINT
@@ -852,7 +1502,7 @@ def scaling_for_agc_ramp_rates(BIDPEROFFER_D, DISPATCHLOAD):
     return BIDPEROFFER_D
 
 
-def scaling_for_uigf(BIDPEROFFER_D, ugif_values):
+def _scaling_for_uigf(BIDPEROFFER_D, ugif_values):
     """Scale semi-schedualed units FCAS enablement max and break points where their UIGF is less than enablement max.
 
     The scaling is caried out as per the
@@ -876,7 +1526,7 @@ def scaling_for_uigf(BIDPEROFFER_D, ugif_values):
     ...   'DUID': ['A', 'B', 'C'],
     ...   'SCHEDULE_TYPE': ['SCHEDULED', 'SCHEDULED', 'SEMI-SCHEDULED']})
 
-    >>> BIDPEROFFER_D_out = scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+    >>> BIDPEROFFER_D_out = _scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
 
     >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'HIGHBREAKPOINT', 'ENABLEMENTMAX']])
       DUID     BIDTYPE  HIGHBREAKPOINT  ENABLEMENTMAX
@@ -890,7 +1540,7 @@ def scaling_for_uigf(BIDPEROFFER_D, ugif_values):
     ...   'DUID': ['A', 'B', 'C'],
     ...   'AVAILABILITY': [120.0, 90.0, 91.0]})
 
-    >>> BIDPEROFFER_D_out = scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+    >>> BIDPEROFFER_D_out = _scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
 
     >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'HIGHBREAKPOINT', 'ENABLEMENTMAX']])
       DUID     BIDTYPE  HIGHBREAKPOINT  ENABLEMENTMAX
@@ -967,7 +1617,7 @@ def scaling_for_uigf(BIDPEROFFER_D, ugif_values):
     return BIDPEROFFER_D
 
 
-def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits):
+def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits):
     """Checks that fcas bids meet criteria for being considered, returns a filtered version of volume and price bids.
 
     The criteria are based on the
@@ -1013,7 +1663,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     ...   'unit': ['A', 'B', 'C'],
     ...   'capacity': [50.0, 120.0, 80.0]})
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits)
 
     All criteria are meet so no units are filtered out.
@@ -1038,7 +1688,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
     >>> BIDPEROFFER_D_mod['MAXAVAIL'] = np.where(BIDPEROFFER_D_mod['DUID'] == 'C', 0.0, BIDPEROFFER_D_mod['MAXAVAIL'])
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D_mod, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits)
 
     All criteria are meet so no units are filtered out.
@@ -1062,7 +1712,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     >>> BIDPEROFFER_D_mod['BANDAVAIL1'] = np.where(BIDPEROFFER_D_mod['DUID'] == 'C', 0.0,
     ...                                            BIDPEROFFER_D_mod['BANDAVAIL1'])
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D_mod, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits)
 
     All criteria are meet so no units are filtered out.
@@ -1086,7 +1736,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     >>> capacity_limits_mod['capacity'] = np.where(capacity_limits_mod['unit'] == 'C', 0.0,
     ...                                            capacity_limits_mod['capacity'])
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD, capacity_limits_mod)
 
     All criteria are meet so no units are filtered out.
@@ -1117,7 +1767,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
     >>> DISPATCHLOAD_mod['INITIALMW'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 0.0, DISPATCHLOAD_mod['INITIALMW'])
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D_mod, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
 
     All criteria are meet so no units are filtered out.
@@ -1140,7 +1790,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
     >>> DISPATCHLOAD_mod['INITIALMW'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 19.0, DISPATCHLOAD_mod['INITIALMW'])
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
 
     All criteria are meet so no units are filtered out.
@@ -1163,7 +1813,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
 
     >>> DISPATCHLOAD_mod['AGCSTATUS'] = np.where(DISPATCHLOAD_mod['DUID'] == 'C', 0.0, DISPATCHLOAD_mod['AGCSTATUS'])
 
-    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = enforce_preconditions_for_enabling_fcas(
+    >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
     ...   BIDPEROFFER_D, BIDDAYOFFER_D, DISPATCHLOAD_mod, capacity_limits)
 
     All criteria are meet so no units are filtered out.
@@ -1288,7 +1938,7 @@ def enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPAT
     return BIDPEROFFER_D, BIDDAYOFFER_D
 
 
-def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
+def _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     """Approximates the unit limits used in historical dispatch, returns inputs compatible with the Spot market class.
 
     The exact method for determining unit limits in historical dispatch is not known. This function first assumes the
@@ -1331,7 +1981,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ...   'BIDTYPE': ['ENERGY', 'ENERGY', 'ENERGY', 'ENERGY'],
     ...   'MAXAVAIL': [100.0, 100.0, 100.0, 100.0]})
 
-    >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+    >>> unit_limits = _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
 
     >>> print(unit_limits)
       unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
@@ -1358,7 +2008,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ...   'BIDTYPE': ['ENERGY', 'ENERGY', 'ENERGY', 'ENERGY'],
     ...   'MAXAVAIL': [80.0, 80.0, 100.0, 80.0]})
 
-    >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+    >>> unit_limits = _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
 
     >>> print(unit_limits)
       unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
@@ -1384,7 +2034,7 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ...   'BIDTYPE': ['ENERGY'],
     ...   'MAXAVAIL': [30.0]})
 
-    >>> unit_limits = determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
+    >>> unit_limits = _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
 
     >>> print(unit_limits)
       unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
@@ -1457,3 +2107,5 @@ def determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
     ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
     return ic
+
+

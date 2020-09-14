@@ -31,6 +31,22 @@ class XMLCacheManager:
         self.xml = None
         Path(cache_folder).mkdir(parents=False, exist_ok=True)
 
+    def populate(self, start_year, start_month, end_year, end_month, verbose=True):
+        start = datetime(year=start_year, month=start_month, day=1) - timedelta(days=1)
+        if end_month == 12:
+            end_month = 0
+            end_year += 1
+        end = datetime(year=end_year, month=end_month + 1, day=1)
+        download_date = start
+        while download_date <= end:
+            if verbose:
+                print('Downloading NEMDE XML file for year={}, month={}, day={}'.format(download_date.year,
+                                                                                        download_date.month,
+                                                                                        download_date.day))
+            download_date_str = download_date.isoformat().replace('T', ' ').replace('-', '/')
+            self.load_interval(download_date_str)
+            download_date += timedelta(days=1)
+
     def load_interval(self, interval):
         """Load the data for particular 5 min dispatch interval into memory.
 
@@ -163,7 +179,7 @@ class XMLCacheManager:
     def _get_interval_datetime_object(self):
         return datetime.strptime(self.interval, '%Y/%m/%d %H:%M:%S')
 
-    def get_unit_initial_conditions_dataframe(self):
+    def get_unit_initial_conditions(self):
         """Get the initial conditions of units at the start of the dispatch interval.
 
         Examples
@@ -172,7 +188,7 @@ class XMLCacheManager:
 
         >>> manager.load_interval('2019/01/01 00:00:00')
 
-        >>> manager.get_unit_initial_conditions_dataframe()
+        >>> manager.get_unit_initial_conditions()
                  DUID   INITIALMW  RAMPUPRATE  RAMPDOWNRATE  AGCSTATUS
         0      AGLHAL    0.000000         NaN           NaN        0.0
         1      AGLSOM    0.000000         NaN           NaN        0.0
@@ -878,6 +894,52 @@ class XMLCacheManager:
                     bid_availability['availability'].append(float(offer['@MaxAvail']))
         bid_availability = pd.DataFrame(bid_availability)
         return bid_availability
+
+    def find_intervals_with_violations(self, limit, start_year, start_month, end_year, end_month):
+        """Find the set of dispatch intervals where the non-intervention dispatch runs had constraint violations.
+
+        Examples
+        -------
+        >>> manager = XMLCacheManager('test_nemde_cache')
+
+        >>> manager.load_interval('2019/01/01 00:00:00')
+
+        >>> manager.find_intervals_with_violations(limit=3, start_year=2019, start_month=1, end_year=2019, end_month=1)
+        {'2019/01/01 00:00:00': ['unit_capacity'], '2019/01/01 00:05:00': ['unit_capacity'], '2019/01/01 00:10:00': ['unit_capacity']}
+
+        Parameters
+        ----------
+        limit : int
+            number of intervals to find, finds first intervals in chronolgical order
+        start_year : int
+            year to start search
+        start_month : int
+            month to start search
+        end_year : int
+            year to end search
+        end_month : int
+            month to end search
+
+        Returns
+        -------
+        dict
+
+        """
+        start = datetime(year=start_year, month=start_month, day=1)
+        end = datetime(year=end_year, month=end_month + 1, day=1)
+        check_time = start
+        intervals = {}
+        while check_time <= end and len(intervals) < limit:
+            time_as_str = check_time.isoformat().replace('T', ' ').replace('-', '/')
+            self.load_interval(time_as_str)
+            violations = self.get_violations()
+            for violation_type, violation_value in violations.items():
+                if violation_value > 0.0:
+                    if time_as_str not in intervals:
+                        intervals[time_as_str] = []
+                    intervals[time_as_str].append(violation_type)
+            check_time += timedelta(minutes=5)
+        return intervals
 
 
 class MissingDataError(Exception):

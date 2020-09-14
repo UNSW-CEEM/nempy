@@ -3,16 +3,14 @@
 import sqlite3
 import pandas as pd
 from nempy import markets
-from nempy.historical_inputs import inputs, historical_inputs_from_mms_db, \
-    historical_inputs_from_xml, units, demand, interconnectors, \
+from nempy.historical_inputs import loaders, mms_db, \
+    xml_cache, units, demand, interconnectors, \
     constraints
 
 con = sqlite3.connect('market_management_system.db')
-market_management_system_db_interface = \
-    historical_inputs_from_mms_db.DBManager(connection=con)
+mms_db_manager = mms_db.DBManager(connection=con)
 
-nemde_xml_file_cache_interface = \
-    historical_inputs_from_xml.XMLCacheManager('cache_directory')
+xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
@@ -20,20 +18,16 @@ down_load_inputs = True
 
 if down_load_inputs:
     # This requires approximately 5 GB of storage.
-    inputs.build_market_management_system_database(
-        market_management_system_db_interface,
-        start_year=2019, start_month=1,
-        end_year=2019, end_month=1)
+    mms_db_manager.populate(start_year=2019, start_month=1,
+                            end_year=2019, end_month=1)
 
     # This requires approximately 60 GB of storage.
-    inputs.build_xml_inputs_cache(
-        nemde_xml_file_cache_interface,
-        start_year=2019, start_month=1,
-        end_year=2019, end_month=1)
+    xml_cache_manager.populate(start_year=2019, start_month=1,
+                               end_year=2019, end_month=1)
 
-raw_inputs_loader = inputs.RawInputsLoader(
-    nemde_xml_cache_manager=nemde_xml_file_cache_interface,
-    market_management_system_database=market_management_system_db_interface)
+raw_inputs_loader = loaders.RawInputsLoader(
+    nemde_xml_cache_manager=xml_cache_manager,
+    market_management_system_database=mms_db_manager)
 
 # A list of intervals we want to recreate historical dispatch for.
 dispatch_intervals = ['2019/01/01 12:00:00',

@@ -1,7 +1,7 @@
 import pickle
 import sqlite3
 
-from nempy.historical_inputs import inputs
+from nempy.historical_inputs import loaders
 
 import os
 cwd = os.getcwd()
@@ -9,7 +9,7 @@ cwd = os.getcwd()
 print(cwd)
 
 con = sqlite3.connect('historical.db')
-historical_inputs = inputs.HistoricalInputs(
+historical_inputs = loaders.HistoricalInputs(
     market_management_system_database_connection=con,
     nemde_xml_cache_folder='historical_xml_files')
 

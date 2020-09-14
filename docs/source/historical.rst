@@ -8,7 +8,7 @@ class.
 XMLCacheManager
 ---------------
 
-.. automodule:: nempy.historical_inputs.historical_inputs_from_xml
+.. automodule:: nempy.historical_inputs.xml_cache
     :autosummary:
     :members:
     :inherited-members:
@@ -17,10 +17,24 @@ XMLCacheManager
 Market Management System Database classes
 -----------------------------------------
 
-.. automodule:: nempy.historical_inputs.historical_inputs_from_mms_db
+.. automodule:: nempy.historical_inputs.mms_db
     :autosummary:
     :members:
     :inherited-members:
     :exclude-members: timedelta,datetime
+
+RawInputsLoader
+-----------------------------------------
+
+.. automodule:: nempy.historical_inputs.loaders
+    :autosummary:
+    :members:
+
+UnitData
+--------
+
+.. automodule:: nempy.historical_inputs.units
+    :autosummary:
+    :members:
 
 

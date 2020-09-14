@@ -78,7 +78,7 @@ class InterconnectorData:
         """
 
         DISPATCHREGIONSUM = self.raw_input_loader.get_regional_loads()
-        LOSSFACTORMODEL = self.raw_input_loader.get_interconnector_loss_paramteters()
+        LOSSFACTORMODEL = self.raw_input_loader.get_interconnector_loss_parameters()
         LOSSMODEL = self.raw_input_loader.get_interconnector_loss_segments()
 
         regional_demand = demand.format_regional_demand(DISPATCHREGIONSUM)

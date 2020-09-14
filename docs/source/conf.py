@@ -59,3 +59,5 @@ autodoc_mock_imports = ["pandas", "numpy", "mip"]
 
 autodoc_member_order = 'bysource'
 
+napoleon_custom_sections = ['Multiple Returns']
+
