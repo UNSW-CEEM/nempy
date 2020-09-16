@@ -104,7 +104,6 @@ for interval in dispatch_intervals:
     market.make_constraints_elastic('joint_capacity', cost)
 
     # Set interconnector definitions, limits and loss models.
-    interconnector_inputs.add_loss_model()
     interconnectors_definitions = \
         interconnector_inputs.get_interconnector_definitions()
     loss_functions, interpolation_break_points = \
@@ -118,7 +117,7 @@ for interval in dispatch_intervals:
     market.set_fcas_requirements_constraints(fcas_requirements)
     violation_costs = constraint_inputs.get_violation_costs()
     market.make_constraints_elastic('fcas', violation_cost=violation_costs)
-    generic_rhs = constraint_inputs.get_rhs_and_type()
+    generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
     market.set_generic_constraints(generic_rhs)
     market.make_constraints_elastic('generic', violation_cost=violation_costs)
     unit_generic_lhs = constraint_inputs.get_unit_lhs()

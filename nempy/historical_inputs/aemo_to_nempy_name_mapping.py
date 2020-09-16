@@ -25,7 +25,14 @@ name_map = {'TOTALCLEARED': 'energy',
             'LOSSFACTOR': 'loss_factor',
             'DISPATCHTYPE': 'dispatch_type',
             'CONNECTIONPOINTID': 'connection_point',
-            'REGIONID': 'region'}
+            'REGIONID': 'region',
+            'INTERCONNECTORID': 'interconnector',
+            'LOSSCONSTANT': 'loss_constant',
+            'LOSSFLOWCOEFFICIENT': 'flow_coefficient',
+            'FROMREGIONLOSSSHARE': 'from_region_loss_share',
+            'DEMANDCOEFFICIENT': 'demand_coefficient',
+            'LOSSSEGMENT': 'loss_segment',
+            'MWBREAKPOINT': 'break_point'}
 
 
 def map_aemo_column_names_to_nempy_names(dataframe):

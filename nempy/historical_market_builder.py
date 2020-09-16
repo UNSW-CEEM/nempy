@@ -86,7 +86,6 @@ class SpotMarketBuilder:
         self.market.make_constraints_elastic('demand', cost)
 
     def add_interconnectors_to_market(self):
-        self.interconnector_inputs.add_loss_model()
         interconnectors = self.interconnector_inputs.get_interconnector_definitions()
         loss_functions, interpolation_break_points = self.interconnector_inputs.get_interconnector_loss_model()
         self.market.set_interconnectors(interconnectors)
@@ -97,7 +96,7 @@ class SpotMarketBuilder:
         self.market.set_fcas_requirements_constraints(fcas_requirements)
         violation_costs = self.constraint_inputs.get_violation_costs()
         self.market.make_constraints_elastic('fcas', violation_cost=violation_costs)
-        generic_rhs = self.constraint_inputs.get_rhs_and_type()
+        generic_rhs = self.constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
         self.market.set_generic_constraints(generic_rhs)
         self.market.make_constraints_elastic('generic', violation_cost=violation_costs)
         unit_generic_lhs = self.constraint_inputs.get_unit_lhs()

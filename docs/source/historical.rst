@@ -5,7 +5,7 @@ historical_inputs modules
 The module provides tools for accessing historical market data and preprocessing for compatibility with the SpotMarket
 class.
 
-XMLCacheManager
+xml_cache
 ---------------
 
 .. automodule:: nempy.historical_inputs.xml_cache
@@ -14,7 +14,7 @@ XMLCacheManager
     :inherited-members:
     :exclude-members: timedelta,datetime,time,Path
 
-Market Management System Database classes
+mms_db
 -----------------------------------------
 
 .. automodule:: nempy.historical_inputs.mms_db
@@ -23,17 +23,38 @@ Market Management System Database classes
     :inherited-members:
     :exclude-members: timedelta,datetime
 
-RawInputsLoader
+loaders
 -----------------------------------------
 
 .. automodule:: nempy.historical_inputs.loaders
     :autosummary:
     :members:
 
-UnitData
+units
 --------
 
 .. automodule:: nempy.historical_inputs.units
+    :autosummary:
+    :members:
+
+interconnectors
+------------------
+
+.. automodule:: nempy.historical_inputs.interconnectors
+    :autosummary:
+    :members:
+
+demand
+------------------
+
+.. automodule:: nempy.historical_inputs.demand
+    :autosummary:
+    :members:
+
+constraints
+------------------
+
+.. automodule:: nempy.historical_inputs.constraints
     :autosummary:
     :members:
 

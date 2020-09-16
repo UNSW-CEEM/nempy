@@ -80,6 +80,8 @@ print(market.get_energy_prices())
 The example demonstrates the broad range of market features that can be implemented with nempy and the use of auxiliary 
 modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with nempy.
 ```python
+# Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
+
 import sqlite3
 import pandas as pd
 from nempy import markets
@@ -184,7 +186,6 @@ for interval in dispatch_intervals:
     market.make_constraints_elastic('joint_capacity', cost)
 
     # Set interconnector definitions, limits and loss models.
-    interconnector_inputs.add_loss_model()
     interconnectors_definitions = \
         interconnector_inputs.get_interconnector_definitions()
     loss_functions, interpolation_break_points = \
@@ -198,7 +199,7 @@ for interval in dispatch_intervals:
     market.set_fcas_requirements_constraints(fcas_requirements)
     violation_costs = constraint_inputs.get_violation_costs()
     market.make_constraints_elastic('fcas', violation_cost=violation_costs)
-    generic_rhs = constraint_inputs.get_rhs_and_type()
+    generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
     market.set_generic_constraints(generic_rhs)
     market.make_constraints_elastic('generic', violation_cost=violation_costs)
     unit_generic_lhs = constraint_inputs.get_unit_lhs()

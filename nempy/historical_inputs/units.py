@@ -487,7 +487,7 @@ class UnitData:
 
         The bids are processed by scaling for AGC enablement limits, scaling for scada ramp rates, scaling for
         the unconstrained intermittent generation forecast and enforcing the preconditions for enabling FCAS bids. For
-        more info on these process :download:`see AEMO docs  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+        more info on these processes :download:`see AEMO docs  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
         Examples
         --------
@@ -531,7 +531,7 @@ class UnitData:
         [569 rows x 12 columns]
 
         Multiple Returns
-        ---------------
+        ----------------
         volume_bids : pd.DataFrame
 
             ================  ========================================

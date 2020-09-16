@@ -65,7 +65,7 @@ interconnector_coefficients = pd.DataFrame({
     'from_region_loss_share': [0.5]})
 
 # Create loss functions on per interconnector basis.
-loss_functions = interconnector_inputs.create_loss_functions(
+loss_functions = interconnector_inputs._create_loss_functions(
     interconnector_coefficients, demand_coefficients,
     demand.loc[:, ['region', 'loss_function_demand']])
 

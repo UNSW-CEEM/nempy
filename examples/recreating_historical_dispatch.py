@@ -67,7 +67,6 @@ for interval in dispatch_intervals:
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
 
-    interconnector_inputs.add_loss_model()
     interconnectors_definitions = \
         interconnector_inputs.get_interconnector_definitions()
     loss_functions, interpolation_break_points = \
