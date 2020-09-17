@@ -69,4 +69,17 @@ conditions of the next interval, rather the historical initial conditions are al
     :linenos:
     :language: python
 
+Time sequential recreation of historical dispatch
+-------------------------------------------------
+Demonstrates using nempy to recreate historical dispatch in a dynamic or time sequential manner, this means the outputs
+of one interval become the initial conditions for the next dispatch interval. Note, currently there is not the infrastructure
+in place to include features such as generic constraints in the time sequential model as the rhs values of many constraints
+would need to be re-calculated based on the dynamic system state. Similarly, using historical bids in this example is
+some what problematic as participants also dynamically change their bids based on market conditions. However, for sake
+of demonstrating how nempy can be used to create time sequential models, historical bids are used in this example.
+
+.. literalinclude:: ../../examples/time_sequential.py
+    :linenos:
+    :language: python
+
 

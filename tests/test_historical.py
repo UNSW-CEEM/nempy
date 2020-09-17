@@ -6,7 +6,8 @@ import random
 import pickle
 from nempy.historical_inputs import loaders, xml_cache, mms_db, units, \
     interconnectors, constraints, demand
-from nempy import historical_market_builder
+from tests import historical_market_builder
+
 
 # These tests require some additional clean up and will probably not run on your machine. ##############################
 

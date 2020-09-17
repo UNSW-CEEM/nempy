@@ -14,6 +14,7 @@ Welcome to nempy's documentation!
    examples
    markets
    historical
+   time_sequential
 
 Indices and tables
 ==================

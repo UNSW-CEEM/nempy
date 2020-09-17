@@ -32,7 +32,10 @@ name_map = {'TOTALCLEARED': 'energy',
             'FROMREGIONLOSSSHARE': 'from_region_loss_share',
             'DEMANDCOEFFICIENT': 'demand_coefficient',
             'LOSSSEGMENT': 'loss_segment',
-            'MWBREAKPOINT': 'break_point'}
+            'MWBREAKPOINT': 'break_point',
+            'RAMPUPRATE': 'ramp_up_rate',
+            'RAMPDOWNRATE': 'ramp_down_rate',
+            'INITIALMW': 'initial_output'}
 
 
 def map_aemo_column_names_to_nempy_names(dataframe):

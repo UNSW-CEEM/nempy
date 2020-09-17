@@ -225,7 +225,6 @@ class UnitData:
             ramp_down_rate    the ramp down rate, in MW/h, \n
                               (as `np.float64`)
             ================  ========================================
-
         """
         ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
         ramp_rates = self._remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates)
@@ -287,6 +286,93 @@ class UnitData:
                                                         fast_start_end_condition['fast_start_initial_mw']) * \
                                                        (60 / dispatch_interval)
         return fast_start_end_condition.loc[:, ['unit', 'fast_start_initial_mw', 'new_ramp_up_rate']]
+
+    def get_as_bid_ramp_rates(self):
+        """Get ramp rates used as bid by units.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_as_bid_ramp_rates()
+                  unit  ramp_up_rate  ramp_down_rate
+        0       AGLHAL         720.0           720.0
+        1       AGLSOM         480.0           480.0
+        2      ANGAST1         840.0           840.0
+        9        ARWF1        1200.0           600.0
+        23      BALBG1        6000.0          6000.0
+        ...        ...           ...             ...
+        989   YARWUN_1           0.0             0.0
+        990      YWPS1         180.0           180.0
+        999      YWPS2         180.0           180.0
+        1008     YWPS3         180.0           180.0
+        1017     YWPS4         180.0           180.0
+        <BLANKLINE>
+        [280 rows x 3 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            ramp_up_rate      the ramp up rate, in MW/h, \n
+                              (as `np.float64`)
+            ramp_down_rate    the ramp down rate, in MW/h, \n
+                              (as `np.float64`)
+            ================  ========================================
+        """
+        ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY'].copy()
+        ramp_rates = ramp_rates.loc[:, ['DUID', 'RAMPUPRATE', 'RAMPDOWNRATE']]
+        ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
+        return ramp_rates
+
+    def get_initial_unit_output(self):
+        """Get unit outputs at the start of the dispatch interval.
+
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_initial_unit_output()
+                 unit  initial_output
+        0      AGLHAL        0.000000
+        1      AGLSOM        0.000000
+        2     ANGAST1        0.000000
+        3       APD01        0.000000
+        4       ARWF1       54.500000
+        ..        ...             ...
+        283  YARWUN_1      140.360001
+        284     YWPS1      366.665833
+        285     YWPS2      374.686066
+        286     YWPS3        0.000000
+        287     YWPS4      368.139252
+        <BLANKLINE>
+        [288 rows x 2 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            unit              unique identifier for units, (as `str`) \n
+            initial_output    the output/consumption of the unit at \n
+                              the start of the dispatch interval, \n
+                              in MW, (as `np.float64`)
+            ================  ========================================
+        """
+        initial_unit_output = self.initial_conditions.loc[:, ['DUID', 'INITIALMW']]
+        initial_unit_output = an.map_aemo_column_names_to_nempy_names(initial_unit_output)
+        return initial_unit_output
 
     def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
         """Get the parameters needed to construct the fast dispatch inflexibility profiles used for dispatch.
