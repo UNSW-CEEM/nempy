@@ -13,7 +13,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-down_load_inputs = False
+down_load_inputs = True
 
 if down_load_inputs:
     # This requires approximately 5 GB of storage.
