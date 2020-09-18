@@ -14,9 +14,9 @@ xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-down_load_inputs = True
+download_inputs = True
 
-if down_load_inputs:
+if download_inputs:
     # This requires approximately 5 GB of storage.
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=1)

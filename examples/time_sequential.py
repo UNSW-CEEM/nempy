@@ -13,9 +13,9 @@ xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-down_load_inputs = True
+download_inputs = False
 
-if down_load_inputs:
+if download_inputs:
     # This requires approximately 5 GB of storage.
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=1)
@@ -41,7 +41,9 @@ dispatch_intervals = ['2019/01/01 12:00:00',
 outputs = []
 
 unit_dispatch = None
+from time import time
 
+t0 = time()
 # Create and dispatch the spot market for each dispatch interval.
 for interval in dispatch_intervals:
     print(interval)
@@ -114,7 +116,7 @@ for interval in dispatch_intervals:
     outputs.append(prices.loc[:, ['time', 'region', 'price']])
 
     unit_dispatch = market.get_unit_dispatch()
-
+print("Run time per interval {}".format((time()-t0)/len(dispatch_intervals)))
 con.close()
 print(pd.concat(outputs))
 #                   time region      price
