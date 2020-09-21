@@ -1371,8 +1371,8 @@ def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
 
     """
     # Split bid based on the scaling that needs to be done.
-    lower_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG']
-    raise_reg = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG']
+    lower_reg = BIDPEROFFER_D[(BIDPEROFFER_D['BIDTYPE'] == 'LOWERREG')]
+    raise_reg = BIDPEROFFER_D[(BIDPEROFFER_D['BIDTYPE'] == 'RAISEREG')]
     bids_not_subject_to_scaling = BIDPEROFFER_D[~BIDPEROFFER_D['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])]
 
     # Merge in AGC enablement values from dispatch load so they can be compared to offer values.
@@ -1382,33 +1382,41 @@ def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
                          'inner', on='DUID')
 
     # Scale lower reg lower trapezium slope.
-    lower_reg['LOWBREAKPOINT'] = np.where(lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN'],
+    lower_reg['LOWBREAKPOINT'] = np.where((lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN']) & 
+                                          (lower_reg['LOWERREGENABLEMENTMIN'] > 0.0),
                                           lower_reg['LOWBREAKPOINT'] +
                                           (lower_reg['LOWERREGENABLEMENTMIN'] - lower_reg['ENABLEMENTMIN']),
                                           lower_reg['LOWBREAKPOINT'])
-    lower_reg['ENABLEMENTMIN'] = np.where(lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN'],
+    lower_reg['ENABLEMENTMIN'] = np.where((lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN']) &
+                                          (lower_reg['LOWERREGENABLEMENTMIN'] > 0.0),
                                           lower_reg['LOWERREGENABLEMENTMIN'], lower_reg['ENABLEMENTMIN'])
     # Scale lower reg upper trapezium slope.
-    lower_reg['HIGHBREAKPOINT'] = np.where(lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX'],
+    lower_reg['HIGHBREAKPOINT'] = np.where((lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX']) &
+                                          (lower_reg['LOWERREGENABLEMENTMAX'] > 0.0),
                                            lower_reg['HIGHBREAKPOINT'] -
                                            (lower_reg['ENABLEMENTMAX'] - lower_reg['LOWERREGENABLEMENTMAX']),
                                            lower_reg['HIGHBREAKPOINT'])
-    lower_reg['ENABLEMENTMAX'] = np.where(lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX'],
+    lower_reg['ENABLEMENTMAX'] = np.where((lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX']) &
+                                          (lower_reg['LOWERREGENABLEMENTMAX'] > 0.0),
                                           lower_reg['LOWERREGENABLEMENTMAX'], lower_reg['ENABLEMENTMAX'])
 
     # Scale raise reg lower trapezium slope.
-    raise_reg['LOWBREAKPOINT'] = np.where(raise_reg['RAISEREGENABLEMENTMIN'] > raise_reg['ENABLEMENTMIN'],
+    raise_reg['LOWBREAKPOINT'] = np.where((raise_reg['RAISEREGENABLEMENTMIN'] > raise_reg['ENABLEMENTMIN']) &
+                                          (raise_reg['RAISEREGENABLEMENTMIN'] > 0.0),
                                           raise_reg['LOWBREAKPOINT'] +
                                           (raise_reg['RAISEREGENABLEMENTMIN'] - raise_reg['ENABLEMENTMIN']),
                                           raise_reg['LOWBREAKPOINT'])
-    raise_reg['ENABLEMENTMIN'] = np.where(raise_reg['RAISEREGENABLEMENTMIN'] > raise_reg['ENABLEMENTMIN'],
+    raise_reg['ENABLEMENTMIN'] = np.where((raise_reg['RAISEREGENABLEMENTMIN'] > raise_reg['ENABLEMENTMIN']) &
+                                          (raise_reg['RAISEREGENABLEMENTMIN'] > 0.0),
                                           raise_reg['RAISEREGENABLEMENTMIN'], raise_reg['ENABLEMENTMIN'])
     # Scale raise reg upper trapezium slope.
-    raise_reg['HIGHBREAKPOINT'] = np.where(raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX'],
+    raise_reg['HIGHBREAKPOINT'] = np.where((raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX']) &
+                                          (raise_reg['RAISEREGENABLEMENTMAX'] > 0.0),
                                            raise_reg['HIGHBREAKPOINT'] -
                                            (raise_reg['ENABLEMENTMAX'] - raise_reg['RAISEREGENABLEMENTMAX']),
                                            raise_reg['HIGHBREAKPOINT'])
-    raise_reg['ENABLEMENTMAX'] = np.where(raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX'],
+    raise_reg['ENABLEMENTMAX'] = np.where((raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX']) &
+                                          (raise_reg['RAISEREGENABLEMENTMAX'] > 0.0),
                                           raise_reg['RAISEREGENABLEMENTMAX'], raise_reg['ENABLEMENTMAX'])
 
     # Drop un need columns
@@ -2007,6 +2015,7 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     # Round initial ouput to 5 decimial places because the enablement min and max are given to this number, without
     # this some units are dropped that shouldn't be.
     fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'AGCSTATUS']], 'inner', on='DUID')
+    fcas_bids['INITIALMW'] = np.where(fcas_bids['INITIALMW'] < 0.0, 0.0, fcas_bids['INITIALMW'])
     fcas_bids = fcas_bids[(fcas_bids['ENABLEMENTMAX'] >= fcas_bids['INITIALMW'].round(5)) &
                           (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'].round(5))]
 

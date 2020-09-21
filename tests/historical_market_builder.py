@@ -4,7 +4,7 @@ import numpy as np
 
 from nempy import markets
 from nempy.help_functions import helper_functions as hf
-from nempy.historical_inputs import mms_db as hi
+from nempy.historical_inputs import mms_db as hi, demand
 
 
 class SpotMarketBuilder:
@@ -17,7 +17,10 @@ class SpotMarketBuilder:
 
         unit_info = self.unit_inputs.get_unit_info()
         self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
-        self.market.solver_name = 'GUROBI'
+        self.market.solver_name = 'CBC'
+
+    def set_solver(self, solver_name):
+        self.market.solver_name = solver_name
 
     def add_unit_bids_to_market(self):
         volume_bids, price_bids = self.unit_inputs.get_processed_bids()
@@ -91,7 +94,7 @@ class SpotMarketBuilder:
         self.market.set_interconnectors(interconnectors)
         self.market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
-    def add_generic_constraints_fcas_requirements(self):
+    def add_generic_constraints_with_fcas_requirements_interface(self):
         fcas_requirements = self.constraint_inputs.get_fcas_requirements()
         self.market.set_fcas_requirements_constraints(fcas_requirements)
         violation_costs = self.constraint_inputs.get_violation_costs()
@@ -103,6 +106,18 @@ class SpotMarketBuilder:
         self.market.link_units_to_generic_constraints(unit_generic_lhs)
         interconnector_generic_lhs = self.constraint_inputs.get_interconnector_lhs()
         self.market.link_interconnectors_to_generic_constraints(interconnector_generic_lhs)
+
+    def add_generic_constraints(self):
+        violation_costs = self.constraint_inputs.get_violation_costs()
+        generic_rhs = self.constraint_inputs.get_rhs_and_type()
+        self.market.set_generic_constraints(generic_rhs)
+        self.market.make_constraints_elastic('generic', violation_cost=violation_costs)
+        unit_generic_lhs = self.constraint_inputs.get_unit_lhs()
+        self.market.link_units_to_generic_constraints(unit_generic_lhs)
+        interconnector_generic_lhs = self.constraint_inputs.get_interconnector_lhs()
+        self.market.link_interconnectors_to_generic_constraints(interconnector_generic_lhs)
+        regions_generic_lhs = self.constraint_inputs.get_region_lhs()
+        self.market.link_regions_to_generic_constraints(regions_generic_lhs)
 
     def dispatch(self, calc_prices=True):
         if self.constraint_inputs.is_over_constrained_dispatch_rerun():
@@ -204,7 +219,7 @@ class MarketChecker:
 
         self.market = market
 
-    def all_dispatch_units_and_service_have_decision_variables(self, wiggle_room=0.001):
+    def all_dispatch_units_and_services_have_decision_variables(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
 
         bounds = DISPATCHLOAD.loc[:, ['DUID'] + self.services]
@@ -231,7 +246,7 @@ class MarketChecker:
 
     def is_regional_demand_meet(self, tolerance=0.5):
         DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
-        regional_demand = hi.format_regional_demand(DISPATCHREGIONSUM)
+        regional_demand = demand.format_regional_demand(DISPATCHREGIONSUM)
         region_summary = self.market.get_region_dispatch_summary()
         region_summary = pd.merge(region_summary, regional_demand, on='region')
         region_summary['calc_demand'] = region_summary['dispatch'] + region_summary['inflow'] \

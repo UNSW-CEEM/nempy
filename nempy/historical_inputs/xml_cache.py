@@ -73,7 +73,7 @@ class XMLCacheManager:
         if not self.interval_inputs_in_cache():
             self._download_xml_from_nemweb()
             if not self.interval_inputs_in_cache():
-                raise MissingDataError('File not downloaded, check internet connection and that NEMWeb contains data for the requested interval.')
+                raise MissingDataError('File not downloaded, check internet connection and that NEMWeb contains data for interval {}.'.format(self.interval))
         with open(self.get_file_path()) as file:
             read = file.read()
             self.xml = xmltodict.parse(read)
@@ -128,12 +128,14 @@ class XMLCacheManager:
         base_name = "NEMSPDOutputs_{year}{month}{day}{interval_number}00.loaded"
         name = base_name.format(year=year, month=month, day=day, interval_number=interval_number)
         path_name = Path(self.cache_folder) / name
+        name_OCD = name.replace('.loaded', '_OCD.loaded')
+        path_name_OCD = Path(self.cache_folder) / name_OCD
         if os.path.exists(path_name):
             return name
-        elif os.path.exists(name.replace('.loaded', '_OCD.loaded')):
-            return name.replace('.loaded', '_OCD.loaded')
+        elif path_name_OCD:
+            return name_OCD
         else:
-            raise MissingDataError('File not downloaded, check internet connection and that NEMWeb contains data for the requested interval.')
+            return name
 
     def _download_xml_from_nemweb(self):
         year, month, day = self._get_market_year_month_day_as_str()
