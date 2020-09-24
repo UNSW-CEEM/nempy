@@ -151,7 +151,7 @@ class SpotMarket:
         ...     'unit': ['A', 'B'],
         ...     '1': [20.0, 50.0],
         ...     '2': [20.0, 30.0],
-        ...     '3': [5.0, 10.0]})
+        ...     '3': [5.0, 0.0]})
 
         Create energy unit bid decision variables.
 
@@ -166,7 +166,6 @@ class SpotMarket:
         2    A             3  energy            2          0.0          5.0  continuous
         3    B             1  energy            3          0.0         50.0  continuous
         4    B             2  energy            4          0.0         30.0  continuous
-        5    B             3  energy            5          0.0         10.0  continuous
 
         A mapping of these variables to constraints acting on that unit and service should also exist.
 
@@ -177,7 +176,6 @@ class SpotMarket:
         2            2    A  energy          1.0
         3            3    B  energy          1.0
         4            4    B  energy          1.0
-        5            5    B  energy          1.0
 
         A mapping of these variables to constraints acting on the units region and service should also exist.
 
@@ -188,7 +186,6 @@ class SpotMarket:
         2            2    NSW  energy          1.0
         3            3    NSW  energy          1.0
         4            4    NSW  energy          1.0
-        5            5    NSW  energy          1.0
 
         Parameters
         ----------

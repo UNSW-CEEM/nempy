@@ -15,7 +15,7 @@ elements:
     is being minimised, and is defined as the sum of each bids dispatch level multiplied by the bid price.
 3.  A set of **linear constraints**: used to implement market features such as network constraints and interconnectors.
 
-The class :func:`nempy.SpotMarket` is used to construct these elements and then solve the linear program to calculate
+The class :class:`nempy.SpotMarket` is used to construct these elements and then solve the linear program to calculate
 dispatch and pricing. The examples below give an overview of how method calls build the linear program.
 
 *   Initialising the market instance, doesn't create any part of the linear program, just saves general information for
@@ -51,6 +51,9 @@ dispatch and pricing. The examples below give an overview of how method calls bu
 .. code-block:: python
 
     market.set_demand_constraints(demand)
+
+Specific examples for using this class are provided on the `Examples`_ page, detailed documentation of the class
+:class:`nempy.SpotMarket` is provided in the `Reference`_ material below.
 
 Reference
 ---------

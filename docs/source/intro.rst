@@ -10,9 +10,7 @@ and loads, capacity and ramp rate constraints, loss factors, regional energy and
 generic constraints. Additionally, a module has been developed for downloading data from the Australian Energy Market
 Operator's (AEMO) NEMWeb data portal and preprocessing this data for compatibility with the nempy SpotMarket class.
 
-Note
-----
-nempy is still in the initial stages of development and no stable version has been released yet.
+**Note**: nempy is still in the initial stages of development and no stable version has been released yet.
 
 The next priorities for development are:
  - adding several features to the historical inputs module to allow

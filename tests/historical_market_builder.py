@@ -204,7 +204,7 @@ class MarketOverrider:
 
 
 class MarketChecker:
-    def __init__(self, market, mms_db, xml_cache, interval):
+    def __init__(self, market, mms_db, xml_cache, interval, unit_inputs=None):
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
                          'LOWERREG', 'RAISEREG']
 
@@ -215,6 +215,7 @@ class MarketChecker:
 
         self.inputs_manager = mms_db
         self.xml = xml_cache
+        self.unit_inputs = unit_inputs
         self.interval = interval
 
         self.market = market
@@ -383,9 +384,9 @@ class MarketChecker:
 
         availabilities['service'] = availabilities['service'].apply(lambda x: availabilities_mapping[x])
 
-        availabilities = pd.merge(availabilities, bounds, on=['unit', 'service'])
+        #availabilities = pd.merge(availabilities, bounds, on=['unit', 'service'])
 
-        availabilities = availabilities[~(availabilities['dispatched'] - 0.001 > availabilities['availability'])]
+        #availabilities = availabilities[~(availabilities['dispatched'] - 0.001 > availabilities['availability'])]
 
         output = self.market.get_fcas_availability()
         output.columns = ['unit', 'service', 'availability_measured']
@@ -398,11 +399,12 @@ class MarketChecker:
 
         availabilities['match'] = availabilities['error'].abs() < 0.1
         availabilities = availabilities.sort_values('match')
+
         return availabilities
 
     def measured_violation_equals_historical_violation(self, historical_name, nempy_constraints):
         measured = 0.0
         for name in nempy_constraints:
             measured += self.market.get_elastic_constraints_violation_degree(name)
-        historical = self.xml.get_non_intervention_violations()[historical_name]
+        historical = self.xml.get_violations()[historical_name]
         return measured == pytest.approx(historical, abs=0.1)

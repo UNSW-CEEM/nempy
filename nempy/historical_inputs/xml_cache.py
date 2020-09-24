@@ -7,6 +7,7 @@ import os
 import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta, time
+from time import time as t
 
 pd.set_option('display.width', None)
 
@@ -927,20 +928,33 @@ class XMLCacheManager:
         dict
 
         """
-        start = datetime(year=start_year, month=start_month, day=1)
-        end = datetime(year=end_year, month=end_month + 1, day=1)
+        if end_month == 12:
+            start = datetime(year=start_year, month=start_month, day=1)
+            end = datetime(year=end_year + 1, month=1, day=1)
+        else:
+            start = datetime(year=start_year, month=start_month, day=1)
+            end = datetime(year=end_year, month=end_month + 1, day=1)
+
         check_time = start
         intervals = {}
         while check_time <= end and len(intervals) < limit:
+            t0 = t()
+            print(len(intervals))
             time_as_str = check_time.isoformat().replace('T', ' ').replace('-', '/')
-            self.load_interval(time_as_str)
-            violations = self.get_violations()
-            for violation_type, violation_value in violations.items():
-                if violation_value > 0.0:
-                    if time_as_str not in intervals:
-                        intervals[time_as_str] = []
-                    intervals[time_as_str].append(violation_type)
-            check_time += timedelta(minutes=5)
+            try:
+                self.load_interval(time_as_str)
+                violations = self.get_violations()
+                for violation_type, violation_value in violations.items():
+                    if violation_value > 0.0:
+                        if time_as_str not in intervals:
+                            intervals[time_as_str] = []
+                        intervals[time_as_str].append(violation_type)
+                        print(time_as_str)
+                        print(violation_type)
+            except MissingDataError:
+                print('Missing {} #####'.format(time_as_str))
+            check_time += timedelta(minutes=30)
+            print(t() - t0)
         return intervals
 
 
