@@ -15,6 +15,7 @@ Welcome to nempy's documentation!
    markets
    historical
    time_sequential
+   publications
 
 Indices and tables
 ==================

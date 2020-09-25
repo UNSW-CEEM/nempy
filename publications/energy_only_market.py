@@ -4,7 +4,6 @@ import sqlite3
 import pandas as pd
 import random
 from datetime import datetime, timedelta
-from time import time
 
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
@@ -51,14 +50,8 @@ def get_test_intervals(number):
 outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.
-t0 = time()
-ta = 0
-tb = 0
-for interval in get_test_intervals(number=10):
-    print(interval)
-    tn = time()
+for interval in get_test_intervals(number=1000):
     raw_inputs_loader.set_interval(interval)
-    ta += time() - tn
     unit_inputs = units.UnitData(raw_inputs_loader)
     interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
     constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
@@ -71,7 +64,7 @@ for interval in get_test_intervals(number=10):
 
     # By default the CBC open source solver is used, but GUROBI is
     # also supported
-    market.solver_name = 'GUROBI'  # or could be 'GUROBI'
+    market.solver_name = 'CBC'  # or could be 'GUROBI'
 
     # Set bids
     volume_bids, price_bids = unit_inputs.get_processed_bids()
@@ -116,7 +109,6 @@ for interval in get_test_intervals(number=10):
     # Set the operational demand to be met by dispatch.
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
-    tb += time() - tn
     market.dispatch()
 
     # Save prices from this interval
@@ -136,12 +128,9 @@ for interval in get_test_intervals(number=10):
         prices.loc[:, ['time', 'region', 'price',
                        'SETTLEMENTDATE', 'REGIONID', 'ROP']])
 
-print(ta)
-print(tb)
-print('Dispatch loop runtime {}'.format(time() - t0))
 con.close()
 outputs = pd.concat(outputs)
 outputs = outputs.sort_values('ROP')
 outputs = outputs.reset_index(drop=True)
-#outputs.to_csv('energy_price_results_2019_1000_intervals_simple_gurobi.csv')
+outputs.to_csv('energy_price_results_2019_1000_intervals.csv')
 

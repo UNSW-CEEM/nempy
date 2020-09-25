@@ -4,7 +4,6 @@ import sqlite3
 import pandas as pd
 import random
 from datetime import datetime, timedelta
-from time import time
 
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
@@ -51,14 +50,8 @@ def get_test_intervals(number):
 outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.
-t0 = time()
-ta = 0
-tb = 0
-for interval in get_test_intervals(number=10):
-    print(interval)
-    tn = time()
+for interval in get_test_intervals(number=1000):
     raw_inputs_loader.set_interval(interval)
-    ta += time() - tn
     unit_inputs = units.UnitData(raw_inputs_loader)
     interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
     constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
@@ -71,7 +64,7 @@ for interval in get_test_intervals(number=10):
 
     # By default the CBC open source solver is used, but GUROBI is
     # also supported
-    market.solver_name = 'GUROBI'  # or could be 'GUROBI'
+    market.solver_name = 'CBC'  # or could be 'GUROBI'
 
     # Set bids
     volume_bids, price_bids = unit_inputs.get_processed_bids()
@@ -103,24 +96,24 @@ for interval in get_test_intervals(number=10):
     market.make_constraints_elastic('ramp_down', violation_cost=cost)
 
     # Set unit FCAS trapezium constraints.
-    # unit_inputs.add_fcas_trapezium_constraints()
-    # cost = constraint_inputs.get_constraint_violation_prices()['fcas_max_avail']
-    # fcas_availability = unit_inputs.get_fcas_max_availability()
-    # market.set_fcas_max_availability(fcas_availability)
-    # market.make_constraints_elastic('fcas_max_availability', cost)
-    # cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
-    # regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
-    # market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
-    # market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-    # scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units()
-    # market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
-    # market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-    # scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units()
-    # market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
-    # market.make_constraints_elastic('joint_ramping_raise_reg', cost)
-    # contingency_trapeziums = unit_inputs.get_contingency_services()
-    # market.set_joint_capacity_constraints(contingency_trapeziums)
-    # market.make_constraints_elastic('joint_capacity', cost)
+    unit_inputs.add_fcas_trapezium_constraints()
+    cost = constraint_inputs.get_constraint_violation_prices()['fcas_max_avail']
+    fcas_availability = unit_inputs.get_fcas_max_availability()
+    market.set_fcas_max_availability(fcas_availability)
+    market.make_constraints_elastic('fcas_max_availability', cost)
+    cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
+    regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
+    market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+    market.make_constraints_elastic('energy_and_regulation_capacity', cost)
+    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units()
+    market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
+    market.make_constraints_elastic('joint_ramping_lower_reg', cost)
+    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units()
+    market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
+    market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+    contingency_trapeziums = unit_inputs.get_contingency_services()
+    market.set_joint_capacity_constraints(contingency_trapeziums)
+    market.make_constraints_elastic('joint_capacity', cost)
 
     # Set interconnector definitions, limits and loss models.
     interconnectors_definitions = \
@@ -132,32 +125,31 @@ for interval in get_test_intervals(number=10):
                                      interpolation_break_points)
 
     # Add generic constraints and FCAS market constraints.
-    # fcas_requirements = constraint_inputs.get_fcas_requirements()
-    # market.set_fcas_requirements_constraints(fcas_requirements)
-    # violation_costs = constraint_inputs.get_violation_costs()
-    # market.make_constraints_elastic('fcas', violation_cost=violation_costs)
-    # generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
-    # market.set_generic_constraints(generic_rhs)
-    # market.make_constraints_elastic('generic', violation_cost=violation_costs)
-    # unit_generic_lhs = constraint_inputs.get_unit_lhs()
-    # market.link_units_to_generic_constraints(unit_generic_lhs)
-    # interconnector_generic_lhs = constraint_inputs.get_interconnector_lhs()
-    # market.link_interconnectors_to_generic_constraints(
-    #     interconnector_generic_lhs)
+    fcas_requirements = constraint_inputs.get_fcas_requirements()
+    market.set_fcas_requirements_constraints(fcas_requirements)
+    violation_costs = constraint_inputs.get_violation_costs()
+    market.make_constraints_elastic('fcas', violation_cost=violation_costs)
+    generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
+    market.set_generic_constraints(generic_rhs)
+    market.make_constraints_elastic('generic', violation_cost=violation_costs)
+    unit_generic_lhs = constraint_inputs.get_unit_lhs()
+    market.link_units_to_generic_constraints(unit_generic_lhs)
+    interconnector_generic_lhs = constraint_inputs.get_interconnector_lhs()
+    market.link_interconnectors_to_generic_constraints(
+        interconnector_generic_lhs)
 
     # Set the operational demand to be met by dispatch.
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
-    tb += time() - tn
     # Get unit dispatch without fast start constraints and use it to
     # make fast start unit commitment decisions.
-    # market.dispatch()
-    # dispatch = market.get_unit_dispatch()
-    # fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-    # market.set_fast_start_constraints(fast_start_profiles)
-    # if 'fast_start' in market.get_constraint_set_names():
-    #     cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
-    #     market.make_constraints_elastic('fast_start', violation_cost=cost)
+    market.dispatch()
+    dispatch = market.get_unit_dispatch()
+    fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
+    market.set_fast_start_constraints(fast_start_profiles)
+    if 'fast_start' in market.get_constraint_set_names():
+        cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
+        market.make_constraints_elastic('fast_start', violation_cost=cost)
 
     # If AEMO historical used the over constrained dispatch rerun
     # process then allow it to be used in dispatch. This is needed
@@ -190,12 +182,10 @@ for interval in get_test_intervals(number=10):
     outputs.append(
         prices.loc[:, ['time', 'region', 'price',
                        'SETTLEMENTDATE', 'REGIONID', 'ROP']])
-print(ta)
-print(tb)
-print('Dispatch loop runtime {}'.format(time()-t0))
+
 con.close()
 outputs = pd.concat(outputs)
 outputs = outputs.sort_values('ROP')
 outputs = outputs.reset_index(drop=True)
-#outputs.to_csv('energy_price_results_2019_1000_intervals_GUROBI.csv')
+outputs.to_csv('energy_price_results_2019_1000_intervals.csv')
 
