@@ -130,6 +130,7 @@ dmypy.json
 
 .idea/*
 *.db
+*.loaded
 nempy/the_database.db
 tests/sos_bug.py
 tests/test_files/historical_xml_files

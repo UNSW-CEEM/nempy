@@ -1,3 +1,6 @@
+import pandas as pd
+
+
 class DemandData:
     """Loads demand related raw data and preprocess it for complatibility with the SpotMarket class.
 
@@ -60,11 +63,11 @@ class DemandData:
 
         """
         DISPATCHREGIONSUM = self.raw_inputs_loader.get_regional_loads()
-        regional_demand = format_regional_demand(DISPATCHREGIONSUM)
+        regional_demand = _format_regional_demand(DISPATCHREGIONSUM)
         return regional_demand.loc[:, ['region', 'demand']]
 
 
-def format_regional_demand(DISPATCHREGIONSUM):
+def _format_regional_demand(DISPATCHREGIONSUM):
     """Re-formats the AEMO MSS table DISPATCHREGIONSUM to be compatible with the SpotMarket class.
 
     Examples
@@ -75,7 +78,7 @@ def format_regional_demand(DISPATCHREGIONSUM):
     ... 'DEMANDFORECAST': [10.0, -10.0],
     ... 'INITIALSUPPLY': [7995.0, 4006.0]})
 
-    >>> regional_demand = format_regional_demand(DISPATCHREGIONSUM)
+    >>> regional_demand = _format_regional_demand(DISPATCHREGIONSUM)
 
     >>> print(regional_demand)
       region  demand  loss_function_demand

@@ -96,7 +96,7 @@ class ConstraintData:
         >>> unit_data = ConstraintData(inputs_loader)
 
         >>> unit_data.get_rhs_and_type_excluding_regional_fcas_constraints()
-                         set           rhs type
+                             set           rhs type
         0               #BANN1_E     32.000000   <=
         1              #BNGSF2_E      3.000000   <=
         2            #CROWLWF1_E     43.000000   <=
@@ -223,20 +223,20 @@ class ConstraintData:
         >>> unit_data = ConstraintData(inputs_loader)
 
         >>> unit_data.get_interconnector_lhs()
-                              set      unit service  coefficient
-        0                #BANN1_E     BANN1  energy          1.0
-        1               #BNGSF2_E    BNGSF2  energy          1.0
-        2             #CROWLWF1_E  CROWLWF1  energy          1.0
-        3              #CSPVPS1_E   CSPVPS1  energy          1.0
-        4              #DAYDSF1_E   DAYDSF1  energy          1.0
-        ...                   ...       ...     ...          ...
-        5864      V_ARWF_FSTTRP_5     ARWF1  energy          1.0
-        5865      V_MTGBRAND_33WT  MTGELWF1  energy          1.0
-        5866     V_OAKHILL_TFB_42  OAKLAND1  energy          1.0
-        5867          V_OWF_NRB_0  OAKLAND1  energy          1.0
-        5868  V_OWF_TGTSNRBHTN_30  OAKLAND1  energy          1.0
+                             set interconnector  coefficient
+        0               DATASNAP      N-Q-MNSP1          1.0
+        1        DATASNAP_DFS_LS      N-Q-MNSP1          1.0
+        2      DATASNAP_DFS_NCAN      N-Q-MNSP1          1.0
+        3    DATASNAP_DFS_NCWEST      N-Q-MNSP1          1.0
+        4      DATASNAP_DFS_NNTH      N-Q-MNSP1          1.0
+        ..                   ...            ...          ...
+        631      V^^S_NIL_TBSE_1           V-SA          1.0
+        632      V^^S_NIL_TBSE_2           V-SA          1.0
+        633        V_S_NIL_ROCOF           V-SA          1.0
+        634          V_T_NIL_BL1      T-V-MNSP1         -1.0
+        635        V_T_NIL_FCSPS      T-V-MNSP1         -1.0
         <BLANKLINE>
-        [5869 rows x 4 columns]
+        [636 rows x 3 columns]
 
         Returns
         -------

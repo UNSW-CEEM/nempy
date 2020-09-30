@@ -1082,13 +1082,14 @@ def _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
     ... 'HIGHBREAKPOINT': [60.0, 0.0],
     ... 'ENABLEMENTMAX': [80.0, 0.0]})
 
-    >>> fcas_trapeziums = _format_fcas_trapezium_constraints(BIDPEROFFER_D)
+    >>> service_name_mapping = {'ENERGY': 'energy', 'RAISE60SEC': 'raise_60s'}
+
+    >>> fcas_trapeziums = _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping)
 
     >>> print(fcas_trapeziums)
-      unit    service  ...  high_break_point  enablement_max
-    0    A  raise_60s  ...              60.0            80.0
-    <BLANKLINE>
-    [1 rows x 7 columns]
+      unit    service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
+    0    A  raise_60s              60.0            20.0             40.0              60.0            80.0
+
     """
     BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
     trapezium_cons = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'ENABLEMENTMIN', 'LOWBREAKPOINT',
@@ -1119,7 +1120,9 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     ...   'BANDAVAIL9': [0.0, 0.0],
     ...   'BANDAVAIL10': [0.0, 0.0]})
 
-    >>> volume_bids = _format_volume_bids(BIDPEROFFER_D)
+    >>> service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg'}
+
+    >>> volume_bids = _format_volume_bids(BIDPEROFFER_D, service_name_mapping)
 
     >>> print(volume_bids)
       unit    service      1     2    3     4     5     6     7    8    9   10
@@ -1184,7 +1187,9 @@ def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     ...   'PRICEBAND9': [0.0, 0.0],
     ...   'PRICEBAND10': [0.0, 0.0]})
 
-    >>> price_bids = _format_price_bids(BIDDAYOFFER_D)
+    >>> service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg'}
+
+    >>> price_bids = _format_price_bids(BIDDAYOFFER_D, service_name_mapping)
 
     >>> print(price_bids)
       unit    service      1     2    3     4     5     6     7    8    9   10
@@ -1242,7 +1247,9 @@ def _format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
     ...   'TRANSMISSIONLOSSFACTOR': [0.9, 0.85],
     ...   'DISTRIBUTIONLOSSFACTOR': [0.9, 0.99]})
 
-    >>> unit_info = _format_unit_info(DUDETAILSUMMARY)
+    >>> dispatch_type_name_map = {'GENERATOR': 'generator', 'LOAD': 'load'}
+
+    >>> unit_info = _format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map)
 
     >>> print(unit_info)
       unit dispatch_type connection_point region  loss_factor
@@ -1612,69 +1619,31 @@ def _scaling_for_uigf(BIDPEROFFER_D, ugif_values):
     ...   'HIGHBREAKPOINT': [0.0, 80.0, 70.0],
     ...   'ENABLEMENTMAX': [0.0, 100.0, 90.0]})
 
-    >>> DISPATCHLOAD = pd.DataFrame({
+    >>> ugif_values = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
-    ...   'AVAILABILITY': [120.0, 90.0, 80.0]})
+    ...   'UIGF': [120.0, 90.0, 80.0]})
 
-    >>> DUDETAILSUMMARY = pd.DataFrame({
-    ...   'DUID': ['A', 'B', 'C'],
-    ...   'SCHEDULE_TYPE': ['SCHEDULED', 'SCHEDULED', 'SEMI-SCHEDULED']})
-
-    >>> BIDPEROFFER_D_out = _scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+    >>> BIDPEROFFER_D_out = _scaling_for_uigf(BIDPEROFFER_D, ugif_values)
 
     >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'HIGHBREAKPOINT', 'ENABLEMENTMAX']])
       DUID     BIDTYPE  HIGHBREAKPOINT  ENABLEMENTMAX
     0    A      ENERGY             0.0            0.0
-    1    B    RAISEREG            80.0          100.0
-    0    C  LOWER60SEC            60.0           80.0
+    0    B    RAISEREG            70.0           90.0
+    1    C  LOWER60SEC            60.0           80.0
 
     In this case we change the availability of unit C so it does not need scaling.
 
-    >>> DISPATCHLOAD = pd.DataFrame({
+    >>> ugif_values = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
-    ...   'AVAILABILITY': [120.0, 90.0, 91.0]})
+    ...   'UIGF': [120.0, 90.0, 91.0]})
 
-    >>> BIDPEROFFER_D_out = _scaling_for_uigf(BIDPEROFFER_D, DISPATCHLOAD, DUDETAILSUMMARY)
+    >>> BIDPEROFFER_D_out = _scaling_for_uigf(BIDPEROFFER_D, ugif_values)
 
     >>> print(BIDPEROFFER_D_out.loc[:, ['DUID', 'BIDTYPE', 'HIGHBREAKPOINT', 'ENABLEMENTMAX']])
       DUID     BIDTYPE  HIGHBREAKPOINT  ENABLEMENTMAX
     0    A      ENERGY             0.0            0.0
-    1    B    RAISEREG            80.0          100.0
-    0    C  LOWER60SEC            70.0           90.0
-
-    Parameters
-    ----------
-
-    BIDPEROFFER_D : pd.DataFrame
-
-        ==============  ====================================================
-        Columns:        Description:
-        DUID            unique identifier of a unit (as `str`)
-        BIDTYPE         the service being provided (as `str`)
-        MAXAVAIL        the offered maximum capacity, in MW (as `np.float64`)
-        HIGHBREAKPOINT  the energy dispatch level at which the unit can no
-                        longer provide the full FCAS service offered,
-                        in MW (as `np.float64`)
-        ENABLEMENTMAX   the energy dispatch level at which the unit can
-                        no longer provide any FCAS service,
-                        in MW (as `np.float64`)
-        ==============  ====================================================
-
-    DISPATCHLOAD : pd.DataFrame
-
-        ===============  ======================================================================================
-        Columns:         Description:
-        DUID             unique identifier of a dispatch unit (as `str`)
-        AVAILABILITY     the reported maximum output of the unit for dispatch interval, in MW (as `np.float64`)
-        ===============  ======================================================================================
-
-    DUDETAILSUMMARY : pd.DataFrame
-
-        ===============  ======================================================================================
-        Columns:         Description:
-        DUID             unique identifier of a dispatch unit (as `str`)
-        SCHEDULE_TYPE    the schedule type of the plant i.e. SCHEDULED, SEMI-SCHEDULED or NON-SCHEDULED (as `str`)
-        ===============  ======================================================================================
+    0    B    RAISEREG            70.0           90.0
+    1    C  LOWER60SEC            70.0           90.0
 
     """
     # Split bid based on the scaling that needs to be done.
@@ -1763,12 +1732,10 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    1    C  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [3 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+    1    C  RAISEREG        50.0         0.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1788,11 +1755,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [2 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1812,11 +1777,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [2 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1836,11 +1799,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [2 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1867,16 +1828,16 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [2 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+    1    C  RAISEREG        50.0         0.0     100.0            0.0           50.0            70.0            0.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
     0    A    ENERGY       100.0       110.0
     0    B  RAISEREG        50.0        60.0
+    1    C  RAISEREG        60.0        80.0
 
     If unit C's INITIALMW is changed to less than its enablement min then it gets filtered out.
 
@@ -1890,11 +1851,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [2 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1913,11 +1872,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  ...  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0  ...            0.0             0.0            0.0
-    0    B  RAISEREG        50.0  ...           50.0            70.0          100.0
-    <BLANKLINE>
-    [2 rows x 9 columns]
+      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID   BIDTYPE  PRICEBAND1  PRICEBAND2

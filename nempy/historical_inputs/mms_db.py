@@ -4,6 +4,8 @@ import io
 import pandas as pd
 from datetime import datetime, timedelta
 
+pd.set_option('display.width', None)
+
 
 class DBManager:
     """Constructs and manages a sqlite database for accessing historical inputs for NEM spot market dispatch.
@@ -40,14 +42,12 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
-            SETTLEMENTDATE     DUID     BIDTYPE  ...    T3   T4  MINIMUMLOAD
-    0  2020/01/10 00:00:00   AGLHAL      ENERGY  ...  10.0  2.0          2.0
-    1  2020/01/10 00:00:00   AGLSOM      ENERGY  ...  35.0  2.0         16.0
-    2  2020/01/10 00:00:00  ANGAST1      ENERGY  ...   0.0  0.0         46.0
-    3  2020/01/10 00:00:00    APD01   LOWER5MIN  ...   0.0  0.0          0.0
-    4  2020/01/10 00:00:00    APD01  LOWER60SEC  ...   0.0  0.0          0.0
-    <BLANKLINE>
-    [5 rows x 18 columns]
+            SETTLEMENTDATE     DUID     BIDTYPE  PRICEBAND1  PRICEBAND2  PRICEBAND3  PRICEBAND4  PRICEBAND5  PRICEBAND6  PRICEBAND7  PRICEBAND8  PRICEBAND9  PRICEBAND10    T1   T2    T3   T4  MINIMUMLOAD
+    0  2020/01/10 00:00:00   AGLHAL      ENERGY     -974.80         0.0      271.78      359.52      408.26      486.24      564.22     1331.15    10312.28     13646.22  10.0  3.0  10.0  2.0          2.0
+    1  2020/01/10 00:00:00   AGLSOM      ENERGY     -980.69         0.0       83.36      107.88      142.20      278.52      455.04      981.67    13044.07     14416.14  20.0  2.0  35.0  2.0         16.0
+    2  2020/01/10 00:00:00  ANGAST1      ENERGY     -941.23         0.0      117.66      188.43      281.61      357.65      555.32     1294.05     9993.99     13836.10   0.0  0.0   0.0  0.0         46.0
+    3  2020/01/10 00:00:00    APD01   LOWER5MIN        0.00         1.0        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00   0.0  0.0   0.0  0.0          0.0
+    4  2020/01/10 00:00:00    APD01  LOWER60SEC        0.00         1.0        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00   0.0  0.0   0.0  0.0          0.0
 
     Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
     provided by AEMO contains all historical data for this table. In this case if multiple calls to the set_data method
@@ -58,14 +58,12 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
-           DUID           START_DATE  ... DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
-    0    AGLHAL  2019/07/01 00:00:00  ...                 1.0000      SCHEDULED
-    1   AGLNOW1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
-    2  AGLSITA1  2019/07/01 00:00:00  ...                 1.0000  NON-SCHEDULED
-    3    AGLSOM  2019/07/01 00:00:00  ...                 0.9891      SCHEDULED
-    4   ANGAST1  2019/07/01 00:00:00  ...                 0.9890      SCHEDULED
-    <BLANKLINE>
-    [5 rows x 9 columns]
+           DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
+    0    AGLHAL  2019/07/01 00:00:00  2020/01/20 00:00:00    GENERATOR             SHPS1      SA1                  0.9748                  1.0000      SCHEDULED
+    1   AGLNOW1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             NDT12     NSW1                  0.9929                  1.0000  NON-SCHEDULED
+    2  AGLSITA1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR            NLP13K     NSW1                  1.0009                  1.0000  NON-SCHEDULED
+    3    AGLSOM  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             VTTS1     VIC1                  0.9915                  0.9891      SCHEDULED
+    4   ANGAST1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             SDRN1      SA1                  0.9517                  0.9890      SCHEDULED
 
     Parameters
     ----------

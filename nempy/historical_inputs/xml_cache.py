@@ -938,8 +938,6 @@ class XMLCacheManager:
         check_time = start
         intervals = {}
         while check_time <= end and len(intervals) < limit:
-            t0 = t()
-            print(len(intervals))
             time_as_str = check_time.isoformat().replace('T', ' ').replace('-', '/')
             try:
                 self.load_interval(time_as_str)
@@ -949,12 +947,9 @@ class XMLCacheManager:
                         if time_as_str not in intervals:
                             intervals[time_as_str] = []
                         intervals[time_as_str].append(violation_type)
-                        print(time_as_str)
-                        print(violation_type)
             except MissingDataError:
-                print('Missing {} #####'.format(time_as_str))
-            check_time += timedelta(minutes=30)
-            print(t() - t0)
+                pass
+            check_time += timedelta(minutes=5)
         return intervals
 
 

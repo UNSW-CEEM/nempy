@@ -44,11 +44,11 @@ def create(definitions, next_variable_id):
     1              B    B            1         50.0        400.0  continuous                          1
 
     >>> print(constraint_map)
-       variable_id region service  coefficient
-    0            0      Y  energy          1.0
-    1            1      Z  energy          1.1
-    2            0      X  energy         -0.9
-    3            1      Y  energy         -1.0
+       variable_id interconnector link region service  coefficient
+    0            0              A    A      Y  energy          1.0
+    1            1              B    B      Z  energy          1.1
+    2            0              A    A      X  energy         -0.9
+    3            1              B    B      Y  energy         -1.0
 
     """
 
@@ -92,10 +92,12 @@ def link_inter_loss_to_interpolation_weights(weight_variables, loss_variables, l
 
     >>> loss_variables = pd.DataFrame({
     ...   'interconnector': ['I'],
+    ...   'link': ['I'],
     ...   'variable_id': [0]})
 
     >>> weight_variables = pd.DataFrame({
     ...   'interconnector': ['I', 'I', 'I'],
+    ...   'link': ['I', 'I', 'I'],
     ...   'variable_id': [1, 2, 3],
     ...   'break_point': [-100.0, 0, 100.0]})
 
@@ -108,6 +110,7 @@ def link_inter_loss_to_interpolation_weights(weight_variables, loss_variables, l
 
     >>> loss_functions = pd.DataFrame({
     ...    'interconnector': ['I'],
+    ...    'link': ['I'],
     ...    'from_region_loss_share': [0.5],
     ...    'loss_function': [constant_losses]})
 
@@ -125,8 +128,8 @@ def link_inter_loss_to_interpolation_weights(weight_variables, loss_variables, l
     2            3              0          5.0
 
     >>> print(rhs)
-      interconnector  constraint_id type  rhs_variable_id
-    0              I              0    =                0
+      interconnector link  constraint_id type  rhs_variable_id
+    0              I    I              0    =                0
     """
 
     # Create a constraint for each set of weight variables.
@@ -162,10 +165,12 @@ def link_weights_to_inter_flow(weight_variables, flow_variables, next_constraint
 
     >>> flow_variables = pd.DataFrame({
     ...   'interconnector': ['I'],
+    ...   'link': ['I'],
     ...   'variable_id': [0]})
 
     >>> weight_variables = pd.DataFrame({
     ...   'interconnector': ['I', 'I', 'I'],
+    ...   'link': ['I', 'I', 'I'],
     ...   'variable_id': [1, 2, 3],
     ...   'break_point': [-100.0, 0, 100.0]})
 
@@ -182,8 +187,8 @@ def link_weights_to_inter_flow(weight_variables, flow_variables, next_constraint
     2            3              0        100.0
 
     >>> print(rhs)
-      interconnector  constraint_id type  rhs_variable_id
-    0              I              0    =                0
+      interconnector link  constraint_id type  rhs_variable_id
+    0              I    I              0    =                0
     """
 
     # Create a constraint for each set of weight variables.
@@ -220,6 +225,7 @@ def create_weights_must_sum_to_one(weight_variables, next_constraint_id):
 
     >>> weight_variables = pd.DataFrame({
     ...   'interconnector': ['I', 'I', 'I'],
+    ...   'link': ['I', 'I', 'I'],
     ...   'variable_id': [1, 2, 3],
     ...   'break_point': [-100.0, 0, 100.0]})
 
@@ -236,43 +242,9 @@ def create_weights_must_sum_to_one(weight_variables, next_constraint_id):
     2            3              0          1.0
 
     >>> print(rhs)
-      interconnector  constraint_id type  rhs
-    0              I              0    =  1.0
+      interconnector link  constraint_id type  rhs
+    0              I    I              0    =  1.0
 
-
-    Parameters
-    ----------
-    weight_variables : pd.DataFrame
-
-        ==============  ==============================================================================
-        Columns:        Description:
-        interconnector  unique identifier of a interconnector (as `str`)
-        variable_id     the id of the variable (as `np.int64`)
-        break_points    the interconnector flow values to interpolate losses between (as `np.int64`)
-        ==============  ==============================================================================
-
-    next_constraint_id : int
-
-    Returns
-    -------
-    lhs : pd.DataFrame
-
-        ==============  ==============================================================================
-        Columns:        Description:
-        variable_id     the id of the variable (as `np.int64`)
-        constraint_id   the id of the constraint (as `np.int64`)
-        coefficient     the coefficient of the variable on the lhs of the constraint (as `np.float64`)
-        ==============  ==============================================================================
-
-    rhs : pd.DataFrame
-
-        ================  ==============================================================================
-        Columns:          Description:
-        interconnector    unique identifier of a interconnector (as `str`)
-        constraint_id     the id of the constraint (as `np.int64`)
-        type              the type of the constraint, e.g. "=" (as `str`)
-        rhs               the rhs of the constraint (as `np.float64`)
-        ================  ==============================================================================
     """
 
     # Create a constraint for each set of weight variables.

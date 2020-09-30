@@ -247,7 +247,7 @@ class MarketChecker:
 
     def is_regional_demand_meet(self, tolerance=0.5):
         DISPATCHREGIONSUM = self.inputs_manager.DISPATCHREGIONSUM.get_data(self.interval)
-        regional_demand = demand.format_regional_demand(DISPATCHREGIONSUM)
+        regional_demand = demand._format_regional_demand(DISPATCHREGIONSUM)
         region_summary = self.market.get_region_dispatch_summary()
         region_summary = pd.merge(region_summary, regional_demand, on='region')
         region_summary['calc_demand'] = region_summary['dispatch'] + region_summary['inflow'] \

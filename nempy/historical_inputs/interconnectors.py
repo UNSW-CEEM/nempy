@@ -147,7 +147,7 @@ class InterconnectorData:
         LOSSFACTORMODEL = self.raw_input_loader.get_interconnector_loss_parameters()
         LOSSMODEL = self.raw_input_loader.get_interconnector_loss_segments()
 
-        regional_demand = demand.format_regional_demand(DISPATCHREGIONSUM)
+        regional_demand = demand._format_regional_demand(DISPATCHREGIONSUM)
 
         interconnector_loss_coefficients = \
             self.INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'LOSSCONSTANT', 'LOSSFLOWCOEFFICIENT',
@@ -167,8 +167,8 @@ class InterconnectorData:
         interpolation_break_points['loss_segment'] = interpolation_break_points['loss_segment'].apply(np.int64)
 
 
-        loss_functions = _create_loss_functions(interconnector_loss_coefficients,
-                                                interconnector_demand_coefficients,
+        loss_functions = create_loss_functions(interconnector_loss_coefficients,
+                                               interconnector_demand_coefficients,
                                                 regional_demand.loc[:, ['region', 'loss_function_demand']])
 
         interconnectors = self.get_interconnector_definitions()
@@ -299,9 +299,10 @@ def _format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
     >>> interconnector_paramaters = _format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
 
     >>> print(interconnector_paramaters)
-      interconnector to_region from_region    min    max
-    0              X       NSW         QLD -100.0  150.0
-    1              Y       VIC          SA -900.0  800.0
+      interconnector from_region to_region    min    max
+    0              X         NSW       QLD -100.0  150.0
+    1              Y         VIC        SA -900.0  800.0
+
     """
     interconnector_directions = INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
     interconnector_directions.columns = ['interconnector', 'from_region', 'to_region']
@@ -323,7 +324,9 @@ def _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR, INTERCONNECTORCO
     ...   'FROMREGION': ['C', 'X'],
     ...   'TOREGION': ['X', 'C'],
     ...   'FROM_REGION_TLF': [0.0, 0.75],
-    ...   'TO_REGION_TLF': [0.75, 0.0]})
+    ...   'TO_REGION_TLF': [0.75, 0.0],
+    ...   'LHSFACTOR': [1.0, 0.9],
+    ...   'MAXCAPACITY': [100.0, 200.0]})
 
     >>> INTERCONNECTORCONSTRAINT = pd.DataFrame({
     ...   'INTERCONNECTORID': ['A', 'B'],
@@ -332,22 +335,23 @@ def _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR, INTERCONNECTORCO
     >>> mnsp_transmission_loss_factors = _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
     ...   INTERCONNECTORCONSTRAINT)
 
-    >>> print(mnsp_transmission_loss_factors.loc[:, ['interconnector', 'link_id', 'from_region', 'to_region']])
-      interconnector link_id from_region to_region
-    0              A      A1           C         X
-    1              A      A2           X         C
+    >>> print(mnsp_transmission_loss_factors.loc[:, ['interconnector', 'link', 'from_region', 'to_region']])
+      interconnector link from_region to_region
+    0              A   A1           C         X
+    1              A   A2           X         C
 
-    >>> print(mnsp_transmission_loss_factors.loc[:, ['interconnector', 'link_id', 'from_region_loss_factor',
+    >>> print(mnsp_transmission_loss_factors.loc[:, ['interconnector', 'link', 'from_region_loss_factor',
     ...   'to_region_loss_factor']])
-          interconnector link_id  from_region_loss_factor  to_region_loss_factor
-    0              A      A1                     0.00                   0.75
-    1              A      A2                     0.75                   0.00
+      interconnector link  from_region_loss_factor  to_region_loss_factor
+    0              A   A1                     0.00                   0.75
+    1              A   A2                     0.75                   0.00
 
     """
     INTERCONNECTORCONSTRAINT = INTERCONNECTORCONSTRAINT[INTERCONNECTORCONSTRAINT['ICTYPE'] == 'MNSP']
     MNSP_INTERCONNECTOR = pd.merge(MNSP_INTERCONNECTOR, INTERCONNECTORCONSTRAINT, on=['INTERCONNECTORID'])
     MNSP_INTERCONNECTOR = MNSP_INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'LINKID', 'FROM_REGION_TLF', 'TO_REGION_TLF',
                                                       'FROMREGION', 'TOREGION', 'LHSFACTOR', 'MAXCAPACITY']]
+
     mnsp_transmission_loss_factors = MNSP_INTERCONNECTOR.rename(columns={
         'INTERCONNECTORID': 'interconnector', 'LINKID': 'link', 'FROM_REGION_TLF': 'from_region_loss_factor',
         'TO_REGION_TLF': 'to_region_loss_factor', 'FROMREGION': 'from_region', 'TOREGION': 'to_region',
@@ -357,7 +361,7 @@ def _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR, INTERCONNECTORCO
     return mnsp_transmission_loss_factors
 
 
-def _create_loss_functions(interconnector_coefficients, demand_coefficients, demand):
+def create_loss_functions(interconnector_coefficients, demand_coefficients, demand):
     """Creates a loss function for each interconnector.
 
     Transforms the dynamic demand dependendent interconnector loss functions into functions that only depend on
@@ -399,7 +403,7 @@ def _create_loss_functions(interconnector_coefficients, demand_coefficients, dem
 
     Create the loss functions
 
-    >>> loss_functions = _create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+    >>> loss_functions = create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
 
     Lets use one of the loss functions, first get the loss function of VIC1-NSW1 and call it g
 

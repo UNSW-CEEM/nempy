@@ -1,17 +1,13 @@
 import pickle
-import sqlite3
 
-from nempy.historical_inputs import loaders
+from nempy.historical_inputs import xml_cache
 
 import os
 cwd = os.getcwd()
 
 print(cwd)
 
-con = sqlite3.connect('historical.db')
-historical_inputs = loaders.HistoricalInputs(
-    market_management_system_database_connection=con,
-    nemde_xml_cache_folder='historical_xml_files')
+historical_inputs = xml_cache.XMLCacheManager('test_files/historical_xml_files')
 
 interval_with_violations = \
     historical_inputs.find_intervals_with_violations(limit=1000000,

@@ -36,72 +36,188 @@ def get_test_intervals_august_2020(number=100):
     return times_formatted
 
 
-def test_if_ramp_rates_calculated_correctly():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect(inputs_database)
-    historical_inputs = loaders.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
+def test_ramp_rate_constraints():
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
 
-    for interval in get_test_intervals():
-        print(interval)
-        market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                      interval=interval)
-        market.add_unit_bids_to_market()
-        market.set_ramp_rate_limits()
-        market.set_unit_dispatch_to_historical_values()
-        market.dispatch()
-        assert market.measured_violation_equals_historical_violation(historical_name='ramp_rate',
-                                                                     nempy_constraints=['ramp_up', 'ramp_down'])
+    for interval in get_test_intervals(number=10):
+        raw_inputs_loader.set_interval(interval)
+        unit_inputs = units.UnitData(raw_inputs_loader)
+        interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
+        market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                     interconnector_inputs=interconnector_inputs,
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
+        market_builder.add_unit_bids_to_market()
+        market_builder.set_ramp_rate_limits()
+
+        market = market_builder.get_market_object()
+
+        market_overrider = historical_market_builder.MarketOverrider(market=market,
+                                                                     mms_db=mms_database,
+                                                                     interval=interval)
+
+        market_overrider.set_unit_dispatch_to_historical_values()
+
+        market_builder.dispatch()
+
+        market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                 mms_db=mms_database,
+                                                                 xml_cache=xml_cache_manager,
+                                                                 interval=interval)
+
+        assert market_checker.measured_violation_equals_historical_violation(historical_name='ramp_rate',
+                                                                             nempy_constraints=['ramp_up', 'ramp_down'])
+
+
+def test_ramp_rate_constraints_where_constraints_violated():
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
 
     with open('interval_with_violations.pickle', 'rb') as f:
         interval_with_violations = pickle.load(f)
 
+    tests_to_run = 55
+    tests_run = 0
     for interval, types in interval_with_violations.items():
+        if tests_run == tests_to_run:
+            break
         if 'ramp_rate' in types:
-            print(interval)
-            market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                          interval=interval)
-            market.add_unit_bids_to_market()
-            market.set_ramp_rate_limits()
-            market.set_unit_dispatch_to_historical_values()
-            market.dispatch()
-            assert market.measured_violation_equals_historical_violation(historical_name='ramp_rate',
-                                                                         nempy_constraints=['ramp_up', 'ramp_down'])
+            raw_inputs_loader.set_interval(interval)
+            unit_inputs = units.UnitData(raw_inputs_loader)
+            interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+            constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+            demand_inputs = demand.DemandData(raw_inputs_loader)
+
+            market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                         interconnector_inputs=interconnector_inputs,
+                                                                         constraint_inputs=constraint_inputs,
+                                                                         demand_inputs=demand_inputs)
+            market_builder.add_unit_bids_to_market()
+            market_builder.set_ramp_rate_limits()
+
+            market = market_builder.get_market_object()
+
+            market_overrider = historical_market_builder.MarketOverrider(market=market,
+                                                                         mms_db=mms_database,
+                                                                         interval=interval)
+
+            market_overrider.set_unit_dispatch_to_historical_values()
+
+            market_builder.dispatch()
+
+            market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                     mms_db=mms_database,
+                                                                     xml_cache=xml_cache_manager,
+                                                                     interval=interval)
+
+            assert market_checker.measured_violation_equals_historical_violation(historical_name='ramp_rate',
+                                                                                 nempy_constraints=['ramp_up',
+                                                                                                    'ramp_down'])
+            tests_run += 1
+
+    assert tests_to_run == tests_run
 
 
 def test_fast_start_constraints():
-    inputs_database = 'test_files/historical.db'
-    con = sqlite3.connect(inputs_database)
-    historical_inputs = loaders.HistoricalInputs(
-        market_management_system_database_connection=con,
-        nemde_xml_cache_folder='test_files/historical_xml_files')
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
 
-    for interval in get_test_intervals(number=100):
-        print(interval)
-        market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                      interval=interval)
-        market.add_unit_bids_to_market()
-        market.set_fast_start_constraints()
-        market.set_unit_dispatch_to_historical_values()
-        market.dispatch()
-        assert market.measured_violation_equals_historical_violation('fast_start',
-                                                                     nempy_constraints=['fast_start'])
+    for interval in get_test_intervals(number=10):
+        raw_inputs_loader.set_interval(interval)
+        unit_inputs = units.UnitData(raw_inputs_loader)
+        interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
+        market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                     interconnector_inputs=interconnector_inputs,
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
+        market_builder.add_unit_bids_to_market()
+        market_builder.set_fast_start_constraints()
+
+        market = market_builder.get_market_object()
+
+        market_overrider = historical_market_builder.MarketOverrider(market=market,
+                                                                     mms_db=mms_database,
+                                                                     interval=interval)
+
+        market_overrider.set_unit_dispatch_to_historical_values()
+
+        market_builder.dispatch()
+
+        market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                 mms_db=mms_database,
+                                                                 xml_cache=xml_cache_manager,
+                                                                 interval=interval)
+
+        assert market_checker.measured_violation_equals_historical_violation('fast_start',
+                                                                             nempy_constraints=['fast_start'])
+
+
+def test_fast_start_constraints_where_constraints_violated():
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
 
     with open('interval_with_violations.pickle', 'rb') as f:
         interval_with_violations = pickle.load(f)
 
+    tests_to_run = 11
+    tests_run = 0
     for interval, types in interval_with_violations.items():
+        if tests_run == tests_to_run:
+            break
         if 'fast_start' in types:
-            print(interval)
-            market = historical_market_builder.SpotMarket(inputs_database=inputs_database, inputs=historical_inputs,
-                                                          interval=interval)
-            market.add_unit_bids_to_market()
-            market.set_fast_start_constraints()
-            market.set_unit_dispatch_to_historical_values()
-            market.dispatch()
-            assert market.measured_violation_equals_historical_violation('fast_start',
-                                                                         nempy_constraints=['fast_start'])
+            raw_inputs_loader.set_interval(interval)
+            unit_inputs = units.UnitData(raw_inputs_loader)
+            interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+            constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+            demand_inputs = demand.DemandData(raw_inputs_loader)
+
+            market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                         interconnector_inputs=interconnector_inputs,
+                                                                         constraint_inputs=constraint_inputs,
+                                                                         demand_inputs=demand_inputs)
+            market_builder.add_unit_bids_to_market()
+            market_builder.set_fast_start_constraints()
+
+            market = market_builder.get_market_object()
+
+            market_overrider = historical_market_builder.MarketOverrider(market=market,
+                                                                         mms_db=mms_database,
+                                                                         interval=interval)
+
+            market_overrider.set_unit_dispatch_to_historical_values()
+
+            market_builder.dispatch()
+
+            market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                     mms_db=mms_database,
+                                                                     xml_cache=xml_cache_manager,
+                                                                     interval=interval)
+
+            assert market_checker.measured_violation_equals_historical_violation('fast_start',
+                                                                                 nempy_constraints=[
+                                                                                     'fast_start'])
+            tests_run += 1
+
+    assert tests_to_run == tests_run
 
 
 def test_capacity_constraints():
@@ -145,10 +261,22 @@ def test_capacity_constraints():
         assert market_checker.measured_violation_equals_historical_violation('unit_capacity',
                                                                              nempy_constraints=['unit_bid_capacity'])
 
+
+def test_capacity_constraint_where_constraints_violated():
+    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
+
     with open('interval_with_violations.pickle', 'rb') as f:
         interval_with_violations = pickle.load(f)
 
+    tests_to_run = 10
+    tests_run = 0
     for interval, types in interval_with_violations.items():
+        if tests_run == tests_to_run:
+            break
         if 'unit_capacity' in types:
             raw_inputs_loader.set_interval(interval)
             unit_inputs = units.UnitData(raw_inputs_loader)
@@ -183,9 +311,12 @@ def test_capacity_constraints():
             assert market_checker.measured_violation_equals_historical_violation('unit_capacity',
                                                                                  nempy_constraints=[
                                                                                      'unit_bid_capacity'])
+            tests_run += 1
+
+    assert tests_to_run == tests_run
 
 
-def test_fcas_trapezium_scaled_availability():
+def ignore_test_fcas_trapezium_scaled_availability():
     con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms_august_2020.db')
     mms_database = mms_db.DBManager(con)
     xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache_august_2020')
@@ -236,7 +367,7 @@ def test_fcas_trapezium_scaled_availability():
         #assert avails['error'].abs().max() < 1.1
 
 
-def test_find_fcas_trapezium_scaled_availability_erros():
+def ignore_test_find_fcas_trapezium_scaled_availability_erros():
     con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms_august_2020.db')
     mms_database = mms_db.DBManager(con)
     xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache_august_2020')
