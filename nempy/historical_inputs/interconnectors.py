@@ -389,9 +389,12 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     Loss model details from 2020 Jan NEM web LOSSFACTORMODEL file
 
     >>> demand_coefficients = pd.DataFrame({
-    ...   'interconnector': ['NSW1-QLD1', 'NSW1-QLD1', 'VIC1-NSW1', 'VIC1-NSW1', 'VIC1-NSW1'],
+    ...   'interconnector': ['NSW1-QLD1', 'NSW1-QLD1', 'VIC1-NSW1',
+    ...                      'VIC1-NSW1', 'VIC1-NSW1'],
     ...   'region': ['NSW1', 'QLD1', 'NSW1', 'VIC1', 'SA1'],
-    ...   'demand_coefficient': [-0.00000035146, 0.000010044, 0.000021734, -0.000031523, -0.000065967]})
+    ...   'demand_coefficient': [-0.00000035146, 0.000010044,
+    ...                           0.000021734, -0.000031523,
+    ...                          -0.000065967]})
 
     Loss model details from 2020 Jan NEM web INTERCONNECTORCONSTRAINT file
 
@@ -403,7 +406,8 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
 
     Create the loss functions
 
-    >>> loss_functions = create_loss_functions(interconnector_coefficients, demand_coefficients, demand)
+    >>> loss_functions = create_loss_functions(interconnector_coefficients,
+    ...                                        demand_coefficients, demand)
 
     Lets use one of the loss functions, first get the loss function of VIC1-NSW1 and call it g
 
@@ -425,33 +429,41 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
     ----------
     interconnector_coefficients : pd.DataFrame
 
-        ======================  ========================================================================================
+        ======================  ======================================
         Columns:                Description:
-        interconnector          unique identifier of a interconnector (as `str`)
-        loss_constant           the constant term in the interconnector loss factor equation (as np.float64)
-        flow_coefficient        the coefficient of the interconnector flow variable in the loss factor equation
-                                (as np.float64)
-        from_region_loss_share  the proportion of loss attribute to the from region, remainer are attributed to the to
-                                region (as np.float64)
-        ======================  ========================================================================================
+        interconnector          unique identifier of a interconnector, \n
+                                (as `str`)
+        loss_constant           the constant term in the interconnector \n
+                                loss factor equation, (as `np.float64`)
+        flow_coefficient        the coefficient of the interconnector \n
+                                flow variable in the loss factor equation \n
+                                (as `np.float64`)
+        from_region_loss_share  the proportion of loss attribute to the \n
+                                from region, remainer are attributed to \n
+                                the to region, (as `np.float64`)
+        ======================  ======================================
 
     demand_coefficients : pd.DataFrame
 
-        ==================  =========================================================================================
+        ==================  ==========================================
         Columns:            Description:
-        interconnector      unique identifier of a interconnector (as `str`)
-        region              the market region whose demand the coefficient applies too, required (as `str`)
-        demand_coefficient  the coefficient of regional demand variable in the loss factor equation (as `np.float64`)
-        ==================  =========================================================================================
+        interconnector      unique identifier of a interconnector, \n
+                            (as `str`)
+        region              the market region whose demand the coefficient \n
+                            applies too (as `str`)
+        demand_coefficient  the coefficient of regional demand variable \n
+                            in the loss factor equation, (as `np.float64`)
+        ==================  ==========================================
 
     demand : pd.DataFrame
 
-        ====================  =====================================================================================
+        ====================  ========================================
         Columns:              Description:
-        region                unique identifier of a region (as `str`)
-        loss_function_demand  the estimated regional demand, as calculated by initial supply + demand forecast,
+        region                unique identifier of a region, (as `str`)
+        loss_function_demand  the estimated regional demand, as calculated \n
+                              by initial supply + demand forecast, \n
                               in MW (as `np.float64`)
-        ====================  =====================================================================================
+        ====================  ========================================
 
     Returns
     -------
@@ -459,12 +471,13 @@ def create_loss_functions(interconnector_coefficients, demand_coefficients, dema
 
         loss_functions
 
-        ================  ============================================================================================
+        ================  ============================================
         Columns:          Description:
-        interconnector    unique identifier of a interconnector (as `str`)
-        loss_function     a `function` object that takes interconnector flow (as `float`) an input and returns
+        interconnector    unique identifier of a interconnector, (as `str`)
+        loss_function     a `function` object that takes interconnector \n
+                          flow (as `float`) an input and returns \n
                           interconnector losses (as `float`).
-        ================  ============================================================================================
+        ================  ============================================
     """
 
     demand_loss_factor_offset = pd.merge(demand_coefficients, demand, 'inner', on=['region'])
