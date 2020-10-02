@@ -1,0 +1,17 @@
+include *.txt
+include LICENSE
+include pytest.ini
+recursive-include docs *.bat
+recursive-include docs *.html
+recursive-include docs *.pdf
+recursive-include docs *.py
+recursive-include docs *.rst
+recursive-include docs *.txt
+recursive-include docs Makefile
+recursive-include examples *.py
+recursive-include nempy *.py
+recursive-include publications *.py
+recursive-include tests *.csv
+recursive-include tests *.py
+recursive-include tests *.zip
+recursive-exclude tests/test_files/historical_xml_files *.loaded
