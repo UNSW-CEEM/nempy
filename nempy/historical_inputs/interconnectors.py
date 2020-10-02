@@ -13,7 +13,7 @@ def _test_setup():
     mms_db_manager = mms_db.DBManager(connection=con)
     xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    inputs_loader.set_interval('2019/01/01 00:00:00')
+    inputs_loader.set_interval('2019/01/10 12:05:00')
     return inputs_loader
 
 
@@ -37,7 +37,7 @@ class InterconnectorData:
     >>> mms_db_manager = mms_db.DBManager(connection=con)
     >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     >>> inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    >>> inputs_loader.set_interval('2019/01/01 00:00:00')
+    >>> inputs_loader.set_interval('2019/01/10 12:05:00')
 
     Create a InterconnectorData instance.
 

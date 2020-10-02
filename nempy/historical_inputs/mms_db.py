@@ -254,15 +254,20 @@ class DBManager:
             if hasattr(attribute, 'create_table_in_sqlite_db'):
                 attribute.create_table_in_sqlite_db()
 
+    def _create_sample_database(self, date_time):
+        for name, attribute in self.__dict__.items():
+            if hasattr(attribute, '_create_sample_table'):
+                attribute._create_sample_table(date_time)
+
     def populate(self, start_year, start_month, end_year, end_month, verbose=True):
 
         self.create_tables()
 
-        if start_month == 1:
-            start_year -= 1
-            start_month = 12
-        else:
-            start_month -= 1
+        # if start_month == 1:
+        #     start_year -= 1
+        #     start_month = 12
+        # else:
+        #     start_month -= 1
 
         # Download data were inputs are needed on a monthly basis.
         finished = False
@@ -516,6 +521,16 @@ class _MMSTable:
             primary_keys = ','.join(['{}'.format(col) for col in self.table_primary_keys])
             create_query = base_create_query.format(self.table_name, columns, primary_keys)
             cur.execute(create_query)
+            self.con.commit()
+
+    def _create_sample_table(self, date_time):
+        print(self.table_name)
+        try:
+            interval_data = self.get_data(date_time)
+        except:
+            interval_data = self.get_data()
+        with self.con:
+            interval_data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)
             self.con.commit()
 
 

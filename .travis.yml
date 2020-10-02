@@ -6,5 +6,4 @@ install:
   - pip install e .
 # command to run tests
 script:
-  - python build_test_data.py
   - pytest

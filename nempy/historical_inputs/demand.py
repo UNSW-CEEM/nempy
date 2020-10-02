@@ -17,17 +17,17 @@ class DemandData:
     >>> mms_db_manager = mms_db.DBManager(connection=con)
     >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     >>> inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    >>> inputs_loader.set_interval('2019/01/01 00:00:00')
+    >>> inputs_loader.set_interval('2019/01/10 12:05:00')
 
     >>> demand_data = DemandData(inputs_loader)
 
     >>> demand_data.get_operational_demand()
       region   demand
-    0   NSW1  7598.63
-    1   QLD1  5904.65
-    2    SA1  1447.52
-    3   TAS1  1026.00
-    4   VIC1  4401.10
+    0   NSW1  8540.33
+    1   QLD1  7089.69
+    2    SA1  1019.21
+    3   TAS1  1070.89
+    4   VIC1  4500.71
 
     Parameters
     ----------

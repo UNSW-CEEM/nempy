@@ -13,7 +13,7 @@ def _test_setup():
     mms_db_manager = mms_db.DBManager(connection=con)
     xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    inputs_loader.set_interval('2019/01/01 00:00:00')
+    inputs_loader.set_interval('2019/01/10 12:05:00')
     return inputs_loader
 
 
@@ -40,7 +40,7 @@ class UnitData:
     >>> mms_db_manager = mms_db.DBManager(connection=con)
     >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     >>> inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    >>> inputs_loader.set_interval('2019/01/01 00:00:00')
+    >>> inputs_loader.set_interval('2019/01/10 12:05:00')
 
     Create the UnitData instance.
 
@@ -48,17 +48,17 @@ class UnitData:
 
     >>> unit_data.get_unit_bid_availability()
               unit  capacity
-    0       AGLHAL     173.0
+    0       AGLHAL     170.0
     1       AGLSOM     160.0
-    2      ANGAST1      43.0
-    23      BALBG1       4.0
+    2      ANGAST1      44.0
+    23      BALBG1       0.0
     33      BALBL1       0.0
     ...        ...       ...
-    989   YARWUN_1     140.0
-    990      YWPS1     370.0
-    999      YWPS2     380.0
-    1008     YWPS3       0.0
-    1017     YWPS4     370.0
+    989   YARWUN_1     165.0
+    990      YWPS1     380.0
+    999      YWPS2     180.0
+    1008     YWPS3     350.0
+    1017     YWPS4     340.0
     <BLANKLINE>
     [218 rows x 2 columns]
     """
@@ -95,17 +95,17 @@ class UnitData:
 
         >>> unit_data.get_unit_bid_availability()
                   unit  capacity
-        0       AGLHAL     173.0
+        0       AGLHAL     170.0
         1       AGLSOM     160.0
-        2      ANGAST1      43.0
-        23      BALBG1       4.0
+        2      ANGAST1      44.0
+        23      BALBG1       0.0
         33      BALBL1       0.0
         ...        ...       ...
-        989   YARWUN_1     140.0
-        990      YWPS1     370.0
-        999      YWPS2     380.0
-        1008     YWPS3       0.0
-        1017     YWPS4     370.0
+        989   YARWUN_1     165.0
+        990      YWPS1     380.0
+        999      YWPS2     180.0
+        1008     YWPS3     350.0
+        1017     YWPS4     340.0
         <BLANKLINE>
         [218 rows x 2 columns]
 
@@ -149,17 +149,17 @@ class UnitData:
 
         >>> unit_data.get_unit_uigf_limits()
                 unit  capacity
-        0      ARWF1    56.755
-        1   BALDHWF1     9.160
-        2      BANN1     0.000
-        3     BLUFF1     4.833
-        4     BNGSF1     0.000
+        0      ARWF1    18.654
+        1   BALDHWF1    11.675
+        2      BANN1    53.661
+        3     BLUFF1     8.655
+        4     BNGSF1    98.877
         ..       ...       ...
-        57     WGWF1    25.445
-        58   WHITSF1     0.000
-        59  WOODLWN1     0.075
-        60     WRSF1     0.000
-        61     WRWF1    15.760
+        57     WGWF1     7.649
+        58   WHITSF1     6.075
+        59  WOODLWN1    11.659
+        60     WRSF1    20.000
+        61     WRWF1     7.180
         <BLANKLINE>
         [62 rows x 2 columns]
 
@@ -199,14 +199,14 @@ class UnitData:
         0      AGLHAL        0.000000    720.000000      720.000000
         1      AGLSOM        0.000000    480.000000      480.000000
         2     ANGAST1        0.000000    840.000000      840.000000
-        3       ARWF1       54.500000   1200.000000      600.000000
-        4      BALBG1        3.810000   6000.000000     6000.000000
+        3       ARWF1       15.800001   1200.000000      600.000000
+        4      BALBG1        0.000000   6000.000000     6000.000000
         ..        ...             ...           ...             ...
-        275  YARWUN_1      140.360001      0.000000        0.000000
-        276     YWPS1      366.665833    177.750006      177.750006
-        277     YWPS2      374.686066    180.000000      180.000000
-        278     YWPS3        0.000000    180.000000      180.000000
-        279     YWPS4      368.139252    180.000000      180.000000
+        275  YARWUN_1      157.019989      0.000000        0.000000
+        276     YWPS1      383.959503    177.750006      177.750006
+        277     YWPS2      180.445572    177.750006      177.750006
+        278     YWPS3      353.460754    175.499997      175.499997
+        279     YWPS4      338.782288    180.000000      180.000000
         <BLANKLINE>
         [280 rows x 4 columns]
 
@@ -348,13 +348,13 @@ class UnitData:
         1      AGLSOM        0.000000
         2     ANGAST1        0.000000
         3       APD01        0.000000
-        4       ARWF1       54.500000
+        4       ARWF1       15.800001
         ..        ...             ...
-        283  YARWUN_1      140.360001
-        284     YWPS1      366.665833
-        285     YWPS2      374.686066
-        286     YWPS3        0.000000
-        287     YWPS4      368.139252
+        283  YARWUN_1      157.019989
+        284     YWPS1      383.959503
+        285     YWPS2      180.445572
+        286     YWPS3      353.460754
+        287     YWPS4      338.782288
         <BLANKLINE>
         [288 rows x 2 columns]
 
@@ -394,11 +394,11 @@ class UnitData:
         0     AGLHAL         0               5.0              3.0               2.0          2.0
         1     AGLSOM         0               5.0              2.0               2.0         16.0
         2   BARCALDN         0               5.0              4.0               4.0         12.0
-        3   BARRON-1         5               5.0              3.0               1.0          5.0
+        3   BARRON-1         0               5.0              3.0               1.0          5.0
         4   BARRON-2         5               5.0              3.0               1.0          5.0
         ..       ...       ...               ...              ...               ...          ...
-        69     VPGS5         0               5.0              3.0               0.0         48.0
-        70     VPGS6         0               5.0              3.0               0.0         48.0
+        69     VPGS5         0               5.0              3.0               0.0         49.0
+        70     VPGS6         0               5.0              3.0               0.0         49.0
         71   W/HOE#1         0               5.0              0.0               0.0        160.0
         72   W/HOE#2         0               5.0              0.0               0.0        160.0
         73    YABULU         0               5.0              6.0               6.0         83.0
@@ -585,20 +585,20 @@ class UnitData:
         >>> volume_bids, price_bids = unit_data.get_processed_bids()
 
         >>> volume_bids
-                unit    service     1      2    3     4    5     6     7     8    9     10
-        0     AGLHAL     energy   0.0    0.0  0.0   0.0  0.0   0.0  60.0   0.0  0.0  160.0
-        1     AGLSOM     energy   0.0    0.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0  170.0
-        2    ANGAST1     energy   0.0    0.0  0.0   0.0  0.0  50.0   0.0   0.0  0.0   50.0
-        9      ARWF1     energy   0.0  241.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0    0.0
-        23    BALBG1     energy   4.0    0.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0   26.0
-        ..       ...        ...   ...    ...  ...   ...  ...   ...   ...   ...  ...    ...
-        340    YWPS4   lower_6s  15.0   10.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0    0.0
-        341    YWPS4  raise_60s   0.0    0.0  0.0   0.0  0.0   5.0   5.0   0.0  0.0   10.0
-        342    YWPS4   raise_6s   0.0    0.0  0.0  10.0  5.0   0.0   0.0   0.0  0.0   10.0
-        343    YWPS4  lower_reg   0.0    0.0  0.0   0.0  0.0   0.0   0.0  20.0  0.0    0.0
-        344    YWPS4  raise_reg   0.0    0.0  0.0   0.0  0.0   0.0   5.0  10.0  0.0    5.0
+                unit    service    1      2    3     4    5     6     7     8    9     10
+        0     AGLHAL     energy  0.0    0.0  0.0   0.0  0.0   0.0  60.0   0.0  0.0  160.0
+        1     AGLSOM     energy  0.0    0.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0  170.0
+        2    ANGAST1     energy  0.0    0.0  0.0   0.0  0.0  50.0   0.0   0.0  0.0   50.0
+        9      ARWF1     energy  0.0  241.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0    0.0
+        23    BALBG1     energy  0.0    0.0  0.0   0.0  0.0   0.0   0.0   0.0  0.0   30.0
+        ..       ...        ...  ...    ...  ...   ...  ...   ...   ...   ...  ...    ...
+        364    YWPS4   raise_6s  0.0    0.0  0.0  10.0  5.0   0.0   0.0   0.0  0.0   10.0
+        365    YWPS4  lower_reg  0.0    0.0  0.0   0.0  0.0   0.0   0.0  20.0  0.0    0.0
+        366    YWPS4  raise_reg  0.0    0.0  0.0   0.0  0.0   0.0   5.0  10.0  0.0    5.0
+        369   SWAN_E  lower_reg  0.0    0.0  0.0   0.0  0.0   0.0   5.0   0.0  0.0   52.0
+        370   SWAN_E  raise_reg  0.0    0.0  0.0   5.0  0.0   0.0   3.0   0.0  0.0   49.0
         <BLANKLINE>
-        [569 rows x 12 columns]
+        [591 rows x 12 columns]
 
         >>> price_bids
                 unit    service        1      2       3       4       5       6       7        8         9        10
@@ -608,13 +608,13 @@ class UnitData:
         9      ARWF1     energy  -969.10 -63.00    2.00    4.00    8.00   16.00   32.00    64.00    128.00  14051.95
         23    BALBG1     energy  -994.80   0.00   19.92   47.37   75.18  109.45  298.44   443.13  10047.49  14424.60
         ..       ...        ...      ...    ...     ...     ...     ...     ...     ...      ...       ...       ...
-        284    YWPS4   lower_6s     0.03   0.05    0.16    0.30    1.90   25.04   30.04    99.00   4600.00   9899.00
-        285    YWPS4  lower_reg     0.05   1.90    4.78    9.40   14.00   29.00   64.90   240.90  11990.00  13050.00
-        286    YWPS4  raise_60s     0.17   1.80    4.80   10.01   21.00   39.00   52.00   102.00   4400.00  11999.00
-        287    YWPS4   raise_6s     0.48   1.75    4.90   20.70   33.33   99.90  630.00  1999.00   6000.00  12299.00
-        288    YWPS4  raise_reg     0.05   2.70    9.99   19.99   49.00   95.50  240.00   450.50    950.50  11900.00
+        306    YWPS4   lower_6s     0.03   0.05    0.16    0.30    1.90   25.04   30.04    99.00   4600.00   9899.00
+        307    YWPS4  lower_reg     0.05   1.90    4.78    9.40   14.00   29.00   64.90   240.90  11990.00  13050.00
+        308    YWPS4  raise_60s     0.17   1.80    4.80   10.01   21.00   39.00   52.00   102.00   4400.00  11999.00
+        309    YWPS4   raise_6s     0.48   1.75    4.90   20.70   33.33   99.90  630.00  1999.00   6000.00  12299.00
+        310    YWPS4  raise_reg     0.05   2.70    9.99   19.99   49.00   95.50  240.00   450.50    950.50  11900.00
         <BLANKLINE>
-        [569 rows x 12 columns]
+        [591 rows x 12 columns]
 
         Multiple Returns
         ----------------
@@ -707,19 +707,19 @@ class UnitData:
 
         >>> unit_data.get_fcas_max_availability()
                 unit     service  max_availability
-        0      APD01  raise_5min           34.0000
-        1      APD01   raise_60s           34.0000
-        2      APD01    raise_6s           17.0000
-        3    ASNENC1  raise_5min           72.0000
-        4    ASNENC1   raise_60s           49.0000
+        0      APD01  raise_5min              34.0
+        1      APD01   raise_60s              34.0
+        2      APD01    raise_6s              17.0
+        3    ASNENC1  raise_5min              12.0
+        4    ASNENC1   raise_60s               4.0
         ..       ...         ...               ...
-        340    YWPS4    lower_6s           25.0000
-        341    YWPS4   raise_60s           10.0000
-        342    YWPS4    raise_6s           15.0000
-        343    YWPS4   lower_reg           15.1875
-        344    YWPS4   raise_reg           15.0000
+        364    YWPS4    raise_6s              15.0
+        365    YWPS4   lower_reg              15.0
+        366    YWPS4   raise_reg              15.0
+        369   SWAN_E   lower_reg              10.0
+        370   SWAN_E   raise_reg              25.0
         <BLANKLINE>
-        [289 rows x 3 columns]
+        [311 rows x 3 columns]
 
         Returns
         -------
@@ -755,19 +755,19 @@ class UnitData:
 
         >>> unit_data.get_fcas_max_availability()
                 unit     service  max_availability
-        0      APD01  raise_5min           34.0000
-        1      APD01   raise_60s           34.0000
-        2      APD01    raise_6s           17.0000
-        3    ASNENC1  raise_5min           72.0000
-        4    ASNENC1   raise_60s           49.0000
+        0      APD01  raise_5min              34.0
+        1      APD01   raise_60s              34.0
+        2      APD01    raise_6s              17.0
+        3    ASNENC1  raise_5min              12.0
+        4    ASNENC1   raise_60s               4.0
         ..       ...         ...               ...
-        340    YWPS4    lower_6s           25.0000
-        341    YWPS4   raise_60s           10.0000
-        342    YWPS4    raise_6s           15.0000
-        343    YWPS4   lower_reg           15.1875
-        344    YWPS4   raise_reg           15.0000
+        364    YWPS4    raise_6s              15.0
+        365    YWPS4   lower_reg              15.0
+        366    YWPS4   raise_reg              15.0
+        369   SWAN_E   lower_reg              10.0
+        370   SWAN_E   raise_reg              25.0
         <BLANKLINE>
-        [289 rows x 3 columns]
+        [311 rows x 3 columns]
 
         Returns
         -------
@@ -808,19 +808,19 @@ class UnitData:
 
         >>> unit_data.get_fcas_regulation_trapeziums()
                  unit    service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
-        19       BW01  lower_reg         35.015640       280.01013       315.025770        445.010250       445.01025
-        20       BW01  raise_reg         35.015640       280.01013       280.010130        409.994610       445.01025
-        27       BW02  lower_reg         28.390656       297.05151       325.442166        633.239010       633.23901
-        28       BW02  raise_reg         28.390656       297.05151       297.051510        604.848354       633.23901
-        35   CALL_B_1  lower_reg         15.000000       192.00000       207.000000        354.100010       354.10001
+        16       BW01  lower_reg         35.015640       309.27185       344.287490         520.80701       520.80701
+        17       BW01  raise_reg         35.015640       309.27185       309.271850         485.79137       520.80701
+        24   CALL_B_1  lower_reg         15.000000       180.00000       195.000000         270.30002       270.30002
+        25   CALL_B_1  raise_reg         15.000000       180.00000       180.000000         205.00000       220.00000
+        55       ER01  lower_reg         24.906273       490.02502       514.931293         680.00000       680.00000
         ..        ...        ...               ...             ...              ...               ...             ...
-        295  TUNGATIN  raise_reg         77.000000         3.00003         3.000030          1.000000        78.00000
-        311       VP6  lower_reg         30.125000       250.00000       280.125000        660.000000       660.00000
-        312       VP6  raise_reg         30.125000       250.00000       250.000000        629.875000       660.00000
-        343     YWPS4  lower_reg         15.187500       250.00000       265.187500        370.687500       370.68750
-        344     YWPS4  raise_reg         15.000000       250.00000       250.000000        355.687500       370.68750
+        359     YWPS3  raise_reg         14.625000       250.00000       250.000000         370.37500       385.00000
+        365     YWPS4  lower_reg         15.000000       250.00000       265.000000         385.00000       385.00000
+        366     YWPS4  raise_reg         15.000000       250.00000       250.000000         370.00000       385.00000
+        369    SWAN_E  lower_reg         10.000000       145.00000       202.000000         362.50000       362.50000
+        370    SWAN_E  raise_reg         25.000000       145.00000       145.000000         305.50000       362.50000
         <BLANKLINE>
-        [64 rows x 7 columns]
+        [75 rows x 7 columns]
 
         Returns
         -------
@@ -911,11 +911,11 @@ class UnitData:
 
         >>> unit_data.get_scada_ramp_down_rates_of_lower_reg_units().head()
                 unit  initial_output  ramp_down_rate
-        36      BW01      433.425049      420.187683
-        37      BW02      532.075073      340.687866
-        40  CALL_B_1      344.100006      240.000000
-        41  CALL_B_2      349.100006      240.000000
-        74      ER01      542.699951      298.875275
+        36      BW01      425.125000      420.187683
+        40  CALL_B_1      219.699997      240.000000
+        74      ER01      636.000000      298.875275
+        76      ER03      678.925049      297.187500
+        77      ER04      518.550049      298.312225
 
         Returns
         -------
@@ -963,11 +963,11 @@ class UnitData:
 
         >>> unit_data.get_scada_ramp_up_rates_of_raise_reg_units().head()
                 unit  initial_output  ramp_up_rate
-        36      BW01      433.425049    420.187683
-        37      BW02      532.075073    340.687866
-        40  CALL_B_1      344.100006    240.000000
-        41  CALL_B_2      349.100006    240.000000
-        74      ER01      542.699951    299.999542
+        36      BW01      425.125000    420.187683
+        40  CALL_B_1      219.699997    240.000000
+        74      ER01      636.000000    299.999542
+        76      ER03      678.925049    297.750092
+        77      ER04      518.550049    298.875275
 
         Returns
         -------
@@ -1016,16 +1016,16 @@ class UnitData:
         0      APD01  raise_5min              34.0             0.0              0.0               0.0             0.0
         1      APD01   raise_60s              34.0             0.0              0.0               0.0             0.0
         2      APD01    raise_6s              17.0             0.0              0.0               0.0             0.0
-        3    ASNENC1  raise_5min              72.0             0.0              0.0               0.0             0.0
-        4    ASNENC1   raise_60s              49.0             0.0              0.0               0.0             0.0
+        3    ASNENC1  raise_5min              12.0             0.0              0.0               0.0             0.0
+        4    ASNENC1   raise_60s               4.0             0.0              0.0               0.0             0.0
         ..       ...         ...               ...             ...              ...               ...             ...
-        338    YWPS4  lower_5min              15.0           250.0            265.0             385.0           385.0
-        339    YWPS4   lower_60s              20.0           250.0            270.0             385.0           385.0
-        340    YWPS4    lower_6s              25.0           250.0            275.0             385.0           385.0
-        341    YWPS4   raise_60s              10.0           220.0            220.0             390.0           400.0
-        342    YWPS4    raise_6s              15.0           220.0            220.0             390.0           405.0
+        360    YWPS4  lower_5min              15.0           250.0            265.0             385.0           385.0
+        361    YWPS4   lower_60s              20.0           250.0            270.0             385.0           385.0
+        362    YWPS4    lower_6s              25.0           250.0            275.0             385.0           385.0
+        363    YWPS4   raise_60s              10.0           220.0            220.0             390.0           400.0
+        364    YWPS4    raise_6s              15.0           220.0            220.0             390.0           405.0
         <BLANKLINE>
-        [225 rows x 7 columns]
+        [236 rows x 7 columns]
 
         Returns
         -------
