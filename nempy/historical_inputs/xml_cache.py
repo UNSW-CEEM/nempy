@@ -107,8 +107,13 @@ class XMLCacheManager:
 
         >>> manager.load_interval('2019/01/01 00:00:00')
 
-        >>> manager.get_file_path()
+        >>> manager.get_file_path() # doctest: +SKIP
         PosixPath('test_nemde_cache/NEMSPDOutputs_2018123124000.loaded')
+
+        So the doctest runs on all Operating systems lets also look at the parts of the path.
+
+        >>> manager.get_file_path().parts
+        ('test_nemde_cache', 'NEMSPDOutputs_2018123124000.loaded')
         """
         return Path(self.cache_folder) / self.get_file_name()
 
