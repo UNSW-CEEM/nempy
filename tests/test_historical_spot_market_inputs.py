@@ -8,7 +8,7 @@ from nempy.historical_inputs import mms_db
 
 
 def test_download_to_df():
-    server = subprocess.Popen(shlex.split('python -m http.server 8080 --bind 127.0.0.1'), shell=True)
+    server = subprocess.Popen('python -m http.server 8080 --bind 127.0.0.1', shell=True)
     try:
         time.sleep(1)
         output_1 = mms_db._download_to_df(
