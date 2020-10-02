@@ -19,6 +19,7 @@ jobs:
 install:
   - pip3 install --upgrade pip
   - pip install e .
+  - pip install pytest
 # command to run tests
 script:
   - python3 -m pytest || python -m pytest
