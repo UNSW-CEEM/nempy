@@ -38,7 +38,7 @@ def test_download_to_df_raises_on_missing_data():
     try:
         with pytest.raises(mms_db._MissingData) as exc_info:
             mms_db._download_to_df(
-                url='http://127.0.0.1:8080/tests/test_files/{table}_{year}{month}01.zip',
+                url='http://localhost:8080/tests/test_files/{table}_{year}{month}01.zip',
                 table_name='table_two', year=2019, month=3)
     finally:
         server.terminate()
