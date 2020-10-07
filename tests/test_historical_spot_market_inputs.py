@@ -8,7 +8,7 @@ from nempy.historical_inputs import mms_db
 
 
 def test_download_to_df():
-    server = subprocess.Popen(shlex.split('python -m http.server 8080 --bind 127.0.0.1'))
+    server = subprocess.Popen(shlex.split('python3 -m http.server 8080 --bind 127.0.0.1'))
     try:
         time.sleep(20)
         output_1 = mms_db._download_to_df(
@@ -33,7 +33,7 @@ def test_download_to_df():
 
 
 def test_download_to_df_raises_on_missing_data():
-    server = subprocess.Popen(shlex.split('python -m http.server 8080 --bind 127.0.0.1'))
+    server = subprocess.Popen(shlex.split('python3 -m http.server 8080 --bind 127.0.0.1'))
     time.sleep(20)
     try:
         with pytest.raises(mms_db._MissingData) as exc_info:
