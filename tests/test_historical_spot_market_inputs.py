@@ -34,7 +34,7 @@ def test_download_to_df():
 
 def test_download_to_df_raises_on_missing_data():
     server = subprocess.Popen(shlex.split('python -m http.server 8080 --bind 127.0.0.1'))
-    time.sleep(1)
+    time.sleep(10)
     try:
         with pytest.raises(mms_db._MissingData) as exc_info:
             mms_db._download_to_df(
