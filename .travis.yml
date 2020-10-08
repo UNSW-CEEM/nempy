@@ -16,6 +16,10 @@ jobs:
         - pip install requests==2.0.0
         - pip install e .
         - pip install pytest
+        - pip show pandas
+        - pip show mip
+        - pip show xmltodict
+        - pip show requests
     - name: "Linux python 3.7"
       language: python
       python:
@@ -40,7 +44,6 @@ install:
   - pip3 install --upgrade pip
   - pip install e .
   - pip install pytest
-after_install:
   - pip show pandas
   - pip show mip
   - pip show xmltodict
