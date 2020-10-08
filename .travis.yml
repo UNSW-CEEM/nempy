@@ -1,11 +1,17 @@
 language: python
 jobs:
   include:
-    - name: "Linux"
+    - name: "Linux python 3.6"
       language: python
       python:
         - "3.6"
+    - name: "Linux python 3.7"
+      language: python
+      python:
         - "3.7"
+    - name: "Linux python 3.8"
+      language: python
+      python:
         - "3.8"
     - name: "macOS"
       os: osx
