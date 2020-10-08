@@ -12,6 +12,8 @@ setup(
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.6"
+        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "License :: OSI Approved :: BSD License",
         "Operating System :: OS Independent",
@@ -21,8 +23,8 @@ setup(
     author_email="n.gorman@unsw.edu.au",
 
     install_requires=[
-        "pandas==1.1.2",
-        "mip==1.11.0",
+        "pandas>=1.0.0, <2.0.0",
+        "mip>=1.11.0, <2.0.0",
         "xmltodict==0.12.0",
         "requests==2.24.0"
     ],
