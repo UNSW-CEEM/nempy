@@ -11,6 +11,7 @@ Welcome to nempy's documentation!
    :caption: Contents:
 
    intro
+   installation
    examples
    markets
    historical

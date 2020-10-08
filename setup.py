@@ -5,14 +5,14 @@ with open("README.md", "r") as fh:
 
 setup(
     name="nempy",
-    version="0.1.1",
+    version="0.1.2",
     description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure.",
     packages=find_packages(),
     long_description=long_description,
     long_description_content_type="text/markdown",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6"
+        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "License :: OSI Approved :: BSD License",
