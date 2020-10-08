@@ -29,25 +29,25 @@ class DBManager:
 
     >>> historical.create_tables()
 
-    Add data from AEMO nemweb data portal. In this case we are adding data from the table BIDDAYOFFER_D which contains
-    unit's volume bids on 5 min basis, the data comes in monthly chunks.
+    Add data from AEMO nemweb data portal. In this case we are adding data from the table DISPATCHREGIONSUM which contains
+    a dispatch summary by region, the data comes in monthly chunks.
 
-    >>> historical.BIDDAYOFFER_D.add_data(year=2020, month=1)
+    >>> historical.DISPATCHREGIONSUM.add_data(year=2020, month=1)
 
-    >>> historical.BIDDAYOFFER_D.add_data(year=2020, month=2)
+    >>> historical.DISPATCHREGIONSUM.add_data(year=2020, month=2)
 
     This table has an add_data method indicating that data provided by AEMO comes in monthly files that do not overlap.
     If you need data for multiple months then multiple add_data calls can be made.
 
     Data for a specific 5 min dispatch interval can then be retrieved.
 
-    >>> print(historical.BIDDAYOFFER_D.get_data('2020/01/10 12:35:00').head())
-            SETTLEMENTDATE     DUID     BIDTYPE  PRICEBAND1  PRICEBAND2  PRICEBAND3  PRICEBAND4  PRICEBAND5  PRICEBAND6  PRICEBAND7  PRICEBAND8  PRICEBAND9  PRICEBAND10    T1   T2    T3   T4  MINIMUMLOAD
-    0  2020/01/10 00:00:00   AGLHAL      ENERGY     -974.80         0.0      271.78      359.52      408.26      486.24      564.22     1331.15    10312.28     13646.22  10.0  3.0  10.0  2.0          2.0
-    1  2020/01/10 00:00:00   AGLSOM      ENERGY     -980.69         0.0       83.36      107.88      142.20      278.52      455.04      981.67    13044.07     14416.14  20.0  2.0  35.0  2.0         16.0
-    2  2020/01/10 00:00:00  ANGAST1      ENERGY     -941.23         0.0      117.66      188.43      281.61      357.65      555.32     1294.05     9993.99     13836.10   0.0  0.0   0.0  0.0         46.0
-    3  2020/01/10 00:00:00    APD01   LOWER5MIN        0.00         1.0        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00   0.0  0.0   0.0  0.0          0.0
-    4  2020/01/10 00:00:00    APD01  LOWER60SEC        0.00         1.0        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00   0.0  0.0   0.0  0.0          0.0
+    >>> print(historical.DISPATCHREGIONSUM.get_data('2020/01/10 12:35:00').head())
+            SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
+    0  2020/01/10 12:35:00     NSW1      9938.01        34.23926     9902.79199
+    1  2020/01/10 12:35:00     QLD1      6918.63        26.47852     6899.76270
+    2  2020/01/10 12:35:00      SA1      1568.04         4.79657     1567.85864
+    3  2020/01/10 12:35:00     TAS1      1124.05        -3.43994     1109.36963
+    4  2020/01/10 12:35:00     VIC1      6633.45        37.05273     6570.15527
 
     Some tables will have a set_data method instead of an add_data method, indicating that the most recent data file
     provided by AEMO contains all historical data for this table. In this case if multiple calls to the set_data method
@@ -263,11 +263,11 @@ class DBManager:
 
         self.create_tables()
 
-        # if start_month == 1:
-        #     start_year -= 1
-        #     start_month = 12
-        # else:
-        #     start_month -= 1
+        if start_month == 1:
+            start_year -= 1
+            start_month = 12
+        else:
+            start_month -= 1
 
         # Download data were inputs are needed on a monthly basis.
         finished = False
@@ -636,9 +636,10 @@ class _MultiDataSource(_MMSTable):
 
         Create the table object.
 
-        >>> table = _MultiDataSource(table_name='DISPATCHLOAD',
-        ...                          table_columns=['SETTLEMENTDATE', 'DUID',  'RAMPDOWNRATE', 'RAMPUPRATE'],
-        ...                          table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=con)
+        >>> table = _MultiDataSource(table_name='DISPATCHREGIONSUM',
+        ...   table_columns=['SETTLEMENTDATE', 'REGIONID', 'TOTALDEMAND',
+        ...                  'DEMANDFORECAST', 'INITIALSUPPLY'],
+        ...   table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=con)
 
         Create the table in the database.
 
@@ -650,11 +651,11 @@ class _MultiDataSource(_MMSTable):
 
         Now the database should contain data for this table that is up to date as the end of Janurary.
 
-        >>> query = "Select * from DISPATCHLOAD order by SETTLEMENTDATE DESC limit 1;"
+        >>> query = "Select * from DISPATCHREGIONSUM order by SETTLEMENTDATE DESC limit 1;"
 
         >>> print(pd.read_sql_query(query, con=con))
-                SETTLEMENTDATE   DUID  RAMPDOWNRATE  RAMPUPRATE
-        0  2020/02/01 00:00:00  YWPS4         180.0       180.0
+                SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
+        0  2020/02/01 00:00:00     VIC1       5935.1        -15.9751     5961.77002
 
         If we subsequently add data from an earlier month the old data remains in the table, in addition to the new
         data.
@@ -662,8 +663,8 @@ class _MultiDataSource(_MMSTable):
         >>> table.add_data(year=2019, month=1)
 
         >>> print(pd.read_sql_query(query, con=con))
-                SETTLEMENTDATE   DUID  RAMPDOWNRATE  RAMPUPRATE
-        0  2020/02/01 00:00:00  YWPS4         180.0       180.0
+                SETTLEMENTDATE REGIONID  TOTALDEMAND  DEMANDFORECAST  INITIALSUPPLY
+        0  2020/02/01 00:00:00     VIC1       5935.1        -15.9751     5961.77002
 
         Clean up by closing the database and deleting if its no longer needed.
 
