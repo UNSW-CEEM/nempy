@@ -5,13 +5,15 @@ jobs:
       language: python
       python:
         - "3.6"
-    - name: "Linux python 3.6 pandas 1.0.0"
+    - name: "Linux python 3.6 oldest dependencies"
       language: python
       python:
         - "3.6"
       install:
         - pip3 install --upgrade pip
         - pip install pandas==1.0.0
+        - pip install mip==1.11.0
+        - pip install requests==2.0.0
         - pip install e .
         - pip install pytest
     - name: "Linux python 3.7"
@@ -38,6 +40,11 @@ install:
   - pip3 install --upgrade pip
   - pip install e .
   - pip install pytest
+after_install:
+  - pip show pandas
+  - pip show mip
+  - pip show xmltodict
+  - pip show requests
 # command to run tests
 script:
   - python3 -m pytest || python -m pytest

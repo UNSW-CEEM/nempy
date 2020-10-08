@@ -26,7 +26,7 @@ setup(
         "pandas>=1.0.0, <2.0.0",
         "mip>=1.11.0, <2.0.0",
         "xmltodict==0.12.0",
-        "requests==2.24.0"
+        "requests>=2.0.0, <3.0.0"
     ],
 
     extras_require={
