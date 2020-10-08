@@ -2,6 +2,7 @@ language: python
 jobs:
   include:
     - name: "Linux"
+      language: python
       python:
         - "3.6"
         - "3.7"
