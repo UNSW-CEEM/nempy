@@ -7,12 +7,11 @@ NEM evolves, constraints and ancillary service markets are becoming increasingly
 Significant changes to the dispatch process are also likely to occur soon. Nempy allows users to easily configure a
 dispatch model to fit the relevant research question. Furthermore, if extra functionality is needed, the python
 implementation, open-source licencing and planned ongoing support from developers make it possible to adapt nempy
-to your needs. The publication of this technical brief coincides with the release of nempy version 1.0.0. Version 1 will
-be a stable release and ongoing minor updates or patches will remain backwards compatible. However, we are interested in
-receiving feedback to inform the ongoing maintenance, development and any future major updates.
+to your needs. Version 1 will be a stable release and ongoing minor updates or patches will remain backwards compatible.
+However, we are interested in receiving feedback to inform the ongoing maintenance, development and any future major updates.
 
 Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, has detailed
-documentation and has planned support up until mid-2023.
+documentation and has planned support until mid-2023.
 
 Find nempy and more information at https://github.com/UNSW-CEEM/nempy.
 

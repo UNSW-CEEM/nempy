@@ -4,7 +4,8 @@ Links to publications and associate source code.
 
 Nempy Technical Brief
 ---------------------
-Soon to be published technical brief will be available here.
+The nempy technical brief is available :download:`here  <../../docs/pdfs/Nempy Technical Brief v1.0.0.pdf>`.
+as pdf, and is also used as the introduction for readthedocs page.
 
 Source code for Figure 1
 ************************
