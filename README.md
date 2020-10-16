@@ -11,9 +11,6 @@ on Energy and Environmental Markets (CEEM). As part the project we hope to engag
 the software. Feel welcome to get in touch if you have any questions, want to provide feed back, have a feature request,
 are interested in collaborating or just want to discuss this project. You can contact Nick via n.gorman<@>unsw.edu.au.      
 
-## In development
-No stable version released yet.
-
 ## Installation
 Installing nempy to use in your project is easy.
 
