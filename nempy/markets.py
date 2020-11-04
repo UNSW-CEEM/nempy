@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from time import time
 
 from nempy.help_functions import helper_functions as hf
 from nempy.spot_markert_backend import elastic_constraints, fcas_constraints, interconnectors as inter, \
@@ -2767,7 +2768,9 @@ class SpotMarket:
                 special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
                 si.add_sos_type_1(special_ordered_sets)
 
+        t0 = time()
         si.optimize()
+        print(time()-t0)
 
         # Find the slack in constraints.
         if self._constraints_rhs_and_type:
@@ -2792,7 +2795,10 @@ class SpotMarket:
         # to be accessed and used to price constraints.
         if 'interconnector_losses' in self._decision_variables:
             si = self._get_linear_model(si)
+
+        t0 = time()
         si.linear_mip_model.optimize()
+        print(time() - t0)
 
         for var_group in self._decision_variables:
             self._decision_variables[var_group]['value_lin'] = \

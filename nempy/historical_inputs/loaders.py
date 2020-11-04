@@ -1,3 +1,6 @@
+import pandas as pd
+
+
 class RawInputsLoader:
     """Provides single interface for accessing raw historical inputs.
 
@@ -96,6 +99,14 @@ class RawInputsLoader:
         """Direct interface to :func:`nempy.historical_inputs.xml_cache.XMLCacheManager.get_UIGF_values <nempy.historical_inputs.xml_cache.XMLCacheManager.get_UIGF_values>`
         """
         return self.xml.get_UIGF_values()
+
+    def get_reported_maximum_availability(self):
+        """Interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD.get_data <nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD>`
+
+        Only a subset of DISPATCHLOAD's columns are returned.
+        """
+        DISPATCHLOAD = self.mms_db.DISPATCHLOAD.get_data(self.interval)
+        return DISPATCHLOAD.loc[:, ['DUID', 'AVAILABILITY']]
 
     def get_violations(self):
         """Direct interface to :func:`nempy.historical_inputs.xml_cache.XMLCacheManager.get_violations <nempy.historical_inputs.xml_cache.XMLCacheManager.get_violations>`
@@ -211,3 +222,186 @@ class RawInputsLoader:
 
         """
         return 'OCD' in self.xml.get_file_name()
+
+
+class RawInputsLoaderMMSOnly:
+    """Provides an alternative inputs interface to RawInputsLoader that only sources data from the mms database.
+
+    This means some data is not available but that the runtime cost of loading the xml file into memory of is avoided,
+    saving aproximately 0.4 s per interval.
+
+    Examples
+    --------
+
+    >>> import sqlite3
+
+    >>> from nempy.historical_inputs import mms_db
+
+    For the RawInputsLoaderMMSOnly to work we need to construct a database and then pass the interface to these to the inputs
+    loader.
+
+    >>> con = sqlite3.connect('market_management_system.db')
+    >>> mms_db_manager = mms_db.DBManager(connection=con)
+
+    In this example the database and cache have already been populated so the input loader can be created straight
+    away.
+
+    >>> inputs_loader = RawInputsLoader(mms_db_manager)
+
+    Then we set the dispatch interval that we want to load inputs from.
+
+    >>> inputs_loader.set_interval('2019/01/01 00:00:00')
+
+    And then we can load some inputs.
+
+    >>> inputs_loader.get_unit_volume_bids()
+             DUID     BIDTYPE  MAXAVAIL  ENABLEMENTMIN  ENABLEMENTMAX  LOWBREAKPOINT  HIGHBREAKPOINT  BANDAVAIL1  BANDAVAIL2  BANDAVAIL3  BANDAVAIL4  BANDAVAIL5  BANDAVAIL6  BANDAVAIL7  BANDAVAIL8  BANDAVAIL9  BANDAVAIL10  RAMPDOWNRATE  RAMPUPRATE
+    0      AGLHAL      ENERGY     173.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0        60.0         0.0         0.0        160.0         720.0       720.0
+    1      AGLSOM      ENERGY     160.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        170.0         480.0       480.0
+    2     ANGAST1      ENERGY      43.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0        50.0         0.0         0.0         0.0         50.0         840.0       840.0
+    3       APD01   LOWER5MIN       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0           0.0         0.0
+    4       APD01  LOWER60SEC       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0           0.0         0.0
+    ...       ...         ...       ...            ...            ...            ...             ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...           ...         ...
+    1021    YWPS4   LOWER6SEC      25.0          250.0          385.0          275.0           385.0        15.0        10.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
+    1022    YWPS4   RAISE5MIN       0.0          250.0          390.0          250.0           380.0         0.0         0.0         0.0         0.0         5.0         0.0         0.0         5.0         0.0         10.0           0.0         0.0
+    1023    YWPS4    RAISEREG      15.0          250.0          385.0          250.0           370.0         0.0         0.0         0.0         0.0         0.0         0.0         5.0        10.0         0.0          5.0           0.0         0.0
+    1024    YWPS4  RAISE60SEC      10.0          220.0          400.0          220.0           390.0         0.0         0.0         0.0         0.0         0.0         5.0         5.0         0.0         0.0         10.0           0.0         0.0
+    1025    YWPS4   RAISE6SEC      15.0          220.0          405.0          220.0           390.0         0.0         0.0         0.0        10.0         5.0         0.0         0.0         0.0         0.0         10.0           0.0         0.0
+    <BLANKLINE>
+    [1026 rows x 19 columns]
+
+    """
+    def __init__(self, market_management_system_database):
+        self.mms_db = market_management_system_database
+        self.interval = None
+
+    def set_interval(self, interval):
+        """Set the interval to load inputs for.
+
+        Examples
+        --------
+
+        For an example see the :func:`class level documentation <nempy.historical_inputs.loaders.RawInputsLoaderMMSOnly>`
+
+
+        Parameters
+        ----------
+        interval : str
+            In the format '%Y/%m/%d %H:%M:%S'
+
+        """
+        self.interval = interval
+
+    def get_unit_initial_conditions(self):
+        """Interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD.get_data <nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD>`
+
+        Only a subset of DISPATCHLOAD's columns are returned.
+        """
+        DISPATCHLOAD = self.mms_db.DISPATCHLOAD.get_data(self.interval)
+        return DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE', 'AGCSTATUS']]
+
+    def get_unit_volume_bids(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.BIDPEROFFER_D.get_data <nempy.historical_inputs.mms_db.DBManager.BIDPEROFFER_D>`
+        """
+        return self.mms_db.BIDPEROFFER_D.get_data(self.interval)
+
+    def get_unit_price_bids(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.BIDDAYOFFER_D.get_data <nempy.historical_inputs.mms_db.DBManager.BIDDAYOFFER_D>`
+        """
+        return self.mms_db.BIDDAYOFFER_D.get_data(self.interval)
+
+    def get_unit_details(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DUDETAILSUMMARY.get_data <nempy.historical_inputs.mms_db.DBManager.DUDETAILSUMMARY>`
+        """
+        return self.mms_db.DUDETAILSUMMARY.get_data(self.interval)
+
+    def get_agc_enablement_limits(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD.get_data <nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD>`
+        """
+        return self.mms_db.DISPATCHLOAD.get_data(self.interval)
+
+    def get_reported_maximum_availability(self):
+        """Interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD.get_data <nempy.historical_inputs.mms_db.DBManager.DISPATCHLOAD>`
+
+        Only a subset of DISPATCHLOAD's columns are returned.
+        """
+        DISPATCHLOAD = self.mms_db.DISPATCHLOAD.get_data(self.interval)
+        return DISPATCHLOAD.loc[:, ['DUID', 'AVAILABILITY']]
+
+    def get_market_interconnectors(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.MNSP_INTERCONNECTOR.get_data <nempy.historical_inputs.mms_db.DBManager.MNSP_INTERCONNECTOR>`
+        """
+        return self.mms_db.MNSP_INTERCONNECTOR.get_data(self.interval)
+
+    def get_market_interconnector_link_bid_availability(self):
+        """Direct interface to :func:`nempy.historical_inputs.xml_cache.XMLCacheManager.get_market_interconnector_link_bid_availability <nempy.historical_inputs.xml_cache.XMLCacheManager.get_market_interconnector_link_bid_availability>`
+
+        Examples
+        -------
+        >>> import sqlite3
+
+        >>> from nempy.historical_inputs import mms_db
+
+        For the RawInputsLoaderMMSOnly to work we need to construct a database and then pass the interface to these to the inputs
+        loader.
+
+        >>> con = sqlite3.connect('market_management_system.db')
+        >>> mms_db_manager = mms_db.DBManager(connection=con)
+
+        In this example the database and cache have already been populated so the input loader can be created straight
+        away.
+
+        >>> inputs_loader = RawInputsLoaderMMSOnly(mms_db_manager)
+
+        Then we set the dispatch interval that we want to load inputs from.
+
+        >>> inputs_loader.set_interval('2019/01/10 12:05:00')
+
+        And then we can load some inputs.
+
+        >>> inputs_loader.get_market_interconnector_link_bid_availability()
+          interconnector to_region  availability
+        0      T-V-MNSP1      VIC1         478.0
+        1      T-V-MNSP1      TAS1         478.0
+
+
+        """
+        interconnector_info = self.get_market_interconnectors()
+        interconnector_info = interconnector_info.loc[:, ['INTERCONNECTORID', 'LINKID', 'TOREGION']]
+        interconnector_bid_availability = self.mms_db.MNSP_PEROFFER.get_data(self.interval)
+        interconnector_bid_availability = interconnector_bid_availability.sort_values(['PERIODID', 'VERSIONNO'])
+        interconnector_bid_availability = interconnector_bid_availability.groupby('LINKID', as_index=False).first()
+        interconnector_bid_availability = pd.merge(interconnector_bid_availability, interconnector_info, 'left',
+                                                   on='LINKID')
+        interconnector_bid_availability = interconnector_bid_availability.loc[:, ['INTERCONNECTORID', 'TOREGION', 'MAXAVAIL']]
+        interconnector_bid_availability = interconnector_bid_availability.rename(columns=
+                                                                                 {'INTERCONNECTORID': 'interconnector',
+                                                                                  'TOREGION': 'to_region',
+                                                                                  'MAXAVAIL': 'availability'})
+
+        return interconnector_bid_availability
+
+    def get_interconnector_constraint_parameters(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.INTERCONNECTORCONSTRAINT.get_data <nempy.historical_inputs.mms_db.DBManager.INTERCONNECTORCONSTRAINT>`
+        """
+        return self.mms_db.INTERCONNECTORCONSTRAINT.get_data(self.interval)
+
+    def get_interconnector_definitions(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.INTERCONNECTOR.get_data <nempy.historical_inputs.mms_db.DBManager.INTERCONNECTOR>`
+        """
+        return self.mms_db.INTERCONNECTOR.get_data()
+
+    def get_regional_loads(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DISPATCHREGIONSUM.get_data <nempy.historical_inputs.mms_db.DBManager.DISPATCHREGIONSUM>`
+        """
+        return self.mms_db.DISPATCHREGIONSUM.get_data(self.interval)
+
+    def get_interconnector_loss_segments(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.LOSSMODEL.get_data <nempy.historical_inputs.mms_db.DBManager.LOSSMODEL>`
+        """
+        return self.mms_db.LOSSMODEL.get_data(self.interval)
+
+    def get_interconnector_loss_parameters(self):
+        """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.LOSSFACTORMODEL.get_data <nempy.historical_inputs.mms_db.DBManager.LOSSFACTORMODEL>`
+        """
+        return self.mms_db.LOSSFACTORMODEL.get_data(self.interval)

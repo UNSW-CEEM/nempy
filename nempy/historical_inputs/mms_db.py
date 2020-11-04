@@ -202,6 +202,9 @@ class DBManager:
                                                              'FROMREGION', 'TOREGION', 'FROM_REGION_TLF',
                                                              'TO_REGION_TLF', 'LHSFACTOR', 'MAXCAPACITY'],
             table_primary_keys=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
+        self.MNSP_PEROFFER = InputsByDay(
+            table_name='MNSP_PEROFFER', table_columns=['SETTLEMENTDATE', 'LINKID', 'PERIODID', 'MAXAVAIL', 'VERSIONNO'],
+            table_primary_keys=['SETTLEMENTDATE', 'LINKID', 'PERIODID', 'VERSIONNO'], con=self.con)
 
     def create_tables(self):
         """Drops any existing default tables and creates new ones, this method is generally called a new database.
@@ -261,7 +264,8 @@ class DBManager:
 
     def populate(self, start_year, start_month, end_year, end_month, verbose=True):
 
-        self.create_tables()
+        #self.create_tables()
+        self.BIDPEROFFER_D.create_table_in_sqlite_db()
 
         if start_month == 1:
             start_year -= 1
@@ -280,13 +284,14 @@ class DBManager:
                 if verbose:
                     print('Downloading MMS table for year={} month={}'.format(year, month))
 
-                self.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
-                self.DISPATCHREGIONSUM.add_data(year=year, month=month)
-                self.DISPATCHLOAD.add_data(year=year, month=month)
+                # self.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
+                # self.DISPATCHREGIONSUM.add_data(year=year, month=month)
+                # self.DISPATCHLOAD.add_data(year=year, month=month)
                 self.BIDPEROFFER_D.add_data(year=year, month=month)
-                self.BIDDAYOFFER_D.add_data(year=year, month=month)
-                self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
-                self.DISPATCHPRICE.add_data(year=year, month=month)
+                # self.BIDDAYOFFER_D.add_data(year=year, month=month)
+                # self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
+                # self.DISPATCHPRICE.add_data(year=year, month=month)
+                # self.MNSP_PEROFFER.add_data(year=year, month=month)
 
             if finished:
                 break
@@ -294,22 +299,22 @@ class DBManager:
             start_month = 1
 
         # Download data where inputs are just needed from the latest month.
-        self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
-        self.LOSSMODEL.set_data(year=end_year, month=end_month)
-        self.DUDETAILSUMMARY.create_table_in_sqlite_db()
-        self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
-        self.DUDETAIL.set_data(year=end_year, month=end_month)
-        self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.GENCONDATA.set_data(year=end_year, month=end_month)
-        self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
-        self.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.DUDETAIL.create_table_in_sqlite_db()
-        self.DUDETAIL.set_data(year=end_year, month=end_month)
+        # self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
+        # self.LOSSMODEL.set_data(year=end_year, month=end_month)
+        # self.DUDETAILSUMMARY.create_table_in_sqlite_db()
+        # self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
+        # self.DUDETAIL.set_data(year=end_year, month=end_month)
+        # self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.GENCONDATA.set_data(year=end_year, month=end_month)
+        # self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
+        # self.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.DUDETAIL.create_table_in_sqlite_db()
+        # self.DUDETAIL.set_data(year=end_year, month=end_month)
 
 
 def _download_to_df(url, table_name, year, month):
@@ -470,7 +475,7 @@ class _MMSTable:
             'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER6SECROP': 'REAL',
             'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL', 'FROM_REGION_TLF': 'REAL',
             'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT', 'TOREGION': 'TEXT',
-            'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
+            'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL', 'PERIODID': 'TEXT'
         }
 
     def create_table_in_sqlite_db(self):
@@ -1415,7 +1420,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
 
 
 class InputsNoFilter(_SingleDataSource):
-    """Manages retrieving dispatch inputs where no filter is require."""
+    """Manages retrieving dispatch inputs where no filter is required."""
 
     def __init__(self, table_name, table_columns, table_primary_keys, con):
         _MMSTable.__init__(self, table_name, table_columns, table_primary_keys, con)
