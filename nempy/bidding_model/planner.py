@@ -1,68 +1,163 @@
 import pandas as pd
-from mip import Model, xsum, maximize
-
-from nempy.bidding_model import model_interface
+from mip import Model, xsum, maximize, INF, BINARY
 
 
 class DispatchPlanner:
-    def __init__(self, dispatch_interval, price_traces, min_capacity, max_capacity):
+    def __init__(self, dispatch_interval):
         self.dispatch_interval = dispatch_interval
-        self.price_traces = price_traces
+        self.planning_horizon = None
+        self.market_nodes = []
+        self.price_traces_by_node = {}
+        self.units = []
+        self.unit_node_mapping = {}
         self.model = Model()
+        self.unit_in_flow_variables = {}
+        self.unit_out_flow_variables = {}
+        self.unit_storage_input_capacity = {}
+        self.unit_storage_output_capacity = {}
+        self.unit_storage_input_efficiency = {}
+        self.unit_storage_output_efficiency = {}
+        self.unit_storage_mwh = {}
+        self.unit_storage_initial_mwh = {}
+        self.unit_storage_level_variables = {}
+        self.market_node_dispatch_variables = {}
+        self.market_node_revenue_variables = {}
+        self.market_node_dispatch_revenue_interpolation_weights = {}
+
+    def add_market_node(self, name, price_traces):
+        self.market_nodes.append(name)
+        self.price_traces_by_node[name] = price_traces
         self.planning_horizon = len(price_traces['interval'])
-        self.dispatch_variables = {}
-        self.revenue_variables = {}
-        self.dispatch_revenue_interpolation_weights = {}
-        self.storage_level_variables = {}
-        revenue_traces = self._get_revenue_traces()
+        revenue_traces = self._get_revenue_traces(name)
+        self.market_node_dispatch_variables[name] = {}
+        self.market_node_revenue_variables[name] = {}
+        self.market_node_dispatch_revenue_interpolation_weights[name] = {}
         for i in range(0, self.planning_horizon):
             dispatch_var_name = "dispatch_{}".format(i)
-            self.dispatch_variables[i] = self.model.add_var(name=dispatch_var_name, lb=min_capacity, ub=max_capacity)
+            self.market_node_dispatch_variables[name][i] = self.model.add_var(name=dispatch_var_name, lb=-1 * INF, ub=INF)
             revenue_var_name = "revenue_{}".format(i)
-            self.revenue_variables[i] = self.model.add_var(name=revenue_var_name, lb=min_capacity, ub=max_capacity)
-            self.dispatch_revenue_interpolation_weights[i] = {}
+            self.market_node_revenue_variables[name][i] = self.model.add_var(name=revenue_var_name, lb=-1 * INF, ub=INF)
+            self.market_node_dispatch_revenue_interpolation_weights[name][i] = {}
             trace_dispatch_levels = [level for level in revenue_traces.columns if level != 'interval']
             for level in trace_dispatch_levels:
                 interpolation_var_name = "interpolation_{}_{}".format(i, level)
-                self.dispatch_revenue_interpolation_weights[i][level] = self.model.add_var(interpolation_var_name,
+                self.market_node_dispatch_revenue_interpolation_weights[name][i][level] = self.model.add_var(interpolation_var_name,
                                                                                            lb=0.0, ub=1.0)
-            self.model += xsum(self.dispatch_revenue_interpolation_weights[i].values()) == 1.0
-            weights = self.dispatch_revenue_interpolation_weights[i]
+            self.model += xsum(self.market_node_dispatch_revenue_interpolation_weights[name][i].values()) == 1.0
+            weights = self.market_node_dispatch_revenue_interpolation_weights[name][i]
             revenue = revenue_traces.loc[i].to_dict()
             self.model += xsum([level * weight_var for level, weight_var in weights.items()]) == \
-                          self.dispatch_variables[i]
+                          self.market_node_dispatch_variables[name][i]
             self.model += xsum([revenue[level] * weight_var for level, weight_var in weights.items()]) == \
-                          self.revenue_variables[i]
+                          self.market_node_revenue_variables[name][i]
             self.model.add_sos([(weight_var, level) for level, weight_var in weights.items()], 2)
 
-        self.model.objective = maximize(xsum([var * 1.0 for name, var in self.revenue_variables.items()]))
+        self.model.add_var("dummy", var_type=BINARY)
+        self.model.objective = maximize(xsum([var * 1.0 for name, var in self.market_node_revenue_variables[name].items()]))
 
-    def add_storage_size(self, mwh, initial_mwh):
+    def add_unit(self, name, market_node_name):
+        self.units.append(name)
+        self.unit_node_mapping[name] = market_node_name
+        self.unit_in_flow_variables[name] = {}
+        self.unit_out_flow_variables[name] = {}
+
         for i in range(0, self.planning_horizon):
-            storage_level_var_name = "storage_level_{}".format(i)
-            self.storage_level_variables[i] = self.model.add_var(name=storage_level_var_name, lb=0.0, ub=mwh)
-            if i == 0:
-                self.model += initial_mwh - self.dispatch_variables[i] / 0.9 == self.storage_level_variables[i]
-            else:
-                self.model += self.storage_level_variables[i-1] - self.dispatch_variables[i] / 0.9 == \
-                              self.storage_level_variables[i]
+            self.unit_in_flow_variables[name][i] = {}
+            self.unit_out_flow_variables[name][i] = {}
 
-    def _get_revenue_traces(self):
-        revenue_traces = self.price_traces
+    def add_unit_to_market_flow(self, unit_name, capacity):
+        for i in range(0, self.planning_horizon):
+            var_name = "{}_unit_to_market_{}".format(unit_name, i)
+            self.unit_out_flow_variables[unit_name][i]['unit_to_market'] = self.model.add_var(name=var_name,
+                                                                                              ub=capacity)
+
+    def add_market_to_unit_flow(self, unit_name, capacity):
+        for i in range(0, self.planning_horizon):
+            var_name = "{}_market_to_unit_{}".format(unit_name, i)
+            self.unit_in_flow_variables[unit_name][i]['market_to_unit'] = self.model.add_var(name=var_name, ub=capacity)
+
+    def add_storage(self, unit_name, mwh, initial_mwh, output_capacity, output_efficiency,
+                    input_capacity, input_efficiency):
+
+        self.unit_storage_mwh[unit_name] = mwh
+        self.unit_storage_initial_mwh[unit_name] = initial_mwh
+        self.unit_storage_input_capacity[unit_name] = input_capacity
+        self.unit_storage_output_capacity[unit_name] = output_capacity
+        self.unit_storage_input_efficiency[unit_name] = input_efficiency
+        self.unit_storage_output_efficiency[unit_name] = output_efficiency
+        self.unit_storage_level_variables[unit_name] = {}
+
+        for i in range(0, self.planning_horizon):
+            input_var_name = "{}_unit_to_storage_{}".format(unit_name, i)
+            self.unit_out_flow_variables[unit_name][i]['unit_to_storage'] = self.model.add_var(name=input_var_name,
+                                                                                               ub=input_capacity)
+
+            output_var_name = "{}_storage_to_unit_{}".format(unit_name, i)
+            self.unit_in_flow_variables[unit_name][i]['storage_to_unit'] = self.model.add_var(name=output_var_name,
+                                                                                              ub=output_capacity)
+
+            storage_var_name = "{}_storage_level_{}".format(unit_name, i)
+            self.unit_storage_level_variables[unit_name][i] = self.model.add_var(name=storage_var_name, ub=mwh)
+
+            input_to_storage = self.unit_out_flow_variables[unit_name][i]['unit_to_storage']
+            output_from_storage = self.unit_in_flow_variables[unit_name][i]['storage_to_unit']
+            storage_level = self.unit_storage_level_variables[unit_name][i]
+            hours_per_interval = self.dispatch_interval / 60
+
+            if i == 0:
+                self.model += initial_mwh - (output_from_storage / output_efficiency) * hours_per_interval + \
+                              (input_to_storage * input_efficiency) * hours_per_interval == storage_level
+            else:
+                previous_storage_level = self.unit_storage_level_variables[unit_name][i - 1]
+                self.model += previous_storage_level - (output_from_storage / output_efficiency) * hours_per_interval + \
+                              (input_to_storage * input_efficiency) * hours_per_interval == storage_level
+
+    def _get_revenue_traces(self, name):
+        revenue_traces = self.price_traces_by_node[name]
         for col in revenue_traces.columns:
             if col != 'interval':
-                revenue_traces[col] = revenue_traces[col] * (col * 0.00001)
+                revenue_traces[col] = revenue_traces[col] * (col + 0.00001)
         return revenue_traces
 
     def optimise(self):
+        self._balance_grid_nodes()
+        self._balance_unit_nodes()
         self.model.optimize()
 
+    def _balance_grid_nodes(self):
+        for node in self.market_nodes:
+            for i in range(0, self.planning_horizon):
+                out_flow_vars = [self.unit_out_flow_variables[unit_name][i]["unit_to_market"] for
+                                unit_name in self.units if node == self.unit_node_mapping[unit_name]]
+                in_flow_vars = [self.unit_in_flow_variables[unit_name][i]["market_to_unit"] for
+                                 unit_name in self.units if node == self.unit_node_mapping[unit_name]]
+                self.model += xsum([self.market_node_dispatch_variables[node][i]] + in_flow_vars +
+                                   [-1 * var for var in out_flow_vars]) == 0.0
+
+    def _balance_unit_nodes(self):
+        for unit in self.units:
+            for i in range(0, self.planning_horizon):
+                in_flow_vars = [var for var_name, var in self.unit_in_flow_variables[unit][i].items()]
+                out_flow_vars = [var for var_name, var in self.unit_out_flow_variables[unit][i].items()]
+                self.model += xsum(in_flow_vars + [-1 * var for var in out_flow_vars]) == 0.0
+
     def get_dispatch(self):
-        self.price_traces['dispatch'] = \
-            self.price_traces['interval'].apply(lambda x: self.model.var_by_name(str("dispatch_{}".format(x))).x, self.model)
-        self.price_traces['storage'] = \
-            self.price_traces['interval'].apply(lambda x: self.model.var_by_name(str("storage_level_{}".format(x))).x, self.model)
-        return self.price_traces.loc[:, ['interval', 'dispatch', 'storage']]
+        trace = self.price_traces_by_node[self.market_nodes[0]].loc[:, ['interval']]
+        trace['dispatch'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("dispatch_{}".format(x))).x, self.model)
+        trace['revenue'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("revenue_{}".format(x))).x, self.model)
+        trace['unit_to_market'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("stor_unit_to_market_{}".format(x))).x, self.model)
+        trace['market_to_unit'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("stor_market_to_unit_{}".format(x))).x, self.model)
+        trace['unit_to_storage'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("stor_unit_to_storage_{}".format(x))).x, self.model)
+        trace['storage_to_unit'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("stor_storage_to_unit_{}".format(x))).x, self.model)
+        trace['storage'] = \
+            trace['interval'].apply(lambda x: self.model.var_by_name(str("stor_storage_level_{}".format(x))).x, self.model)
+        return trace
 
 
 def _create_dispatch_dependent_price_traces(price_forecast, self_dispatch_forecast, capacity_min, capacity_max,
