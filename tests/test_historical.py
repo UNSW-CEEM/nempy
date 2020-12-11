@@ -550,9 +550,9 @@ def test_hist_dispatch_values_meet_demand():
 
 
 def test_against_10_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []

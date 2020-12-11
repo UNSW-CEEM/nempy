@@ -3,7 +3,7 @@ from nempy.bidding_model import planner
 import matplotlib.pyplot as plt
 
 price_data = pd.read_csv('price_2019_01.csv')
-price_data = price_data[price_data['SETTLEMENTDATE'] < '2019/01/04 00:00:00']
+price_data = price_data[price_data['SETTLEMENTDATE'] < '2019/01/03 00:00:00']
 price_data = price_data.loc[:, ['RRP']]
 price_data['interval'] = price_data.index
 price_data.columns = [0, 'interval']

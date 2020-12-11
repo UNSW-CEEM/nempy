@@ -10,7 +10,7 @@ class DispatchPlanner:
         self.price_traces_by_node = {}
         self.units = []
         self.unit_node_mapping = {}
-        self.model = Model()
+        self.model = Model(solver_name='CBC')
         self.unit_in_flow_variables = {}
         self.unit_out_flow_variables = {}
         self.unit_storage_input_capacity = {}
@@ -51,9 +51,6 @@ class DispatchPlanner:
             self.model += xsum([revenue[level] * weight_var for level, weight_var in weights.items()]) == \
                           self.market_node_revenue_variables[name][i]
             self.model.add_sos([(weight_var, level) for level, weight_var in weights.items()], 2)
-
-        self.model.add_var("dummy", var_type=BINARY)
-        self.model.objective = maximize(xsum([var * 1.0 for name, var in self.market_node_revenue_variables[name].items()]))
 
     def add_unit(self, name, market_node_name):
         self.units.append(name)
@@ -120,11 +117,12 @@ class DispatchPlanner:
         return revenue_traces
 
     def optimise(self):
-        self._balance_grid_nodes()
-        self._balance_unit_nodes()
+        self._create_constraints_to_balance_grid_nodes()
+        self._create_constraints_to_balance_unit_nodes()
+        self._add_objective_function()
         self.model.optimize()
 
-    def _balance_grid_nodes(self):
+    def _create_constraints_to_balance_grid_nodes(self):
         for node in self.market_nodes:
             for i in range(0, self.planning_horizon):
                 out_flow_vars = [self.unit_out_flow_variables[unit_name][i]["unit_to_market"] for
@@ -134,12 +132,18 @@ class DispatchPlanner:
                 self.model += xsum([self.market_node_dispatch_variables[node][i]] + in_flow_vars +
                                    [-1 * var for var in out_flow_vars]) == 0.0
 
-    def _balance_unit_nodes(self):
+    def _create_constraints_to_balance_unit_nodes(self):
         for unit in self.units:
             for i in range(0, self.planning_horizon):
                 in_flow_vars = [var for var_name, var in self.unit_in_flow_variables[unit][i].items()]
                 out_flow_vars = [var for var_name, var in self.unit_out_flow_variables[unit][i].items()]
                 self.model += xsum(in_flow_vars + [-1 * var for var in out_flow_vars]) == 0.0
+
+    def _add_objective_function(self):
+        revenue_vars = []
+        for node in self.market_nodes:
+            revenue_vars += [var for name, var in self.market_node_revenue_variables[node].items()]
+        self.model.objective = maximize(xsum(revenue_vars))
 
     def get_dispatch(self):
         trace = self.price_traces_by_node[self.market_nodes[0]].loc[:, ['interval']]
