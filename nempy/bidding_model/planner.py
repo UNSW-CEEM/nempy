@@ -10,7 +10,8 @@ class DispatchPlanner:
         self.price_traces_by_node = {}
         self.units = []
         self.unit_node_mapping = {}
-        self.model = Model(solver_name='CBC')
+        self.model = Model(solver_name='GUROBI')
+        self.model.max_mip_gap = 0.05
         self.unit_in_flow_variables = {}
         self.unit_out_flow_variables = {}
         self.unit_storage_input_capacity = {}
@@ -45,12 +46,14 @@ class DispatchPlanner:
                                                                                            lb=0.0, ub=1.0)
             self.model += xsum(self.market_node_dispatch_revenue_interpolation_weights[name][i].values()) == 1.0
             weights = self.market_node_dispatch_revenue_interpolation_weights[name][i]
-            revenue = revenue_traces.loc[i].to_dict()
+            revenue = revenue_traces.iloc[i].to_dict()
             self.model += xsum([level * weight_var for level, weight_var in weights.items()]) == \
                           self.market_node_dispatch_variables[name][i]
             self.model += xsum([revenue[level] * weight_var for level, weight_var in weights.items()]) == \
                           self.market_node_revenue_variables[name][i]
             self.model.add_sos([(weight_var, level) for level, weight_var in weights.items()], 2)
+
+        self.model.add_var(var_type=BINARY, obj=0.0)
 
     def add_unit(self, name, market_node_name):
         self.units.append(name)

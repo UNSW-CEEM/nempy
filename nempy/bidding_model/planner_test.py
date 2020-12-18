@@ -2,29 +2,25 @@ import pandas as pd
 from nempy.bidding_model import planner
 import matplotlib.pyplot as plt
 
-price_data = pd.read_csv('price_2019_01.csv')
-price_data = price_data[price_data['SETTLEMENTDATE'] < '2019/01/03 00:00:00']
-price_data = price_data.loc[:, ['RRP']]
+price_data = pd.read_csv('forecast.csv')
+price_data = price_data.rename(columns={'SETTLEMENTDATE': 'interval'})
+price_data['interval'] = pd.to_datetime(price_data['interval'])
+price_data = price_data[price_data['interval'].dt.minute.isin([0, 30])]
+price_data.columns = [int(col) if col != 'interval' else col for col in price_data.columns]
+price_data = price_data.reset_index(drop=True)
 price_data['interval'] = price_data.index
-price_data.columns = [0, 'interval']
-price_data[20] = price_data[0]
-price_data[40] = price_data[0]
-price_data[60] = price_data[0]
-price_data[80] = price_data[0]
-price_data[100] = price_data[0]
-price_data[-20] = price_data[0]
-price_data[-40] = price_data[0]
-price_data[-60] = price_data[0]
-price_data[-80] = price_data[0]
-price_data[-100] = price_data[0]
 
-p = planner.DispatchPlanner(5.0)
+# for col in price_data.columns:
+#     if col != 'interval':
+#         price_data[col] = price_data[0]
+
+p = planner.DispatchPlanner(30.0)
 p.add_market_node('nsw', price_data.copy())
 p.add_unit('stor', 'nsw')
-p.add_market_to_unit_flow('stor', 100.0)
-p.add_unit_to_market_flow('stor', 100.0)
-p.add_storage('stor', mwh=100.0, initial_mwh=50.0, output_capacity=100.0, output_efficiency=0.9,
-              input_capacity=100.0, input_efficiency=0.9)
+p.add_market_to_unit_flow('stor', 1000.0)
+p.add_unit_to_market_flow('stor', 1000.0)
+p.add_storage('stor', mwh=1000.0, initial_mwh=500.0, output_capacity=1000.0, output_efficiency=0.9,
+              input_capacity=1000.0, input_efficiency=0.9)
 p.optimise()
 dispatch = p.get_dispatch()
 
