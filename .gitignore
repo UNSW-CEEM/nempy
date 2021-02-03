@@ -150,3 +150,4 @@ venv_docs_build/*
 
 !/market_management_system.db
 !/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded
+/nempy/bidding_model/nem_data/
