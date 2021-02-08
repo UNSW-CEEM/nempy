@@ -1,18 +1,23 @@
 import pandas as pd
+import numpy as np
 from pandas._testing import assert_frame_equal
 from nempy.bidding_model import planner
 
 
 def test_energy_storage_over_two_intervals_with_inelastic_prices():
-    price_traces = pd.DataFrame({
+    historical_data = pd.DataFrame({
+        'interval': np.linspace(0, 100, num=101).astype(int),
+        'nsw-energy': np.linspace(0, 500, num=101),
+        'nsw-demand': np.linspace(0, 500, num=101),
+        'nsw-energy-fleet-dispatch': np.zeros(101)})
+
+    forward_data = pd.DataFrame({
         'interval': [0, 1],
-        -50: [100, 200],
-        0: [100, 200],
-        50: [100, 200]})
+        'nsw-demand': [100, 200]})
 
-    p = planner.DispatchPlanner(dispatch_interval=60)
+    p = planner.DispatchPlanner(dispatch_interval=60, historical_data=historical_data, forward_data=forward_data)
 
-    p.add_regional_market('nsw', 'energy', price_traces=price_traces)
+    p.add_regional_market('nsw', 'energy')
 
     p.add_unit('storage_one', 'nsw')
     p.add_unit_to_market_flow('storage_one', 1.0)
