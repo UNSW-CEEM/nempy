@@ -6,11 +6,11 @@ from causalnex.structure.pytorch import DAGRegressor
 
 
 class DispatchPlanner:
-    def __init__(self, dispatch_interval, historical_data, forward_data):
+    def __init__(self, dispatch_interval, historical_data, forward_data, train_pct=0.1, demand_delta_steps=10):
         self.dispatch_interval = dispatch_interval
         self.historical_data = historical_data
         self.forward_data = forward_data
-        self.planning_horizon = None
+        self.planning_horizon = len(self.forward_data.index)
         self.regional_markets = []
         self.price_traces_by_market = {}
         self.units = []
@@ -32,6 +32,8 @@ class DispatchPlanner:
         self.market_dispatch_variables = {}
         self.market_net_dispatch_variables = {}
         self.nominal_price_forecast = {}
+        self.train_pct = train_pct
+        self.demand_delta_steps = demand_delta_steps
         self.expected_regions = ['qld', 'nsw', 'vic', 'sa', 'tas', 'mainland']
         self.expected_service = ['energy',
                                  'raise_5_min', 'raise_60_second', 'raise_6_second', 'raise_reg',
@@ -47,7 +49,6 @@ class DispatchPlanner:
         positive_rate, positive_dispatch, negative_rate, negative_dispatch = \
             self._marginal_market_trade(region, service, forward_data)
 
-        self.planning_horizon = len(self.forward_data.index)
         if region not in self.market_dispatch_variables:
             self.market_dispatch_variables[region] = {}
         self.market_dispatch_variables[region][service] = {}
@@ -114,11 +115,14 @@ class DispatchPlanner:
                 cols_to_drop.append(col)
 
         historical_data = self.historical_data.drop(columns=cols_to_drop)
+        cols_to_drop = [col for col in cols_to_drop if col in forward_data.columns]
         forward_data = forward_data.drop(columns=cols_to_drop)
 
-        forecaster.train(data=historical_data, train_sample_fraction=0.1, target_col=target_column_name)
+        forecaster.train(data=historical_data, train_sample_fraction=self.train_pct, target_col=target_column_name)
         price_traces = forecaster.price_forecast(forward_data=forward_data, region=region, market=target_column_name,
-                                                 min_delta=-1000, max_delta=1000, delta_step_size=100)
+                                                 min_delta=self._get_market_out_flow_capacity(region, service),
+                                                 max_delta=self._get_market_in_flow_capacity(region, service),
+                                                 steps=self.demand_delta_steps)
 
         self.nominal_price_forecast[target_column_name] = price_traces
 
@@ -126,6 +130,20 @@ class DispatchPlanner:
             if col != 'interval':
                 price_traces[col] = price_traces[col] * (col + 0.00001)
         return price_traces
+
+    def _get_market_in_flow_capacity(self, region, service):
+        capacity = 0.0
+        for unit_name, market_in_flow_variable in self.unit_out_flow_variables.items():
+            if self.unit_energy_market_mapping[unit_name] == region + '-' + service:
+                capacity += market_in_flow_variable[0]['unit_to_market'].ub
+        return capacity
+
+    def _get_market_out_flow_capacity(self, region, service):
+        capacity = 0.0
+        for unit_name, market_out_flow_variable in self.unit_in_flow_variables.items():
+            if self.unit_energy_market_mapping[unit_name] == region + '-' + service:
+                capacity -= market_out_flow_variable[0]['market_to_unit'].ub
+        return capacity
 
     def _get_forward_dispatch_trace(self, region, service, forward_data):
         target_column_name = region + '-' + service + '-fleet-dispatch'
@@ -344,15 +362,17 @@ class DispatchPlanner:
                 for region_demand_to_update in self.regional_markets:
                     if 'energy' in region_demand_to_update and region_demand_to_update != region_market:
                         region = region_demand_to_update.split('-')[0]
+                        forward_dispatch = self._get_forward_dispatch_trace(region, 'energy', self.forward_data)
+                        modified_forward_data = pd.merge(modified_forward_data, forward_dispatch, on='interval')
                         fleet_dispatch_in_region = self.get_market_dispatch(region_demand_to_update)
                         modified_forward_data = pd.merge(modified_forward_data, fleet_dispatch_in_region, on='interval')
                         modified_forward_data[region + '-demand'] = modified_forward_data[region + '-demand'] - \
                                                                     (modified_forward_data['dispatch'] -
-                                                                     modified_forward_data[region + '-fleet-dispatch'])
+                                                                     modified_forward_data[region + '-energy-fleet-dispatch'])
                         modified_forward_data = modified_forward_data.drop(columns='dispatch')
                 self._update_price_forecast(region_market, forward_data=modified_forward_data)
             old_dispatch = self.get_dispatch()
-            self.optimise()
+            self.model.optimize()
             convergence_reached = self._check_convergence(old_dispatch)
 
     def _check_convergence(self, previous_dispatch):
@@ -396,7 +416,7 @@ class DispatchPlanner:
         return dispatch
 
     def get_unit_energy_flows(self, unit_name):
-        energy_flows = self.price_traces_by_market[self.regional_markets[0]].loc[:, ['interval']]
+        energy_flows = self.forward_data.loc[:, ['interval']]
 
         if 'unit_to_market' in self.unit_out_flow_variables[unit_name][0]:
             energy_flows['unit_to_market'] = \
@@ -582,10 +602,11 @@ class Forecaster:
         X, y = train.loc[:, self.features], np.asarray(train[target_col])
         self.regressor.fit(X, y)
 
-    def price_forecast(self, forward_data, region, market, min_delta, max_delta, delta_step_size):
+    def price_forecast(self, forward_data, region, market, min_delta, max_delta, steps):
         prediction = forward_data.loc[:, ['interval']]
         forward_data['old_demand'] = forward_data[region + '-demand'] + forward_data[market + '-fleet-dispatch']
-        for delta in range(min_delta, max_delta, delta_step_size):
+        delta_step_size = max(int((max_delta - min_delta) / steps), 1)
+        for delta in range(int(min_delta), int(max_delta) + delta_step_size, delta_step_size):
             forward_data[region + '-demand'] = forward_data['old_demand'] - delta
             X = forward_data.loc[:, self.features]
             Y = self.regressor.predict(X)
