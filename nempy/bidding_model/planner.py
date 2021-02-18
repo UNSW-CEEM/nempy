@@ -164,7 +164,7 @@ class DispatchPlanner:
 
         for unit_name, vars_by_service in self.unit_output_fcas_variables.items():
             if ((unit_name in self.unit_fcas_market_mapping[service] and
-                self.unit_fcas_market_mapping[service][unit_name] == region)
+                 self.unit_fcas_market_mapping[service][unit_name] == region)
                     and service in vars_by_service):
                 capacity += vars_by_service[service][0].ub
 
@@ -279,11 +279,11 @@ class DispatchPlanner:
 
         if fcas_trapezium is not None:
             self.add_capacity_constraints_on_output(unit_name=unit_name, service=service,
-                                                   max_available=availability,
-                                                   enablement_min=fcas_trapezium['enablement_min'],
-                                                   low_breakpoint=fcas_trapezium['low_breakpoint'],
-                                                   high_breakpoint=fcas_trapezium['high_breakpoint'],
-                                                   enablement_max=fcas_trapezium['enablement_max'])
+                                                    max_available=availability,
+                                                    enablement_min=fcas_trapezium['enablement_min'],
+                                                    low_breakpoint=fcas_trapezium['low_breakpoint'],
+                                                    high_breakpoint=fcas_trapezium['high_breakpoint'],
+                                                    enablement_max=fcas_trapezium['enablement_max'])
 
         elif 'raise' in service:
             self.add_capacity_constraints_on_output(unit_name=unit_name, service=service,
@@ -292,7 +292,7 @@ class DispatchPlanner:
                                                     enablement_max=capacity)
         elif 'lower' in service:
             self.add_capacity_constraints_on_output(unit_name=unit_name, service=service,
-                                                    max_available=capacity, enablement_min=0.0,
+                                                    max_available=availability, enablement_min=0.0,
                                                     low_breakpoint=availability, high_breakpoint=capacity,
                                                     enablement_max=capacity)
 
@@ -357,7 +357,7 @@ class DispatchPlanner:
                                                    enablement_max=capacity)
 
     def add_capacity_constraints_on_input(self, unit_name, service, max_available, enablement_min,
-                                           low_breakpoint, high_breakpoint, enablement_max):
+                                          low_breakpoint, high_breakpoint, enablement_max):
 
         if unit_name in self.unit_in_flow_variables:
             upper_slope_coefficient = (enablement_max - high_breakpoint) / max_available
@@ -388,48 +388,62 @@ class DispatchPlanner:
                 self.model += energy_dispatch_target + fcas_regulation_target - previous_energy_dispatch_target \
                               <= ramp_rate * (self.dispatch_interval / 60)
 
-    def add_contingency_service_to_output(self, unit_name, service, availability):
+    def add_contingency_service_to_output(self, unit_name, service, availability, fcas_trapezium=None):
         capacity = self.unit_out_flow_variables[unit_name][0]['unit_to_market'].ub
         self.unit_output_fcas_variables[unit_name][service] = {}
         for i in range(0, self.planning_horizon):
             var_name = "{}_output_{}_{}".format(unit_name, service, i)
             self.unit_output_fcas_variables[unit_name][service][i] = self.model.add_var(name=var_name, ub=availability)
 
-        if 'raise' in service:
+        if fcas_trapezium is not None:
+            self.add_joint_capacity_constraints_on_output(unit_name=unit_name, service=service,
+                                                          max_available=availability,
+                                                          enablement_min=fcas_trapezium['enablement_min'],
+                                                          low_breakpoint=fcas_trapezium['low_breakpoint'],
+                                                          high_breakpoint=fcas_trapezium['high_breakpoint'],
+                                                          enablement_max=fcas_trapezium['enablement_max'])
+        elif 'raise' in service:
             self.add_joint_capacity_constraints_on_output(unit_name=unit_name, service=service,
                                                           max_available=availability, enablement_min=0.0,
-                                                          low_break_point=0.0, high_break_point=capacity - availability,
+                                                          low_breakpoint=0.0, high_breakpoint=capacity - availability,
                                                           enablement_max=capacity)
         elif 'lower' in service:
             self.add_joint_capacity_constraints_on_output(unit_name=unit_name, service=service,
-                                                          max_available=capacity, enablement_min=0.0,
-                                                          low_break_point=availability, high_break_point=capacity,
+                                                          max_available=availability, enablement_min=0.0,
+                                                          low_breakpoint=availability, high_breakpoint=capacity,
                                                           enablement_max=capacity)
 
-    def add_contingency_service_to_input(self, unit_name, service, availability):
+    def add_contingency_service_to_input(self, unit_name, service, availability, fcas_trapezium=None):
         capacity = self.unit_in_flow_variables[unit_name][0]['market_to_unit'].ub
         self.unit_input_fcas_variables[unit_name][service] = {}
         for i in range(0, self.planning_horizon):
             var_name = "{}_input_{}_{}".format(unit_name, service, i)
-            self.unit_input_fcas_variables[unit_name][service][i] = self.model.add_var(name=var_name, ub=capacity)
+            self.unit_input_fcas_variables[unit_name][service][i] = self.model.add_var(name=var_name, ub=availability)
 
-        if 'raise' in service:
+        if fcas_trapezium is not None:
             self.add_joint_capacity_constraints_on_input(unit_name=unit_name, service=service,
-                                                         max_available=capacity, enablement_min=0.0,
-                                                         low_break_point=availability, high_break_point=capacity,
+                                                         max_available=availability,
+                                                         enablement_min=fcas_trapezium['enablement_min'],
+                                                         low_breakpoint=fcas_trapezium['low_breakpoint'],
+                                                         high_breakpoint=fcas_trapezium['high_breakpoint'],
+                                                         enablement_max=fcas_trapezium['enablement_max'])
+        elif 'raise' in service:
+            self.add_joint_capacity_constraints_on_input(unit_name=unit_name, service=service,
+                                                         max_available=availability, enablement_min=0.0,
+                                                         low_breakpoint=availability, high_breakpoint=capacity,
                                                          enablement_max=capacity)
         elif 'lower' in service:
             self.add_joint_capacity_constraints_on_input(unit_name=unit_name, service=service,
                                                          max_available=availability, enablement_min=0.0,
-                                                         low_break_point=0.0, high_break_point=capacity - availability,
+                                                         low_breakpoint=0.0, high_breakpoint=capacity - availability,
                                                          enablement_max=capacity)
 
     def add_joint_capacity_constraints_on_output(self, unit_name, service, max_available, enablement_min,
-                                                 low_break_point, high_break_point, enablement_max):
+                                                 low_breakpoint, high_breakpoint, enablement_max):
 
         if unit_name in self.unit_out_flow_variables:
-            upper_slope_coefficient = (enablement_max - high_break_point) / max_available
-            lower_slope_coefficient = (low_break_point - enablement_min) / max_available
+            upper_slope_coefficient = (enablement_max - high_breakpoint) / max_available
+            lower_slope_coefficient = (low_breakpoint - enablement_min) / max_available
 
             for i in range(0, self.planning_horizon):
                 energy_dispatch_target = self.unit_out_flow_variables[unit_name][i]["unit_to_market"]
@@ -452,11 +466,11 @@ class DispatchPlanner:
                                   >= enablement_min
 
     def add_joint_capacity_constraints_on_input(self, unit_name, service, max_available, enablement_min,
-                                                low_break_point, high_break_point, enablement_max):
+                                                low_breakpoint, high_breakpoint, enablement_max):
 
         if unit_name in self.unit_in_flow_variables:
-            upper_slope_coefficient = (enablement_max - high_break_point) / max_available
-            lower_slope_coefficient = (low_break_point - enablement_min) / max_available
+            upper_slope_coefficient = (enablement_max - high_breakpoint) / max_available
+            lower_slope_coefficient = (low_breakpoint - enablement_min) / max_available
 
             for i in range(0, self.planning_horizon):
                 energy_dispatch_target = self.unit_in_flow_variables[unit_name][i]["market_to_unit"]
@@ -585,12 +599,12 @@ class DispatchPlanner:
                 else:
                     out_flow_vars = [self.unit_output_fcas_variables[unit_name][service][i] for
                                      unit_name in self.units if (
-                                     region == self.unit_fcas_market_mapping[service][unit_name] and
-                                     service in self.unit_output_fcas_variables[unit_name])]
+                                             region == self.unit_fcas_market_mapping[service][unit_name] and
+                                             service in self.unit_output_fcas_variables[unit_name])]
                     in_flow_vars = [self.unit_input_fcas_variables[unit_name][service][i] for
                                     unit_name in self.units if (
-                                    region == self.unit_fcas_market_mapping[service][unit_name] and
-                                    service in self.unit_input_fcas_variables[unit_name])]
+                                            region == self.unit_fcas_market_mapping[service][unit_name] and
+                                            service in self.unit_input_fcas_variables[unit_name])]
                     self.model += xsum([self.market_net_dispatch_variables[region][service][i]] +
                                        [-1 * var for var in in_flow_vars] +
                                        [-1 * var for var in out_flow_vars]) == 0.0
