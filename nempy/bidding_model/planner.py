@@ -29,6 +29,7 @@ class DispatchPlanner:
         self.unit_storage_level_variables = {}
         self.unit_output_fcas_variables = {}
         self.unit_input_fcas_variables = {}
+        self.unit_initial_mw = {}
         self.market_dispatch_variables = {}
         self.market_net_dispatch_variables = {}
         self.nominal_price_forecast = {}
@@ -240,13 +241,14 @@ class DispatchPlanner:
 
         return positive_rate, positive_dispatch, negative_rate, negative_dispatch
 
-    def add_unit(self, name, region):
+    def add_unit(self, name, region, initial_mw=0.0):
         self.units.append(name)
         self.unit_energy_market_mapping[name] = region + '-energy'
         self.unit_in_flow_variables[name] = {}
         self.unit_out_flow_variables[name] = {}
         self.unit_output_fcas_variables[name] = {}
         self.unit_input_fcas_variables[name] = {}
+        self.unit_initial_mw[name] = initial_mw
 
         for i in range(0, self.planning_horizon):
             self.unit_in_flow_variables[name][i] = {}
@@ -298,9 +300,14 @@ class DispatchPlanner:
 
     def add_joint_ramping_constraints_to_output(self, unit_name, service, ramp_rate):
 
-        for i in range(1, self.planning_horizon):
-            previous_energy_dispatch_target = self.unit_out_flow_variables[unit_name][i]["unit_to_market"]
-            energy_dispatch_target = self.unit_out_flow_variables[unit_name][i - 1]["unit_to_market"]
+        for i in range(0, self.planning_horizon):
+
+            if i == 0:
+                previous_energy_dispatch_target = self.unit_initial_mw[unit_name]
+            else:
+                previous_energy_dispatch_target = self.unit_out_flow_variables[unit_name][i - 1]["unit_to_market"]
+
+            energy_dispatch_target = self.unit_out_flow_variables[unit_name][i]["unit_to_market"]
             fcas_regulation_target = self.unit_output_fcas_variables[unit_name][service][i]
 
             if 'raise' in service:
@@ -375,9 +382,14 @@ class DispatchPlanner:
 
     def add_joint_ramping_constraints_to_input(self, unit_name, service, ramp_rate):
 
-        for i in range(1, self.planning_horizon):
-            previous_energy_dispatch_target = self.unit_in_flow_variables[unit_name][i]["market_to_unit"]
-            energy_dispatch_target = self.unit_in_flow_variables[unit_name][i - 1]["market_to_unit"]
+        for i in range(0, self.planning_horizon):
+
+            if i == 0:
+                previous_energy_dispatch_target = self.unit_initial_mw[unit_name]
+            else:
+                previous_energy_dispatch_target = self.unit_in_flow_variables[unit_name][i - 1]["market_to_unit"]
+
+            energy_dispatch_target = self.unit_in_flow_variables[unit_name][i]["market_to_unit"]
             fcas_regulation_target = self.unit_input_fcas_variables[unit_name][service][i]
 
             if 'raise' in service:
