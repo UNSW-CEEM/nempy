@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import math
 from itertools import product
 from mip import Model, xsum, maximize, INF, BINARY
 from causalnex.structure.pytorch import DAGRegressor
@@ -39,6 +40,10 @@ class DispatchPlanner:
         self.expected_service = ['energy',
                                  'raise_5_min', 'raise_60_second', 'raise_6_second', 'raise_regulation',
                                  'lower_5_min', 'lower_60_second', 'lower_6_second', 'lower_regulation']
+        self.unit_commitment_vars = {}
+        self.unit_capacity = {}
+        self.unit_min_loading = {}
+        self.unit_min_down_time = {}
 
     def add_regional_market(self, region, service):
         market_name = region + '-' + service
@@ -260,10 +265,191 @@ class DispatchPlanner:
         self.unit_fcas_market_mapping[service][unit_name] = region
 
     def add_unit_to_market_flow(self, unit_name, capacity):
+        self.unit_capacity[unit_name] = capacity
         for i in range(0, self.planning_horizon):
             var_name = "{}_unit_to_market_{}".format(unit_name, i)
             self.unit_out_flow_variables[unit_name][i]['unit_to_market'] = self.model.add_var(name=var_name,
                                                                                               ub=capacity)
+
+    def add_unit_minimum_operating_level(self, unit_name, min_loading, shutdown_ramp_rate, start_up_ramp_rate,
+                                         min_up_time, min_down_time, initial_state, initial_up_time,
+                                         initial_down_time):
+        """Unit commitment constraints are the Tight formulation from Knueven et al. On Mixed Integer Programming
+        Formulations for Unit Commitment."""
+
+        startup_max_output = self._mw_per_minute_to_mw_per_interval(start_up_ramp_rate)
+        shutdown_max_output = self._mw_per_minute_to_mw_per_interval(shutdown_ramp_rate)
+        if start_up_ramp_rate < min_loading:
+            raise ValueError()
+        if shutdown_max_output < min_loading:
+            raise ValueError()
+
+        self.unit_commitment_vars[unit_name] = {}
+        self.unit_commitment_vars[unit_name]['state'] = {}
+        self.unit_commitment_vars[unit_name]['startup_status'] = {}
+        self.unit_commitment_vars[unit_name]['shutdown_status'] = {}
+        self.unit_min_loading[unit_name] = min_loading
+        self.unit_min_down_time[unit_name] = min_down_time
+
+        self._create_state_variables(unit_name)
+        self._add_state_variable_constraint(unit_name, initial_state)
+        self._add_initial_up_time_constraint(unit_name, min_up_time, initial_up_time)
+        self._add_initial_down_time_constraint(unit_name, min_down_time, initial_down_time)
+        self._update_continuous_production_variable_upper_bound(unit_name, min_loading)
+        #self._add_start_up_and_shut_down_ramp_rates(unit_name, min_loading, startup_max_output, shutdown_max_output)
+        self._add_generation_limit_constraint(unit_name)
+
+    def _mw_per_minute_to_mw_per_interval(self, mw_per_minute):
+        return mw_per_minute * self.dispatch_interval
+
+    def _create_state_variables(self, unit_name):
+        for i in range(0, self.planning_horizon):
+            self.unit_commitment_vars[unit_name]['state'][i] = self.model.add_var(var_type=BINARY)
+            self.unit_commitment_vars[unit_name]['startup_status'][i] = self.model.add_var(var_type=BINARY)
+            self.unit_commitment_vars[unit_name]['shutdown_status'][i] = self.model.add_var(var_type=BINARY)
+
+    def _add_state_variable_constraint(self, unit_name, initial_state):
+        for i in range(0, self.planning_horizon):
+            if i == 0:
+                self.model += (self.unit_commitment_vars[unit_name]['state'][i] - initial_state -
+                               self.unit_commitment_vars[unit_name]['startup_status'][i] +
+                               self.unit_commitment_vars[unit_name]['shutdown_status'][i] == 0)
+            else:
+                self.model += (self.unit_commitment_vars[unit_name]['state'][i] -
+                               self.unit_commitment_vars[unit_name]['state'][i - 1] -
+                               self.unit_commitment_vars[unit_name]['startup_status'][i] +
+                               self.unit_commitment_vars[unit_name]['shutdown_status'][i] == 0)
+
+    def _add_initial_up_time_constraint(self, unit_name, min_up_time, initial_up_time):
+        min_up_time_in_intervals = self._minutes_to_intervals_round_up(min_up_time)
+        initial_up_time_in_intervals = self._minutes_to_intervals_round_up(initial_up_time)
+        remaining_up_time = min(0, min_up_time_in_intervals - initial_up_time_in_intervals)
+        remaining_up_time = min(remaining_up_time, self.planning_horizon)
+        status_vars = []
+        for i in range(0, remaining_up_time):
+            status_vars.append(self.unit_commitment_vars[unit_name]['state'][i])
+
+        self.model += xsum(status_vars) == remaining_up_time
+
+    def _minutes_to_intervals_round_down(self, minutes):
+        return math.floor(minutes / self.dispatch_interval)
+
+    def _minutes_to_intervals_round_up(self, minutes):
+        return math.ceil(minutes / self.dispatch_interval)
+
+    def _add_initial_down_time_constraint(self, unit_name, min_down_time, initial_down_time):
+        min_down_time_in_intervals = self._minutes_to_intervals_round_up(min_down_time)
+        initial_down_time_in_intervals = self._minutes_to_intervals_round_up(initial_down_time)
+        remaining_down_time = max(0, min_down_time_in_intervals - initial_down_time_in_intervals)
+        remaining_down_time = min(remaining_down_time, self.planning_horizon)
+        status_vars = []
+        for i in range(0, remaining_down_time):
+            status_vars.append(self.unit_commitment_vars[unit_name]['state'][i])
+
+        self.model += xsum(status_vars) == 0
+
+    def _add_min_up_time_constraint(self, unit_name, min_up_time):
+        min_up_time_in_intervals = self._minutes_to_intervals_round_up(min_up_time)
+        for i in range(min_up_time_in_intervals, self.planning_horizon):
+            startup_status_vars = []
+            for j in range(i - min_up_time_in_intervals + 1, i):
+                startup_status_vars.append(self.unit_commitment_vars[unit_name]['startup_status'][j])
+            self.model += xsum(startup_status_vars) <= self.unit_commitment_vars[unit_name]['state'][i]
+
+    def _add_min_down_time_constraint(self, unit_name, min_down_time):
+        min_down_time_in_intervals = self._minutes_to_intervals_round_up(min_down_time)
+        for i in range(min_down_time_in_intervals, self.planning_horizon):
+            shutdown_status_vars = []
+            for j in range(i - min_down_time_in_intervals + 1, i):
+                shutdown_status_vars.append(self.unit_commitment_vars[unit_name]['shutdown_status'][j])
+            self.model += xsum(shutdown_status_vars) <= 1 - self.unit_commitment_vars[unit_name]['state'][i]
+
+    def _update_continuous_production_variable_upper_bound(self, unit_name, min_loading):
+        for i in range(0, self.planning_horizon):
+            self.unit_out_flow_variables[unit_name][i]['unit_to_market'].ub = self.unit_capacity[unit_name] - \
+                                                                              min_loading
+
+    def _add_start_up_and_shut_down_ramp_rates(self, unit_name, min_loading, startup_max_output, shutdown_max_output):
+        continuous_production_capacity = self.unit_capacity[unit_name] - min_loading
+        startup_coefficient = self.unit_capacity[unit_name] - startup_max_output
+        shutdown_coefficient = max(startup_max_output - shutdown_max_output, 0)
+        shutdown_coefficient_2 = self.unit_capacity[unit_name] - shutdown_max_output
+        startup_coefficient_2 = max(shutdown_max_output - startup_max_output, 0)
+
+        for i in range(0, self.planning_horizon - 1):
+            self.model += (self.unit_out_flow_variables[unit_name][i]['unit_to_market'] -
+                           continuous_production_capacity * self.unit_commitment_vars[unit_name]['state'][i] +
+                           startup_coefficient * self.unit_commitment_vars[unit_name]['startup_status'][i] +
+                           shutdown_coefficient * self.unit_commitment_vars[unit_name]['shutdown_status'][i + 1])
+
+            self.model += (self.unit_out_flow_variables[unit_name][i]['unit_to_market'] -
+                           continuous_production_capacity * self.unit_commitment_vars[unit_name]['state'][i] +
+                           shutdown_coefficient_2 * self.unit_commitment_vars[unit_name]['shutdown_status'][i + 1] +
+                           startup_coefficient_2 * self.unit_commitment_vars[unit_name]['startup_status'][i])
+
+    def _add_generation_limit_constraint(self, unit_name):
+        for i in range(0, self.planning_horizon):
+            self.model += (self.unit_out_flow_variables[unit_name][i]['unit_to_market'] -
+                           self.unit_commitment_vars[unit_name]['state'][i] *
+                           (self.unit_capacity[unit_name] - self.unit_min_loading[unit_name])) <= 0.0
+
+    def add_ramp_rates(self, unit_name, ramp_up_rate, ramp_down_rate):
+        ramp_up_rate = self._mw_per_minute_to_mw_per_interval(ramp_up_rate)
+        ramp_down_rate = self._mw_per_minute_to_mw_per_interval(ramp_down_rate)
+        self._add_ramping_constraints(unit_name, ramp_up_rate, ramp_down_rate)
+
+    def _add_ramping_constraints(self, unit_name, max_ramp_up, max_ramp_down):
+        min_loading = self.unit_min_loading
+        for i in range(0, self.planning_horizon):
+            if i == 0:
+                self.model += (self.unit_commitment_vars[unit_name]['unit_to_market'][i] -
+                               max(0, self.unit_initial_mw[unit_name] - min_loading) -
+                               max_ramp_up <= 0)
+                self.model += (max(0, self.unit_initial_mw[unit_name] - min_loading) -
+                               self.unit_commitment_vars[unit_name]['unit_to_market'][i] -
+                               max_ramp_down <= 0)
+            else:
+                self.model += (self.unit_commitment_vars[unit_name]['unit_to_market'][i] -
+                               self.unit_commitment_vars[unit_name]['unit_to_market'][i - 1] -
+                               max_ramp_up <= 0)
+                self.model += (self.unit_commitment_vars[unit_name]['unit_to_market'][i - 1] -
+                               self.unit_commitment_vars[unit_name]['unit_to_market'][i] -
+                               max_ramp_down <= 0)
+
+    def add_startup_costs(self, unit_name, hot_start_cost, cold_start_cost, time_to_go_cold):
+        time_to_go_cold = self._minutes_to_intervals_round_down(time_to_go_cold)
+        min_down_time = self._minutes_to_intervals_round_down(self.unit_min_down_time[unit_name])
+        self._add_start_up_costs(unit_name, hot_start_cost, cold_start_cost, time_to_go_cold, min_down_time)
+
+    def _add_start_up_costs(self, unit_name, hot_start_cost, cold_start_cost, time_to_go_cold, min_down_time):
+        for i in range(0, self.planning_horizon):
+            self.unit_commitment_vars[unit_name]['down_time_arc'][i] = {}
+            for j in range(i + min_down_time, i + time_to_go_cold):
+                self.unit_commitment_vars[unit_name]['down_time_arc'][i][j] = self.model.add_var(var_type=BINARY)
+
+        for i in range(0, self.planning_horizon):
+            arc_vars = []
+            for j in range(i - time_to_go_cold + 1, i - min_down_time):
+                if (i in self.unit_commitment_vars[unit_name]['down_time_arc'] and
+                        j in self.unit_commitment_vars[unit_name]['down_time_arc'][i]):
+                    arc_vars.append(self.unit_commitment_vars[unit_name]['down_time_arc'][i][j])
+            self.model += xsum(arc_vars) - self.unit_commitment_vars[unit_name]['startup_status'][i] <= 0
+
+            arc_vars = []
+            for j in range(i + min_down_time, i + time_to_go_cold - 1):
+                if (j in self.unit_commitment_vars[unit_name]['down_time_arc'] and
+                        i in self.unit_commitment_vars[unit_name]['down_time_arc'][j]):
+                    arc_vars.append(self.unit_commitment_vars[unit_name]['down_time_arc'][j][i])
+            self.model += xsum(arc_vars) - self.unit_commitment_vars[unit_name]['shutdown_status'][i] <= 0
+
+            arc_vars = []
+            for j in range(i - time_to_go_cold + 1, i - min_down_time):
+                if (i in self.unit_commitment_vars[unit_name]['down_time_arc'] and
+                        j in self.unit_commitment_vars[unit_name]['down_time_arc'][i]):
+                    arc_vars.append(self.unit_commitment_vars[unit_name]['down_time_arc'][i][j])
+
+            self.model.objective += (cold_start_cost * self.unit_commitment_vars['startup_status'][i] +
+                                     (hot_start_cost - cold_start_cost) * xsum(arc_vars))
 
     def add_market_to_unit_flow(self, unit_name, capacity):
         for i in range(0, self.planning_horizon):
@@ -606,8 +792,12 @@ class DispatchPlanner:
                                     unit_name in self.units if (
                                             market == self.unit_energy_market_mapping[unit_name] and
                                             "market_to_unit" in self.unit_in_flow_variables[unit_name][i])]
+                    min_loading_vars = []
+                    for unit, min_loading in self.unit_min_loading.items():
+                        min_loading_vars.append(self.unit_commitment_vars[unit]['state'][i] * min_loading * -1)
+
                     self.model += xsum([self.market_net_dispatch_variables[region][service][i]] + in_flow_vars +
-                                       [-1 * var for var in out_flow_vars]) == 0.0
+                                       [-1 * var for var in out_flow_vars] + min_loading_vars) == 0.0
                 else:
                     out_flow_vars = [self.unit_output_fcas_variables[unit_name][service][i] for
                                      unit_name in self.units if (
@@ -626,7 +816,11 @@ class DispatchPlanner:
             for i in range(0, self.planning_horizon):
                 in_flow_vars = [var for var_name, var in self.unit_in_flow_variables[unit][i].items()]
                 out_flow_vars = [var for var_name, var in self.unit_out_flow_variables[unit][i].items()]
-                self.model += xsum(in_flow_vars + [-1 * var for var in out_flow_vars]) == 0.0
+                if unit in self.unit_commitment_vars:
+                    min_loading_var = [self.unit_commitment_vars[unit]['state'][i] * self.unit_min_loading[unit] * -1]
+                    self.model += xsum(in_flow_vars + [-1 * var for var in out_flow_vars] + min_loading_var) == 0.0
+                else:
+                    self.model += xsum(in_flow_vars + [-1 * var for var in out_flow_vars]) == 0.0
 
     def get_unit_dispatch(self, unit_name):
         energy_flows = self.get_unit_energy_flows(unit_name)
@@ -644,6 +838,10 @@ class DispatchPlanner:
             energy_flows['market_to_unit'] = \
                 energy_flows['interval'].apply(lambda x: self.unit_in_flow_variables[unit_name][x]['market_to_unit'].x)
 
+        if 'state' in self.unit_commitment_vars[unit_name]:
+            energy_flows['state'] = \
+                energy_flows['interval'].apply(lambda x: self.unit_commitment_vars[unit_name]['state'][x].x)
+
         energy_flows['net_dispatch'] = 0.0
 
         if 'unit_to_market' in energy_flows.columns:
@@ -651,6 +849,9 @@ class DispatchPlanner:
 
         if 'market_to_unit' in energy_flows.columns:
             energy_flows['net_dispatch'] -= energy_flows['market_to_unit']
+
+        if 'state' in energy_flows.columns:
+            energy_flows['net_dispatch'] += energy_flows['state'] * self.unit_min_loading[unit_name]
 
         return energy_flows
 
