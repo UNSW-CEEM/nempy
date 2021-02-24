@@ -151,10 +151,9 @@ class DispatchPlanner:
 
     def _get_market_in_flow_capacity(self, region, service):
         capacity = 0.0
-        for unit_name, market_in_flow_variable in self.unit_out_flow_variables.items():
-            if (self.unit_energy_market_mapping[unit_name] == region + '-' + service
-                    and 'unit_to_market' in market_in_flow_variable[0].keys()):
-                capacity += market_in_flow_variable[0]['unit_to_market'].ub
+        for unit_name, unit_capacity in self.unit_capacity.items():
+            if self.unit_energy_market_mapping[unit_name] == region + '-' + service:
+                capacity += unit_capacity
         return capacity
 
     def _get_market_out_flow_capacity(self, region, service):
@@ -279,7 +278,7 @@ class DispatchPlanner:
 
         startup_max_output = self._mw_per_minute_to_mw_per_interval(start_up_ramp_rate)
         shutdown_max_output = self._mw_per_minute_to_mw_per_interval(shutdown_ramp_rate)
-        if start_up_ramp_rate < min_loading:
+        if startup_max_output < min_loading:
             raise ValueError()
         if shutdown_max_output < min_loading:
             raise ValueError()
@@ -293,10 +292,14 @@ class DispatchPlanner:
 
         self._create_state_variables(unit_name)
         self._add_state_variable_constraint(unit_name, initial_state)
-        self._add_initial_up_time_constraint(unit_name, min_up_time, initial_up_time)
-        self._add_initial_down_time_constraint(unit_name, min_down_time, initial_down_time)
+        if initial_state == 1:
+            self._add_initial_up_time_constraint(unit_name, min_up_time, initial_up_time)
+        elif initial_state == 0:
+            self._add_initial_down_time_constraint(unit_name, min_down_time, initial_down_time)
+        self._add_min_up_time_constraint(unit_name, min_up_time)
+        self._add_min_down_time_constraint(unit_name, min_down_time)
         self._update_continuous_production_variable_upper_bound(unit_name, min_loading)
-        #self._add_start_up_and_shut_down_ramp_rates(unit_name, min_loading, startup_max_output, shutdown_max_output)
+        self._add_start_up_and_shut_down_ramp_rates(unit_name, min_loading, startup_max_output, shutdown_max_output)
         self._add_generation_limit_constraint(unit_name)
 
     def _mw_per_minute_to_mw_per_interval(self, mw_per_minute):
@@ -323,13 +326,14 @@ class DispatchPlanner:
     def _add_initial_up_time_constraint(self, unit_name, min_up_time, initial_up_time):
         min_up_time_in_intervals = self._minutes_to_intervals_round_up(min_up_time)
         initial_up_time_in_intervals = self._minutes_to_intervals_round_up(initial_up_time)
-        remaining_up_time = min(0, min_up_time_in_intervals - initial_up_time_in_intervals)
+        remaining_up_time = max(0, min_up_time_in_intervals - initial_up_time_in_intervals)
         remaining_up_time = min(remaining_up_time, self.planning_horizon)
         status_vars = []
         for i in range(0, remaining_up_time):
             status_vars.append(self.unit_commitment_vars[unit_name]['state'][i])
 
-        self.model += xsum(status_vars) == remaining_up_time
+        if len(status_vars) > 0:
+            self.model += xsum(status_vars) == remaining_up_time
 
     def _minutes_to_intervals_round_down(self, minutes):
         return math.floor(minutes / self.dispatch_interval)
@@ -380,12 +384,12 @@ class DispatchPlanner:
             self.model += (self.unit_out_flow_variables[unit_name][i]['unit_to_market'] -
                            continuous_production_capacity * self.unit_commitment_vars[unit_name]['state'][i] +
                            startup_coefficient * self.unit_commitment_vars[unit_name]['startup_status'][i] +
-                           shutdown_coefficient * self.unit_commitment_vars[unit_name]['shutdown_status'][i + 1])
+                           shutdown_coefficient * self.unit_commitment_vars[unit_name]['shutdown_status'][i + 1] <= 0)
 
             self.model += (self.unit_out_flow_variables[unit_name][i]['unit_to_market'] -
                            continuous_production_capacity * self.unit_commitment_vars[unit_name]['state'][i] +
                            shutdown_coefficient_2 * self.unit_commitment_vars[unit_name]['shutdown_status'][i + 1] +
-                           startup_coefficient_2 * self.unit_commitment_vars[unit_name]['startup_status'][i])
+                           startup_coefficient_2 * self.unit_commitment_vars[unit_name]['startup_status'][i] <= 0)
 
     def _add_generation_limit_constraint(self, unit_name):
         for i in range(0, self.planning_horizon):
@@ -732,14 +736,14 @@ class DispatchPlanner:
             input_var_name = "{}_generator_to_unit_{}".format(unit_name, i)
             self.unit_in_flow_variables[unit_name][i]['generator_to_unit'] = self.model.add_var(name=input_var_name,
                                                                                                 ub=capacity,
-                                                                                                obj=cost)
+                                                                                                obj=-1 * cost)
 
     def add_load(self, unit_name, capacity, cost=0.0):
         for i in range(0, self.planning_horizon):
             input_var_name = "{}_unit_to_load_{}".format(unit_name, i)
             self.unit_out_flow_variables[unit_name][i]['unit_to_load'] = self.model.add_var(name=input_var_name,
                                                                                             ub=capacity,
-                                                                                            obj=cost)
+                                                                                            obj=-1 * cost)
 
     def optimise(self):
         self._create_constraints_to_balance_grid_nodes()
@@ -837,6 +841,10 @@ class DispatchPlanner:
         if 'market_to_unit' in self.unit_in_flow_variables[unit_name][0]:
             energy_flows['market_to_unit'] = \
                 energy_flows['interval'].apply(lambda x: self.unit_in_flow_variables[unit_name][x]['market_to_unit'].x)
+
+        if 'generator_to_unit' in self.unit_in_flow_variables[unit_name][0]:
+            energy_flows['generator_to_unit'] = \
+                energy_flows['interval'].apply(lambda x: self.unit_in_flow_variables[unit_name][x]['generator_to_unit'].x)
 
         if 'state' in self.unit_commitment_vars[unit_name]:
             energy_flows['state'] = \
@@ -1026,7 +1034,7 @@ class Forecaster:
         prediction = forward_data.loc[:, ['interval']]
         forward_data['old_demand'] = forward_data[region + '-demand'] + forward_data[market + '-fleet-dispatch']
         delta_step_size = max(int((max_delta - min_delta) / steps), 1)
-        for delta in range(int(min_delta), int(max_delta) + delta_step_size, delta_step_size):
+        for delta in range(int(min_delta), int(max_delta) + delta_step_size * 2, delta_step_size):
             forward_data[region + '-demand'] = forward_data['old_demand'] - delta
             X = forward_data.loc[:, self.features]
             Y = self.regressor.predict(X)
