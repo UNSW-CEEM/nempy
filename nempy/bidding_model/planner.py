@@ -276,8 +276,8 @@ class DispatchPlanner:
         """Unit commitment constraints are the Tight formulation from Knueven et al. On Mixed Integer Programming
         Formulations for Unit Commitment."""
 
-        startup_max_output = self._mw_per_minute_to_mw_per_interval(start_up_ramp_rate)
-        shutdown_max_output = self._mw_per_minute_to_mw_per_interval(shutdown_ramp_rate)
+        startup_max_output = self._mw_per_hour_to_mw_per_interval(start_up_ramp_rate)
+        shutdown_max_output = self._mw_per_hour_to_mw_per_interval(shutdown_ramp_rate)
         if startup_max_output < min_loading:
             raise ValueError()
         if shutdown_max_output < min_loading:
@@ -302,8 +302,8 @@ class DispatchPlanner:
         self._add_start_up_and_shut_down_ramp_rates(unit_name, min_loading, startup_max_output, shutdown_max_output)
         self._add_generation_limit_constraint(unit_name)
 
-    def _mw_per_minute_to_mw_per_interval(self, mw_per_minute):
-        return mw_per_minute * self.dispatch_interval
+    def _mw_per_hour_to_mw_per_interval(self, mw_per_hour):
+        return mw_per_hour * (self.dispatch_interval / 60)
 
     def _create_state_variables(self, unit_name):
         for i in range(0, self.planning_horizon):
@@ -426,10 +426,13 @@ class DispatchPlanner:
         self._add_start_up_costs(unit_name, hot_start_cost, cold_start_cost, time_to_go_cold, min_down_time)
 
     def _add_start_up_costs(self, unit_name, hot_start_cost, cold_start_cost, time_to_go_cold, min_down_time):
+        self.unit_commitment_vars[unit_name]['down_time_arc'] = {}
+        cost_diff = (hot_start_cost - cold_start_cost)
         for i in range(0, self.planning_horizon):
             self.unit_commitment_vars[unit_name]['down_time_arc'][i] = {}
             for j in range(i + min_down_time, i + time_to_go_cold):
-                self.unit_commitment_vars[unit_name]['down_time_arc'][i][j] = self.model.add_var(var_type=BINARY)
+                self.unit_commitment_vars[unit_name]['down_time_arc'][i][j] = self.model.add_var(var_type=BINARY,
+                                                                                                 obj=cost_diff)
 
         for i in range(0, self.planning_horizon):
             arc_vars = []
@@ -452,8 +455,7 @@ class DispatchPlanner:
                         j in self.unit_commitment_vars[unit_name]['down_time_arc'][i]):
                     arc_vars.append(self.unit_commitment_vars[unit_name]['down_time_arc'][i][j])
 
-            self.model.objective += (cold_start_cost * self.unit_commitment_vars['startup_status'][i] +
-                                     (hot_start_cost - cold_start_cost) * xsum(arc_vars))
+            self.unit_commitment_vars[unit_name]['startup_status'][i].obj = cold_start_cost
 
     def add_market_to_unit_flow(self, unit_name, capacity):
         for i in range(0, self.planning_horizon):
