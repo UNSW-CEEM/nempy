@@ -21,7 +21,7 @@ def get_test_intervals(number=100):
     intervals = random.sample(range(1, difference_in_5_min_intervals), number)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
-    return times_formatted
+    return ['2019/01/29 16:10:00']
 
 
 def get_test_intervals_august_2020(number=100):
@@ -37,9 +37,9 @@ def get_test_intervals_august_2020(number=100):
 
 
 def test_ramp_rate_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -77,9 +77,9 @@ def test_ramp_rate_constraints():
 
 
 def test_ramp_rate_constraints_where_constraints_violated():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -129,9 +129,9 @@ def test_ramp_rate_constraints_where_constraints_violated():
 
 
 def test_fast_start_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -169,9 +169,9 @@ def test_fast_start_constraints():
 
 
 def test_fast_start_constraints_where_constraints_violated():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -221,9 +221,9 @@ def test_fast_start_constraints_where_constraints_violated():
 
 
 def test_capacity_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -263,9 +263,9 @@ def test_capacity_constraints():
 
 
 def test_capacity_constraint_where_constraints_violated():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -317,9 +317,9 @@ def test_capacity_constraint_where_constraints_violated():
 
 
 def ignore_test_fcas_trapezium_scaled_availability():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms_august_2020.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms_august_2020.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache_august_2020')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache_august_2020')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -368,9 +368,9 @@ def ignore_test_fcas_trapezium_scaled_availability():
 
 
 def ignore_test_find_fcas_trapezium_scaled_availability_erros():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms_august_2020.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms_august_2020.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache_august_2020')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache_august_2020')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
@@ -392,9 +392,9 @@ def ignore_test_find_fcas_trapezium_scaled_availability_erros():
 
 
 def test_all_units_and_service_dispatch_historically_present_in_market():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -419,9 +419,9 @@ def test_all_units_and_service_dispatch_historically_present_in_market():
 
 
 def test_slack_in_generic_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -466,9 +466,9 @@ def test_slack_in_generic_constraints():
 
 
 def test_slack_in_generic_constraints_with_fcas_interface():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -514,9 +514,9 @@ def test_slack_in_generic_constraints_with_fcas_interface():
 
 
 def test_hist_dispatch_values_meet_demand():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -550,9 +550,9 @@ def test_hist_dispatch_values_meet_demand():
 
 
 def test_against_10_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
@@ -592,9 +592,9 @@ def test_against_10_interval_benchmark():
 
 
 def test_against_100_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
@@ -635,9 +635,9 @@ def test_against_100_interval_benchmark():
 
 
 def test_against_1000_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
