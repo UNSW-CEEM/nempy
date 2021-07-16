@@ -13,7 +13,7 @@ that you can start simple, like in the example below, and grow the complexity of
 ramping constraints, interconnectors, FCAS markets and more. 
 
 ## Motivation
-Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. Nempy allows for modelling of the dispatch process in a high level of detail. Potential use cases include studying historical dispatch outcomes, studying the dispatch process itself, or as a building block in part of a larger operational market model.
+Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. Nempy allows for modelling of the dispatch process in a high level of detail. Potential use cases include studying historical dispatch outcomes, studying the dispatch process itself, or as a building block in part of a larger operational market model.
 
 ## Documentation
 Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
