@@ -1,11 +1,27 @@
-## nempy
-This project aims to enhance the Australia electricity industries modelling and analytical capabilities. nempy is a set 
-of tools that allow the user to model the dispatch procedure used in Australia's National Electricty Market. The idea is 
+## Introduction
+Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). The idea is 
 that you can start simple, like in the example below, and grow the complexity of your model by adding features such as 
-ramping constraints, interconnectors and FCAS markets. Check out the documentation and examples on our read-the-docs page 
-for more details, link below.
+ramping constraints, interconnectors, FCAS markets and more. 
 
-## Get in touch
+## Motivation
+Operational dispatch is a important part of NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. Nempy allows for modelling of the dispatch process in a high level of detail. Potential use cases include studying historical dispatch outcomes, studying the dispatch process itself, or as a building block in part of a larger operational market model.
+
+## Documentation
+Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
+
+## Community
+Nempy is open-source and we welcome all forms of community engagment, some more info is provided below.
+
+### Support
+You can seek suport for using Nempy using the discussion tab, checking the issues register, or by contacting Nick directly.
+
+### Reporting issues
+Issues with Nempy can be reported via the issues register, issues submissions do not need to adhere to any particular format.
+
+### Contributing
+Contributions via pull requests are welcome. Contributions should; follow the PEP8 style guide (with exception of line length up to 120 rather than 80), ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour, please highlight this in your pull request description), implement automated tests for new features, and provided doc strings for public interfaces. 
+
+### Get in touch
 This project is being lead by Nick Gorman, a PhD candidate at the University for New South Wales and the Collaboration 
 on Energy and Environmental Markets (CEEM). As part the project we hope to engage with and support prospective users of
 the software. Feel welcome to get in touch if you have any questions, want to provide feed back, have a feature request,
@@ -23,9 +39,6 @@ To install for development purposes, such as adding new features. Download the s
 Then the test suite can be run using.
 
 `python -m pytest`
-
-## Documentation
-Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
 
 ## A simple example
 ```python
