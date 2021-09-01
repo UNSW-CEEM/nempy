@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from time import time
 
 from nempy.help_functions import helper_functions as hf
 from nempy.spot_markert_backend import elastic_constraints, fcas_constraints, interconnectors as inter, \
@@ -2767,7 +2768,10 @@ class SpotMarket:
                 special_ordered_sets = special_ordered_sets.rename(columns={'interconnector': 'sos_id'})
                 si.add_sos_type_1(special_ordered_sets)
 
+        t0 = time()
+        t_opt = 0
         si.optimize()
+        t_opt += time() - t0
 
         # Find the slack in constraints.
         if self._constraints_rhs_and_type:
@@ -2792,7 +2796,10 @@ class SpotMarket:
         # to be accessed and used to price constraints.
         if 'interconnector_losses' in self._decision_variables:
             si = self._get_linear_model(si)
+
+        t0 = time()
         si.linear_mip_model.optimize()
+        t_opt += time() - t0
 
         for var_group in self._decision_variables:
             self._decision_variables[var_group]['value_lin'] = \
@@ -2843,7 +2850,11 @@ class SpotMarket:
                 variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.0001) * \
                     variables_and_cons['coefficient'] * -1
                 variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
+
+                t0 = 0
                 si.linear_mip_model.optimize()
+                t_opt += time() - t0
+
 
                 # If there are market constraints then calculate their associated prices.
                 if self._market_constraints_rhs_and_type:
@@ -2853,6 +2864,8 @@ class SpotMarket:
                         prices = si.price_constraints(constraints_to_price)
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
+
+        return t_opt
 
     def _get_linear_model(self, si):
         self._remove_unused_interpolation_weights(si)

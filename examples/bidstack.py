@@ -36,7 +36,8 @@ market.set_unit_price_bids(price_bids)
 market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing
-market.dispatch()
+t_opt = market.dispatch()
+print('time optimising was {}'.format(t_opt))
 
 # Return the total dispatch of each unit in MW.
 print(market.get_unit_dispatch())
