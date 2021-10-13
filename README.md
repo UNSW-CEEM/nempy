@@ -12,8 +12,13 @@ Nempy is a python package for modelling the dispatch procedure of the Australian
 that you can start simple, like in the example below, and grow the complexity of your model by adding features such as 
 ramping constraints, interconnectors, FCAS markets and more. 
 
-## Motivation
-Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. Nempy allows for modelling of the dispatch process in a high level of detail. Potential use cases include studying historical dispatch outcomes, studying the dispatch process itself, or as a building block in part of a larger operational market model.
+## Motivation and Use cases
+Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. The motivation for developing Nempy was to create a re-usable model of this process. Nempy has several potential use case:
+
+1. As a reference implementation of the NEM's dispatch procedure. While the Australian Energy Market Operator (AEMO) has published several documents that describe aspects of the dispatch process, such as [FCAS Model in NEMDE](https://github.com/UNSW-CEEM/nempy/blob/master/docs/pdfs/FCAS%20Model%20in%20NEMDE.pdf), [Fast Start Unit Inflexibility Profile Model](https://github.com/UNSW-CEEM/nempy/blob/master/docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf), [Marginal Loss Factors](https://github.com/UNSW-CEEM/nempy/blob/master/docs/pdfs/Marginal%20Loss%20Factors%20for%20the%202020-21%20Financial%20year.pdf), [Schedule of Constraint Violation Penalty Factors](https://github.com/UNSW-CEEM/nempy/blob/master/docs/pdfs/Schedule%20of%20Constraint%20Violation%20Penalty%20factors.pdf), [Treatment of Loss Factors in the NEM](https://github.com/UNSW-CEEM/nempy/blob/master/docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf), our experience developing Nempy has indicated that key implementation detail is often missing from the public available documentation. Through a process of testing various implementation options, where the documentation was not explicit, Nempy has been refined in attempt to better mirror the actual dispatch procedure implementation. As result Nempy can act as an additional reference for analysts and modelers looking to understand the NEM's dispatch procedure.
+2. As tool for studying the dispatch process itself. (more detail to follow)
+3. As a building block in part of a larger operational market model. (more detail to follow)
+
 
 ## Documentation
 Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
