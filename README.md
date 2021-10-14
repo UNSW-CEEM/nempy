@@ -12,7 +12,7 @@ Nempy is a python package for modelling the dispatch procedure of the Australian
 that you can start simple, like in the example below, and grow the complexity of your model by adding features such as 
 ramping constraints, interconnectors, FCAS markets and more. 
 
-## Motivation and Use cases
+## Motivation
 Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. The motivation for developing Nempy was to create a re-usable model of this process 
 
 ## Documentation
