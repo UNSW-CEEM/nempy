@@ -28,10 +28,75 @@ bibliography: paper.bib
 
 # Summary
 
-Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). Simple models can be constructed using generator supply bids and electricity demand. More complete models can be constructed by using the inbuilt features to create multiple market regions, ramp rate limits, loss factors, Frequency Control Ancillary Service (FCAS) markets, FCAS trapezium constraints, dynamic interconnector loss models, generic constraints and fast start dispatch inflexibility profiles. Outputs include market clearing prices, generator and scheduled load dispatch targets, FCAS enablement levels, unit FCAS availability levels, interconnector flows, interconnector losses and region net inflows. Potential uses include studying the drivers of dispatch outcomes in the NEM and as a component in larger electricity market models. Nempy is written in Python 3, and uses a relatively small number of first-order dependencies; pandas [@reback2020pandas; @mckinney-proc-scipy-2010], Numpy [@harris2020array], MIP-Python [@coin-orpython-mip], xmltodict [@xmltodict], and Requests [@psf].
+Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). 
+Simple models can be constructed using generator supply bids and electricity demand. More complete models can be 
+constructed by using the inbuilt features to create multiple market regions, ramp rate limits, loss factors, Frequency 
+Control Ancillary Service (FCAS) markets, FCAS trapezium constraints, dynamic interconnector loss models, generic 
+constraints and fast start dispatch inflexibility profiles. Outputs include market clearing prices, generator and 
+scheduled load dispatch targets, FCAS enablement levels, unit FCAS availability levels, interconnector flows, 
+interconnector losses and region net inflows. Potential uses include studying the drivers of dispatch outcomes in the 
+NEM and as a component in larger electricity market models. Nempy is written in Python 3, and uses a relatively small 
+number of first-order dependencies; pandas [@reback2020pandas; @mckinney-proc-scipy-2010], Numpy [@harris2020array], 
+MIP-Python [@coin-orpython-mip], xmltodict [@xmltodict], and Requests [@psf].
 
 # Statement of need
 
-In modern industrialised economies, the electricity sector plays a key role in societal welfare and progress, yet commonly is also associated with major environmental harms, particularly where primary energy is sourced mainly through the burning of fossil fuels. As such, all of us are stakeholders in the continued successful operation of the electricity industry, while it transitions to cleaner energy sources, and beyond. Computer models are often used to study the operation, interactions and potential future direction of the electricity sector, review papers highlight the large body of work in this space [@ringkjob2018review; @chang2021trends; @fattahi2020systemic]. Such tools are, invariably, simplifications of the underlying processes of electricity industry operation and investment for reasons including the underlying complexity of the processes and the difficulty of gathering representative data. Commonly they tackle only a subset of the decision making that must operate from milliseconds (for example, under frequency relay trips) through to decades (investment in large generation units with long lead times). A particularly challenging and key task is that of operational dispatch – setting generator outputs and controllable network elements to meet expected demand over the next five to thirty minutes, and minimising costs while ensuring secure and reliable operation. To the best of the author's knowledge `Nempy` is the only open-source software that provides a detailed model of the NEM's dispatch procedure. Other more generalised models of the NEM [@grozev2005nemsim; @mcconnell2013retrospective; @ANEMWorkingReport; @mountain; @wood] or commercial tools such as PLEXOS [@energy_exemplar_plexos_2021] and Prophet [@IES] are used to model NEM dispatch, at various levels of complexity, but are not open-source. More recent work by Xenophon and Hill provides open-source code and data for modelling the NEM, but the dispatch functionality does not include many of the NEM wholesale market features [@xenophon2018open].
+In modern industrialised economies, the electricity sector plays a key role in societal welfare and progress, yet 
+commonly is also associated with major environmental harms, particularly where primary energy is sourced mainly through 
+the burning of fossil fuels. As such, all of us are stakeholders in the continued successful operation of the 
+electricity industry, while it transitions to cleaner energy sources, and beyond. Computer models are often used to 
+study the operation, interactions and potential future direction of the electricity sector, review papers highlight the 
+large body of work in this space [@ringkjob2018review; @chang2021trends; @fattahi2020systemic]. Such tools are, 
+invariably, simplifications of the underlying processes of electricity industry operation and investment for reasons 
+including the underlying complexity of the processes and the difficulty of gathering representative data. Commonly they 
+tackle only a subset of the decision making that must operate from milliseconds (for example, under frequency relay 
+trips) through to decades (investment in large generation units with long lead times). A particularly challenging and 
+key task is that of operational dispatch – setting generator outputs and controllable network elements to meet expected 
+demand over the next five to thirty minutes, and minimising costs while ensuring secure and reliable operation. To the 
+best of the author's knowledge `Nempy` is the only open-source software that provides a detailed model of the NEM's 
+dispatch procedure. Other more generalised models of the NEM [@grozev2005nemsim; @mcconnell2013retrospective; 
+@ANEMWorkingReport; @mountain; @wood] or commercial tools such as PLEXOS [@energy_exemplar_plexos_2021] and Prophet 
+[@IES] are used to model NEM dispatch, at various levels of complexity, but are not open-source. More recent work by 
+Xenophon and Hill provides open-source code and data for modelling the NEM, but the dispatch functionality does not 
+include many of the NEM wholesale market features [@xenophon2018open].
+
+# Use cases
+Nempy has been designed as a flexible model of the NEM's dispatch procedure and to be re-usable in a number of 
+contexts. Some potential use case are outlined below:
+
+1. As a reference implementation of the NEM's dispatch procedure. While the Australian Energy Market Operator (AEMO) 
+has published several documents that describe aspects of the dispatch process [@fcasmodel; @faststart; @lossfactors; 
+@constraintviolation; @treatmentlossfactors], our experience developing Nempy has indicated that key 
+implementation detail is often missing from the public available documentation. Through a process of testing various 
+implementation options, where the documentation was not explicit, Nempy has been refined in an attempt to better reflect 
+the actual dispatch procedure implementation. As result Nempy is a useful additional reference for analysts and modelers 
+looking to understand the NEM's dispatch procedure.
+
+2. As a tool for studying the dispatch process itself. Models of any energy system or electricity market are necessarily 
+simplifications, however to improve model performance it is often desirable to add additional detail. Nempy can be used 
+to study the relative impact of different simplifications on modelling outcomes, and thus provide guidance on how model 
+performance could be improved by adding additional detail. For example, someone working on an operational model of the 
+NEM might be interested in which types of constraints have the biggest impact on dispatch outcomes, and should be given
+priority for implementation.
+
+3. As a building block in agent based market models. Agent based models can be used to study electricity market 
+operation, and are particularly useful in modelling both the competitive nature of electricity markets and their complex. 
+operational constraints [@ventosa]. In such models, agents must interact with a modelled environment, and a key part of that 
+environment is the market dispatch process. Thus, Nempy could be useful as a building block to create agent based models 
+of the NEM, and play a role in answering various questions about market operational outcomes. Such questions could 
+include: How does changing demand for electricity effect market prices and generator dispatch? How does the entry of new 
+generating technologies effect market prices and generator dispatch? and How do patterns of generator ownership effect 
+market prices and generator dispatch? Of course, another necessary component of agent based models are behavioural models 
+of the agents, a prototype behavioural model of NEM participants is being developed as part of the project [@nempro].
+
+4. To answer counter factual questions about historical dispatch outcomes. For example: What would have been the impact 
+on market dispatch if a particular network constraint had not been present? or How would have dispatch outcomes 
+differed if a unit had offered a different bid into the market? The answers to such questions have direct, and 
+potentially large, financial implications for market participants. AEMO offers access to a production version of 
+the market dispatch engine to allow participants to answer such questions [@nemde]. However, access is restricted to registered 
+participants and is provided at a cost of $15,000 per year. Additionally, users of this service are not provided with 
+copy of the dispatch engine, but access it by submitting input files to AEMO. This prevents the use of this service to 
+answer question about how changes to the dispatch process, rather than the inputs, would effect dispatch outcomes. 
+In contrast, access to Nempy is not restricted, it is free to use, and is open to modification.
 
 # References
