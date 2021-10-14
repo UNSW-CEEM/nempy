@@ -28,15 +28,25 @@ bibliography: paper.bib
 
 # Summary
 
-Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). 
-Simple models can be constructed using generator supply bids and electricity demand. More complete models can be 
-constructed by using the inbuilt features to create multiple market regions, ramp rate limits, loss factors, Frequency 
-Control Ancillary Service (FCAS) markets, FCAS trapezium constraints, dynamic interconnector loss models, generic 
-constraints and fast start dispatch inflexibility profiles. Outputs include market clearing prices, generator and 
-scheduled load dispatch targets, FCAS enablement levels, unit FCAS availability levels, interconnector flows, 
-interconnector losses and region net inflows. Potential uses include studying the drivers of dispatch outcomes in the 
-NEM and as a component in larger electricity market models. Nempy is written in Python 3, and uses a relatively small 
-number of first-order dependencies; pandas [@reback2020pandas; @mckinney-proc-scipy-2010], Numpy [@harris2020array], 
+Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM).
+Electricity markets are a way of co-ordinating the supply of electricity by private firms. The NEM is a gross pool spot 
+market that operates on 5 min dispatch basis. Described simply, this means all generator wishing to sell electricity 
+must bid into the market every 5 minutes, market clearing proceeds by calculating the cheapest combination of generator 
+dispatch to meet forecast demand at the end of 5 the minute dispatch interval. The price of electricity is set as the 
+marginal cost of generation, which, under a simple market formulation, would be the cost of the next generation bid to be 
+dispatched if demand for electricity were to increase. Real-world formulation requires significant additional adjustment 
+in order to manage the technical complexity of securely and reliably operating an electricity grid. For example, in the 
+case of the NEM additional markets for ancillary services have been introduced. One set of ancillary markets that have 
+been integrated into the market dispatch procedure are the Frequency Control Ancillary Services (FCAS) markets. In these 
+markets generators compete to provide the ability to rapidly change generation levels in order to stabilise the grid frequency. 
+Nempy is flexible in that it allows for formulation of very simple market models, for the formulation of market models 
+of near real-world complexity, and at the various levels of intermediate complexity. Simple models can be constructed 
+using just generator bids and electricity demand. More complete models can be constructed by using the inbuilt features 
+to create multiple market regions, ramp rate limits, loss factors, FCAS markets, FCAS trapezium constraints, dynamic 
+interconnector loss models, generic constraints and fast start dispatch inflexibility profiles. Outputs include market 
+clearing prices, generator and scheduled load dispatch targets, FCAS enablement levels, unit FCAS availability levels, 
+interconnector flows, interconnector losses and region net inflows. Nempy is written in Python 3, and uses a relatively 
+small number of first-order dependencies; pandas [@reback2020pandas; @mckinney-proc-scipy-2010], Numpy [@harris2020array], 
 MIP-Python [@coin-orpython-mip], xmltodict [@xmltodict], and Requests [@psf].
 
 # Statement of need
