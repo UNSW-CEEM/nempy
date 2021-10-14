@@ -67,26 +67,26 @@ contexts. Some potential use case are outlined below:
 1. As a reference implementation of the NEM's dispatch procedure. While the Australian Energy Market Operator (AEMO) 
 has published several documents that describe aspects of the dispatch process [@fcasmodel; @faststart; @lossfactors; 
 @constraintviolation; @treatmentlossfactors], our experience developing Nempy has indicated that key 
-implementation detail is often missing from the public available documentation. Through a process of testing various 
+implementation details are often missing from the publicly available documentation. Through a process of testing various 
 implementation options, where the documentation was not explicit, Nempy has been refined in an attempt to better reflect 
-the actual dispatch procedure implementation. As result Nempy is a useful additional reference for analysts and modelers 
+the actual dispatch procedure. As a result Nempy is a useful additional reference for analysts and modelers 
 looking to understand the NEM's dispatch procedure.
 
 2. As a tool for studying the dispatch process itself. Models of any energy system or electricity market are necessarily 
 simplifications, however to improve model performance it is often desirable to add additional detail. Nempy can be used 
 to study the relative impact of different simplifications on modelling outcomes, and thus provide guidance on how model 
 performance could be improved by adding additional detail. For example, someone working on an operational model of the 
-NEM might be interested in which types of constraints have the biggest impact on dispatch outcomes, and should be given
-priority for implementation.
+NEM might be interested in which types of constraints have the biggest impact on dispatch outcomes, and thus should be 
+given priority for implementation.
 
 3. As a building block in agent based market models. Agent based models can be used to study electricity market 
-operation, and are particularly useful in modelling both the competitive nature of electricity markets and their complex. 
+operation, and are particularly useful in modelling both the competitive nature of electricity markets and their complex 
 operational constraints [@ventosa]. In such models, agents must interact with a modelled environment, and a key part of that 
 environment is the market dispatch process. Thus, Nempy could be useful as a building block to create agent based models 
 of the NEM, and play a role in answering various questions about market operational outcomes. Such questions could 
-include: How does changing demand for electricity effect market prices and generator dispatch? How does the entry of new 
-generating technologies effect market prices and generator dispatch? and How do patterns of generator ownership effect 
-market prices and generator dispatch? Of course, another necessary component of agent based models are behavioural models 
+include: How does changing the demand for electricity effect market outcomes? How does the entry of new 
+generating technologies effect market outcomes? and How do patterns of generator ownership effect 
+market outcomes? Of course, another necessary component of agent based models are behavioural models 
 of the agents, a prototype behavioural model of NEM participants is being developed as part of the project [@nempro].
 
 4. To answer counter factual questions about historical dispatch outcomes. For example: What would have been the impact 
