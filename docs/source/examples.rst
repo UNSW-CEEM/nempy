@@ -1,18 +1,27 @@
 Examples
 ==============
+A number of examples of how to use Nempy are provided below. Examples 1 to 5 are simple and aim introduce various
+market features that can be modelled with Nempy in an easy to understand way, the dispatch and pricing outcomes are
+explained in inline comments where the results printed. Examples 6 and 7 show how to use the historical data input
+preparation tools provided with Nempy to recreate historical dispatch intervals. Historical dispatch and pricing
+outcomes can be difficult to interpret as they are usually the result of complex interactions between the many features
+of the dispatch process, for these example the results are plotted in comparison to actual historical price outcomes.
+Example 8 simply demonstrates how the outputs of one dispatch interval can be used as the initial conditions of the
+next dispatch interval to create a time sequential model, additionally the current limitations with the approach are
+briefly discussed.
 
-Bid stack equivalent market
+1. Bid stack equivalent market
 ---------------------------
-This example implements a one region market that mirrors the 'bid stack' model of an electricity market. Under the
-bid stack model, generators are dispatched according to their bid prices, from cheapest to most expensive, until all
-demand is satisfied. No loss factors, ramping constraints or other factors are considered.
+This example implements a one region bid stack model of an electricity market. Under the bid stack model, generators are
+dispatched according to their bid prices, from cheapest to most expensive, until all demand is satisfied. No loss factors,
+ramping constraints or other factors are considered.
 
 .. literalinclude:: ../../examples/bidstack.py
     :linenos:
     :language: python
 
 
-Unit loss factors, capacities and ramp rates
+2. Unit loss factors, capacities and ramp rates
 --------------------------------------------
 In this example units are given loss factors, capacity values and ramp rates.
 
@@ -21,14 +30,14 @@ In this example units are given loss factors, capacity values and ramp rates.
     :language: python
 
 
-Interconnector with losses
+3. Interconnector with losses
 ---------------------------
 .. literalinclude:: ../../examples/interconnector_constant_loss_percentage.py
     :linenos:
     :language: python
 
 
-Dynamic non-linear interconnector losses
+4. Dynamic non-linear interconnector losses
 ----------------------------------------
 Implements creating loss functions as described in
 :download:`Marginal Loss Factors documentation section 3 to 5  <../../docs/pdfs/Marginal Loss Factors for the 2020-21 Financial year.pdf>`.
@@ -38,7 +47,7 @@ Implements creating loss functions as described in
     :language: python
 
 
-Simple FCAS markets
+5. Simple FCAS markets
 ----------------------------------------
 Implements a market for energy, regulation raise and contingency 6 sec raise, with
 co-optimisation constraints as described in section 6.2 and 6.3 of
@@ -49,7 +58,7 @@ co-optimisation constraints as described in section 6.2 and 6.3 of
     :language: python
 
 
-Simple recreation of historical dispatch
+6. Simple recreation of historical dispatch
 ----------------------------------------
 Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market with unit bids,
 unit maximum capacity constraints and interconnector models, all sourced from historical data published by AEMO.
@@ -58,7 +67,7 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
     :linenos:
     :language: python
 
-Detailed recreation of historical dispatch
+7. Detailed recreation of historical dispatch
 ------------------------------------------
 Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market using all the
 features of the nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
@@ -69,7 +78,7 @@ conditions of the next interval, rather the historical initial conditions are al
     :linenos:
     :language: python
 
-Time sequential recreation of historical dispatch
+8. Time sequential recreation of historical dispatch
 -------------------------------------------------
 Demonstrates using nempy to recreate historical dispatch in a dynamic or time sequential manner, this means the outputs
 of one interval become the initial conditions for the next dispatch interval. Note, currently there is not the infrastructure
