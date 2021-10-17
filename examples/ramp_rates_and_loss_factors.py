@@ -71,14 +71,19 @@ print(market.get_unit_dispatch())
 # 52.63 $/MW, again fully dispatch. The next cheapest is unit B with 30 MW at
 # 57.89 $/MW, however, unit B start the interval at dispatch level of 0.0 MW
 # and can ramp at speed of 720 MW/hr, the default dispatch interval of Nempy
-# is 5 min, this mean unit B can at most produce 60 MW by the end of the
-# dispatch interval, this means only 10 MW of this bid from unit B can be
+# is 5 min, so unit B can at most produce 60 MW by the end of the
+# dispatch interval, this means only 10 MW of the second bid from unit B can be
 # dispatched. Finally, the last bid that needs to be dispatch for supply to
-# equal demand is from unit A with 25 MW at 57.89 $/MW, only 20 MW of this
+# equal demand is from unit A with 25 MW at 66.67 $/MW, only 20 MW of this
 # bid is needed. Adding together the bids from each unit we can see that
-# unit A is dispatch for a total of 40 MW and unit B for a total of 60.0 MW.
+# unit A is dispatch for a total of 40 MW and unit B for a total of 60 MW.
 
 # Return the price of energy in each region.
 print(market.get_energy_prices())
 #   region  price
-# 0    NSW   57.89
+# 0    NSW  66.67
+
+# Understanding the pricing result: In this case the marginal bid, the bid
+# that would be dispatch if demand increased is the second bid from unit A,
+# after adjusting for the loss factor this bid has a price of 66.67 $/MW bid,
+# and this bid sets the price.
