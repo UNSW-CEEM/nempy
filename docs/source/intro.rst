@@ -23,14 +23,14 @@ Nempy proceeds roughly as follows:
 
 1. Bids from generators and loads are preprocessed, some FCAS bids are excluded if they do not meet a set of inclusion
 criteria set out by AEMO (:download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`).
-2. For each bid from a generator a decision variable in the MIP is created, the cost of the variable is the bid price
+2. For each bid from a generator a decision variable in the MIP is created, and the cost of the variable is the bid price
 submitted by the generator, but is adjusted by a loss factor if one is provided.
 3. For each market region a constraint forcing generation to equal demand is created.
 4. The rest of the market features are implemented as additional variables and/or constraints in the MIP, for example:
    - unit ramp rates are converted to a set MW ramp that units can achieve over the dispatch interval, and the sum of a
      unit's dispatch is limited by this MW value
    - interconnectors are formulated as additional decision variables that link the supply equals demand constraints
-     of the interconnected regions, and are combined with constraints sets that calculate interconnector losses as a
+     of the interconnected regions, and are combined with constraints sets that enforce interconnector losses as a
      function of power flow
 5. The MIP is solved to determined interconnector flows and dispatch targets, the MIP is then converted to a linear
    problem, and re-solved, such that market prices can be determined from constraint shadow prices.
