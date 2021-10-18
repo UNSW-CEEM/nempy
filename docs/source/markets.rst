@@ -52,11 +52,11 @@ dispatch and pricing. The examples below give an overview of how method calls bu
 
     market.set_demand_constraints(demand)
 
-Specific examples for using this class are provided on the `Examples`_ page, detailed documentation of the class
-:class:`nempy.SpotMarket` is provided in the `Reference`_ material below.
+Specific examples for using this class are provided on the :ref:`Examples` page, detailed documentation of the class
+:class:`nempy.markets.SpotMarket` is provided in the `Reference`_ material below.
 
-Reference
----------
+.. _refname:Reference
+---------------------
 
 .. automodule:: nempy.markets
     :autosummary:

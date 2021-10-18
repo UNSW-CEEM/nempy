@@ -3,28 +3,30 @@ Introduction
 Nempy is an open-source python package that can be used to model the dispatch procedure of the Australian National
 Electricity Market (NEM). The dispatch process is at the core of many market modelling projects. As the
 NEM evolves, constraints and ancillary service markets are becoming increasingly important in shaping dispatch outcomes.
-Significant changes to the dispatch process are also likely to occur soon. Nempy allows users to easily configure a
-dispatch model to fit the relevant research question. Furthermore, if extra functionality is needed, the python
-implementation, open-source licencing and planned ongoing support from developers make it possible to adapt nempy
-to your needs. Version 1 will be a stable release and ongoing minor updates or patches will remain backwards compatible.
-However, we are interested in receiving feedback to inform the ongoing maintenance, development and any future major updates.
+As part of the ongoing reform process significant changes to the dispatch process have also been proposed, for example,
+the introduction of an operating reserve market is being considered, as is the adoption of a dynamic intra-regional loss
+model. Nempy allows users to easily configure a dispatch model to fit the relevant research question. Furthermore, if
+extra functionality is needed, the python implementation, open-source licencing and planned ongoing support from developers
+make it possible to adapt Nempy to your needs. Version 1 will be a stable release and ongoing minor updates or patches
+will remain backwards compatible. However, we are interested in receiving feedback to inform the ongoing maintenance,
+development and any future major updates.
 
 Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, has detailed
 documentation and has planned support until mid-2023.
 
-Find nempy and more information at https://github.com/UNSW-CEEM/nempy.
+The Nempy source code is on GitHub: https://github.com/UNSW-CEEM/nempy.
 
 Dispatch Procedure Outline
 --------------------------
-The task of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
+The main task of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
 least cost set of dispatch levels for generators and scheduled loads. Note, in this optimisation the dispatch of
 scheduled loads is treated as a negative cost, this makes the least cost optimisation equivalent to maximising the value of
 market trade. The construction of the MIP as implemented by Nempy proceeds roughly as follows:
 
 #. Bids from generators and loads are preprocessed, some FCAS bids are excluded if they do not meet a set of inclusion
    criteria set out by AEMO (:download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`).
-#. For each bid from a generator and scheduled load a decision variable in the MIP is created, the cost of the
-   variable is the bid price, and the price is adjusted by a loss factor if one is provided.
+#. For each bid a decision variable in the MIP is created, the cost of the variable in the objective function is the bid
+   price, and the price is adjusted by a loss factor if one is provided.
 #. For each market region a constraint forcing generation to equal demand is created.
 #. The rest of the market features are implemented as additional variables and/or constraints in the MIP, for example:
 
@@ -73,9 +75,9 @@ the pandas' interface.
 
 Accuracy
 --------
-The accuracy with which nempy represents the NEM's dispatch process can be measured by re-creating historical dispatch results.
+The accuracy with which Nempy represents the NEM's dispatch process can be measured by re-creating historical dispatch results.
 This is done for a given dispatch interval by downloading the relevant historical inputs such as unit initial operating levels,
-bids and generic constraints, processing these inputs so they are compatible with the nempy SpotMarket class, and finally
+bids and generic constraints, processing these inputs so they are compatible with the Nempy SpotMarket class, and finally
 dispatching the spot market. The results can then be compared to historical results to gauge the model's accuracy.
 Figure 1 shows the results of this process for 1000 randomly selected dispatch intervals in 2019, comparing the modelled
 NSW energy price with historical prices. Here the model is configured to maximally reflect the NEM's dispatch procedure.
@@ -95,11 +97,11 @@ The nempy model was configured to maximally replicated the NEM dispatch process 
   :width: 600
 
 *Figure 2: A comparison of the historical NSW reference node price, prior to scaling or capping, with the price calculated
-using nempy. The nempy model was configured without FCAS markets or generic constraints and 1000 randomly selected intervals were used.*
+using Nempy. The Nempy model was configured without FCAS markets or generic constraints and 1000 randomly selected intervals were used.*
 
 Run-time
 --------
-The run-time for nempy to calculate dispatch depends on several factors, the complexity of the model implemented, time
+The run-time for Nempy to calculate dispatch depends on several factors, the complexity of the model implemented, time
 taken to load inputs, the mixed-integer linear solver used and of course the hardware. Run-times reported here used an
 Intel® Xeon(R) W-2145 CPU @ 3.70 GHz. For the model results shown in Figure 1, including time taken to load inputs from
 the disk and using the open-source solver CBC, the average run-time per dispatch interval was 2.54 s. When the proprietary
@@ -109,10 +111,16 @@ run-time. For the simpler model, the time to load inputs is increased significan
 input/output XML files which takes approximately 0.4 s. Importantly, this means it will be possible to speed up simpler
 models by sourcing inputs from different data storage formats.
 
+Notes:
+- Information on solvers is provided is provided in the :ref:Reference documentation of the SpotMarket class.
+- The total runtime was calculated using the python time module and measuring the time taken from the loading of inputs
+  to the extraction of results from the model. The runtime of different sub-process, i.e. loading of the XML file, was
+  measure by inserting timing code into the Nempy source code where required.
+
 Documentation
 -------------
 Nempy has a detailed set of documentation, mainly comprising of two types: examples and reference documentation. The
-examples aim to show how nempy can be used and how it works in a practical manner. A number of simple examples focus on
+examples aim to show how Nempy can be used and how it works in a practical manner. A number of simple examples focus on
 demonstrating the use of subsets of the package's features in isolation in order to make them easier to understand. The
 more complex examples show how features can be combined to build models more suitable for analysis. The reference
 documentation aims to cover all the package's public APIs (the classes, methods and functions accessible to the user),
@@ -123,16 +131,21 @@ Support
 Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
 Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. As part of this
 project we plan to engage with and support software users, this can be facilitated through the PhD until mid-2023. If
-nempy is used sufficiently broadly we would look to continue support beyond this timeframe.
+Nempy is used sufficiently broadly we would look to continue support beyond this timeframe.
 
 
 Ongoing work
 ------------
-Ongoing work is likely to focus on greater support for time-sequential and dynamic models through the creation of tools
-that dynamically create inputs for the dispatch process. This would likely include tools for dynamically generating
-participant bids and regional FCAS requirements. Additionally, many historical dispatch generic constraints are potentially
-unsuitable for dynamic modelling as their right-hand sides contain line flow values and unit operating statuses
-that would be expected to change under many scenarios in a dynamic model. Thus, another avenue for future work is the
-addition of tools for creating constraint inputs appropriate for dynamic modelling.
+Maintenance:
+1. Retest Nempy on 2020 and 2021 historical data, previous testing has been against 2019 data.
+Enhancements:
+No enhancements are currently planned for Nempy. However, development is active on a market participant behavioural
+modelling package that would strongly complement the functionality of Nempy, https://github.com/UNSW-CEEM/NEMPRO .
 
+Dependencies
+------------
+* pandas >=1.0.0, <2.0.0
+* mip>=1.11.0, <2.0.0: https://github.com/coin-or/python-mip)
+* xmltodict==0.12.0:  https://github.com/martinblech/xmltodict)
+* requests>=2.0.0, <3.0.0
 
