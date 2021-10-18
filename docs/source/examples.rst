@@ -78,6 +78,8 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
 
 *Results from example: for the QLD region a reasonable fit between modelled prices and historical prices is obtained.*
 
+.. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO.
+
 .. literalinclude:: ../../examples/recreating_historical_dispatch.py
     :linenos:
     :language: python
@@ -94,6 +96,8 @@ conditions of the next interval, rather the historical initial conditions are al
 
 *Results from example: for the QLD region a very close fit between modelled prices and historical prices is obtained.*
 
+.. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO.
+
 .. literalinclude:: ../../examples/all_features_example.py
     :linenos:
     :language: python
@@ -106,6 +110,8 @@ in place to include features such as generic constraints in the time sequential 
 would need to be re-calculated based on the dynamic system state. Similarly, using historical bids in this example is
 some what problematic as participants also dynamically change their bids based on market conditions. However, for the sake
 of demonstrating how Nempy can be used to create time sequential models, historical bids are used in this example.
+
+.. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO.
 
 .. literalinclude:: ../../examples/time_sequential.py
     :linenos:

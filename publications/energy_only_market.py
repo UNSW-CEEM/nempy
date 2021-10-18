@@ -13,19 +13,22 @@ from nempy.historical_inputs import loaders, mms_db, \
 # The size of historical data files for a full year of 5 min dispatch
 # is very large, approximately 800 GB, for this reason the data is
 # stored on an external SSD.
-con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
+con = sqlite3.connect('historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
-xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
+    # This requires approximately 5 GB of storage.
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=12)
-    xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=12)
+
+    # This requires approximately 3.5 GB of storage.
+    xml_cache_manager.populate(start_year=2019, start_month=1, start_day=1,
+                               end_year=2020, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,

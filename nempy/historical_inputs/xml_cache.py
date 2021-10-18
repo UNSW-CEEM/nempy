@@ -32,12 +32,12 @@ class XMLCacheManager:
         self.xml = None
         Path(cache_folder).mkdir(parents=False, exist_ok=True)
 
-    def populate(self, start_year, start_month, end_year, end_month, verbose=True):
-        start = datetime(year=start_year, month=start_month, day=1) - timedelta(days=1)
+    def populate(self, start_year, start_month, end_year, end_month, start_day=1, end_day=1, verbose=True):
+        start = datetime(year=start_year, month=start_month, day=start_day) - timedelta(days=1)
         if end_month == 12:
             end_month = 0
             end_year += 1
-        end = datetime(year=end_year, month=end_month + 1, day=1)
+        end = datetime(year=end_year, month=end_month, day=end_day)
         download_date = start
         while download_date <= end:
             if verbose:

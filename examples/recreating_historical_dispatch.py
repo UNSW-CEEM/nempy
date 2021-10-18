@@ -22,8 +22,8 @@ if download_inputs:
                             end_year=2019, end_month=1)
 
     # This requires approximately 60 GB of storage.
-    xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=1)
+    xml_cache_manager.populate(start_year=2019, start_month=1, start_day=1,
+                               end_year=2019, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,

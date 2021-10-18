@@ -25,7 +25,7 @@ if download_inputs:
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=12)
     xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=12)
+                               end_year=2020, end_month=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
