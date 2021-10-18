@@ -13,9 +13,9 @@ from nempy.historical_inputs import loaders, mms_db, \
 # The size of historical data files for a full year of 5 min dispatch
 # is very large, approximately 800 GB, for this reason the data is
 # stored on an external SSD.
-con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+con = sqlite3.connect('F:/nempy_test_files/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
-xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('F:/nempy_test_files/nemde_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.

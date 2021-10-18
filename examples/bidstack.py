@@ -66,8 +66,8 @@ print(market.get_energy_prices())
 
 # Additional Detail: The above is a simplified interpretation
 # of the pricing result, note that the price is actually taken from the
-# underlying linear problem's shadow price for supply equals demand constraint.
+# underlying linear problem's shadow price for the supply equals demand constraint.
 # The way the problem is formulated if supply sits exactly between two bids,
-# for example, in this case 120.0 MW, then price is set by the lower rather
-# than the higher bid. Note in practical use cases the demand is floating point
-# number so this situation is likely to occur.
+# for example at 120.0 MW, then the price is set by the lower rather
+# than the higher bid. Note, in practical use cases if the demand is a floating point
+# number this situation is unlikely to occur.

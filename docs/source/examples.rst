@@ -2,11 +2,11 @@ Examples
 ==============
 A number of examples of how to use Nempy are provided below. Examples 1 to 5 are simple and aim introduce various
 market features that can be modelled with Nempy in an easy to understand way, the dispatch and pricing outcomes are
-explained in inline comments where the results printed. Examples 6 and 7 show how to use the historical data input
+explained in inline comments where the results are printed. Examples 6 and 7 show how to use the historical data input
 preparation tools provided with Nempy to recreate historical dispatch intervals. Historical dispatch and pricing
 outcomes can be difficult to interpret as they are usually the result of complex interactions between the many features
-of the dispatch process, for these example the results are plotted in comparison to actual historical price outcomes.
-Example 8 simply demonstrates how the outputs of one dispatch interval can be used as the initial conditions of the
+of the dispatch process, for these example the results are plotted in comparison to historical price outcomes.
+Example 8 demonstrates how the outputs of one dispatch interval can be used as the initial conditions of the
 next dispatch interval to create a time sequential model, additionally the current limitations with the approach are
 briefly discussed.
 
@@ -45,7 +45,7 @@ thus all the power to meet VIC demand must flow across the interconnetcor.
 
 4. Dynamic non-linear interconnector losses
 ----------------------------------------
-Demonstrates how to model region demand dependant interconnector loss functions as decribed in the AEMO
+This example demonstrates how to model regional demand dependant interconnector loss functions as decribed in the AEMO
 :download:`Marginal Loss Factors documentation section 3 to 5  <../../docs/pdfs/Marginal Loss Factors for the 2020-21 Financial year.pdf>`.
 To make the interconnector flow and loss calculation easy to understand a single unit is modelled in the NSW region,
 NSW demand is set zero, and VIC region demand is set to 800 MW, thus all the power to meet VIC demand must flow across
@@ -59,7 +59,7 @@ the interconnetcor.
 
 5. Simple FCAS markets
 ----------------------------------------
-Implements a market for energy, regulation raise and contingency 6 sec raise, with
+This example implements a market for energy, regulation raise and contingency 6 sec raise, with
 co-optimisation constraints as described in section 6.2 and 6.3 of
 :download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
 
@@ -70,7 +70,7 @@ co-optimisation constraints as described in section 6.2 and 6.3 of
 
 6. Simple recreation of historical dispatch
 ----------------------------------------
-Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market with unit bids,
+Demonstrates using Nempy to recreate historical dispatch intervals by implementing a simple energy market with unit bids,
 unit maximum capacity constraints and interconnector models, all sourced from historical data published by AEMO.
 
 .. image:: ../../examples/charts/energy_market_only_qld_prices.png
@@ -84,8 +84,8 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
 
 7. Detailed recreation of historical dispatch
 ------------------------------------------
-Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market using all the
-features of the nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a simple energy market using all the
+features of the Nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
 dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
 conditions of the next interval, rather the historical initial conditions are always used.
 
@@ -100,12 +100,12 @@ conditions of the next interval, rather the historical initial conditions are al
 
 8. Time sequential recreation of historical dispatch
 -------------------------------------------------
-Demonstrates using nempy to recreate historical dispatch in a dynamic or time sequential manner, this means the outputs
+This example demonstrates using Nempy to recreate historical dispatch in a dynamic or time sequential manner, this means the outputs
 of one interval become the initial conditions for the next dispatch interval. Note, currently there is not the infrastructure
 in place to include features such as generic constraints in the time sequential model as the rhs values of many constraints
 would need to be re-calculated based on the dynamic system state. Similarly, using historical bids in this example is
-some what problematic as participants also dynamically change their bids based on market conditions. However, for sake
-of demonstrating how nempy can be used to create time sequential models, historical bids are used in this example.
+some what problematic as participants also dynamically change their bids based on market conditions. However, for the sake
+of demonstrating how Nempy can be used to create time sequential models, historical bids are used in this example.
 
 .. literalinclude:: ../../examples/time_sequential.py
     :linenos:

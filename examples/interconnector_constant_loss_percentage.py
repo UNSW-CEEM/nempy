@@ -115,8 +115,4 @@ print(market.get_energy_prices())
 
 # Understanding pricing results: The marginal cost of supply in NSW is simply
 # the cost of unit A's bid. However, the marginal cost of supply in VIC also
-# includes the cost of paying for interconnector losses. In this case as losses
-# are a fixed percentage of interconnector flows we can work out the ratio of
-# demand to supply, which is 94.62 / 90.0 = 1.0513, so any increase in VIC
-# demand we will need a factor of 1.0513 extra supply from unit A, hence the
-# price in VIC is 50 * 1.0513 = 52.565.
+# includes the cost of paying for interconnector losses.

@@ -69,7 +69,7 @@ print(market.get_unit_dispatch())
 # from unit A with 20 MW at 44.44 $/MW (after loss factor), this will be
 # fully dispatched. The next cheapest bid is from unit B with 50 MW at
 # 52.63 $/MW, again fully dispatch. The next cheapest is unit B with 30 MW at
-# 57.89 $/MW, however, unit B start the interval at dispatch level of 0.0 MW
+# 57.89 $/MW, however, unit B starts the interval at a dispatch level of 0.0 MW
 # and can ramp at speed of 720 MW/hr, the default dispatch interval of Nempy
 # is 5 min, so unit B can at most produce 60 MW by the end of the
 # dispatch interval, this means only 10 MW of the second bid from unit B can be
