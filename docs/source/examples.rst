@@ -73,8 +73,6 @@ co-optimisation constraints as described in section 6.2 and 6.3 of
 Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market with unit bids,
 unit maximum capacity constraints and interconnector models, all sourced from historical data published by AEMO.
 
-To get graphs working install plotly.
-
 .. image:: ../../examples/charts/energy_market_only_qld_prices.png
   :width: 600
 
@@ -91,9 +89,7 @@ features of the nempy market model, all inputs sourced from historical data publ
 dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
 conditions of the next interval, rather the historical initial conditions are always used.
 
-To get graphs working install plotly.
-
-.. image:: ../../examples/charts/full_featured_market_qld_price.png
+.. image:: ../../examples/charts/full_featured_market_qld_prices.png
   :width: 600
 
 *Results from example: for the QLD region a very close fit between modelled prices and historical prices is obtained.*

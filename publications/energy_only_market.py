@@ -132,5 +132,5 @@ con.close()
 outputs = pd.concat(outputs)
 outputs = outputs.sort_values('ROP')
 outputs = outputs.reset_index(drop=True)
-outputs.to_csv('energy_price_results_2019_1000_intervals.csv')
+outputs.to_csv('energy_price_results_2019_1000_intervals_without_FCAS_or_generic_constraints.csv')
 
