@@ -12,7 +12,7 @@ xml_cache
     :autosummary:
     :members:
     :inherited-members:
-    :exclude-members: timedelta,datetime,time,Path
+    :exclude-members: timedelta,datetime,time,Path,xmltodict
 
 mms_db
 -----------------------------------------
