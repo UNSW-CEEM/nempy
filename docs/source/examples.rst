@@ -1,3 +1,5 @@
+.. _examples:
+
 Examples
 ====================
 A number of examples of how to use Nempy are provided below. Examples 1 to 5 are simple and aim introduce various
