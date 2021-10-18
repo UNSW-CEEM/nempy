@@ -16,9 +16,9 @@ Find nempy and more information at https://github.com/UNSW-CEEM/nempy.
 
 Dispatch Procedure Outline
 --------------------------
-The main step of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
+The task of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
 least cost set of dispatch levels for generators and scheduled loads. Note, in this optimisation the dispatch of
-scheduled is treated as a negative cost, this makes the least cost optimisation equivalent to maximising the value of
+scheduled loads is treated as a negative cost, this makes the least cost optimisation equivalent to maximising the value of
 market trade. The construction of the MIP as implemented by Nempy proceeds roughly as follows:
 
 #. Bids from generators and loads are preprocessed, some FCAS bids are excluded if they do not meet a set of inclusion
@@ -40,9 +40,9 @@ market trade. The construction of the MIP as implemented by Nempy proceeds rough
 Other steps in the dispatch procedure that are not implemented by Nempy are:
 
 #. The preprocessing step to calculate of FCAS market and network constraint right hand side values (right hand side
-values need to be provided as inputs to Nempy)
+   values need to be provided as inputs to Nempy)
 #. Multiple re-runs of the optimisation to the operational settings for DC link between mainland synchronous region and
-the Tasmainian synchronous region
+   the Tasmainian synchronous region
 
 
 Features
