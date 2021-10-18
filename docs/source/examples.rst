@@ -93,7 +93,7 @@ conditions of the next interval, rather the historical initial conditions are al
 
 To get graphs working install plotly.
 
-.. image:: ../../examples/charts/energy_market_only_qld_prices.png
+.. image:: ../../examples/charts/full_featured_market_qld_price.png
   :width: 600
 
 *Results from example: for the QLD region a very close fit between modelled prices and historical prices is obtained.*
