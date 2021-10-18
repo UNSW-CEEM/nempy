@@ -1,4 +1,4 @@
-.. _spot:
+.. _spotmarket:
 
 markets module
 ===============================
