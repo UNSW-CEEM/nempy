@@ -137,10 +137,13 @@ Nempy is used sufficiently broadly we would look to continue support beyond this
 Ongoing work
 ------------
 Maintenance:
+
 1. Retest Nempy on 2020 and 2021 historical data, previous testing has been against 2019 data.
+
 Enhancements:
-No enhancements are currently planned for Nempy. However, development is active on a market participant behavioural
-modelling package that would strongly complement the functionality of Nempy, https://github.com/UNSW-CEEM/NEMPRO .
+
+* No enhancements are currently planned for Nempy. However, development is active on a market participant behavioural
+  modelling package that would strongly complement the functionality of Nempy, https://github.com/UNSW-CEEM/NEMPRO .
 
 Dependencies
 ------------

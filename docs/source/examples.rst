@@ -1,4 +1,6 @@
-.. _refname:Examples
+.. _examples:
+
+Examples
 ====================
 A number of examples of how to use Nempy are provided below. Examples 1 to 5 are simple and aim introduce various
 market features that can be modelled with Nempy in an easy to understand way, the dispatch and pricing outcomes are
