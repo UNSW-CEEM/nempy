@@ -55,7 +55,9 @@ dispatch and pricing. The examples below give an overview of how method calls bu
 Specific examples for using this class are provided on the :ref:`examples` page, detailed documentation of the class
 :class:`nempy.markets.SpotMarket` is provided in the `Reference`_ material below.
 
-.. _refname:Reference
+.. _reference:
+
+Reference
 ---------------------
 
 .. automodule:: nempy.markets
