@@ -33,6 +33,7 @@ class XMLCacheManager:
         Path(cache_folder).mkdir(parents=False, exist_ok=True)
 
     def populate(self, start_year, start_month, end_year, end_month, verbose=True):
+        """Download data to the cache from the AEMO website. Data downloaded is inclusive of the start and end month."""
 
         if end_month == 12:
             end_month = 1
@@ -44,6 +45,8 @@ class XMLCacheManager:
                              end_year=end_year, end_month=end_month, end_day=1, verbose=verbose)
 
     def populate_by_day(self, start_year, start_month, end_year, end_month, start_day, end_day, verbose=True):
+        """Download data to the cache from the AEMO website. Data downloaded is inclusive of the start and end date."""
+
         start = datetime(year=start_year, month=start_month, day=start_day) - timedelta(days=1)
         if end_month == 12:
             end_month = 0
