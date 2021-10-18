@@ -68,7 +68,7 @@ Flexibility
 -----------
 Nempy is designed to have a high degree of flexibility, it can be used to implement very simple merit order dispatch models,
 highly detailed models that seek to re-create the real world dispatch procedure, or a model at the many levels of intermediate
-complexity. A set of `examples1`_ demonstrating this flexibility are available. Most inputs are passed to nempy as pandas DataFrame
+complexity. A set of ref:`examples, <examples1>` demonstrating this flexibility are available. Most inputs are passed to nempy as pandas DataFrame
 objects, which means Nempy can easily source inputs from other python code, SQL databases, CSVs and other formats supported by
 the pandas' interface.
 
@@ -112,7 +112,7 @@ models by sourcing inputs from different data storage formats.
 
 Notes:
 
-- Information on solvers is provided is provided in the `examples1`_ documentation of the SpotMarket class.
+- Information on solvers is provided is provided in the ref:`reference documentation <spotmarket>` of the SpotMarket class.
 - The total runtime was calculated using the python time module and measuring the time taken from the loading of inputs
   to the extraction of results from the model. The runtime of different sub-process, i.e. loading of the XML file, was
   measure by inserting timing code into the Nempy source code where required.
