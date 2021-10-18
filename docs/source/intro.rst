@@ -68,9 +68,8 @@ Flexibility
 -----------
 Nempy is designed to have a high degree of flexibility, it can be used to implement very simple merit order dispatch models,
 highly detailed models that seek to re-create the real world dispatch procedure, or a model at the many levels of intermediate
-complexity. A set of examples demonstrating this flexibility are available on the package's documentation
-`readthedocs page <https://nempy.readthedocs.io/en/latest/examples.html>`_. Most inputs are passed to nempy as pandas DataFrame
-objects, which means nempy can easily source inputs from other python code, SQL databases, CSVs and other formats supported by
+complexity. A set of `examples`_ demonstrating this flexibility are available. Most inputs are passed to nempy as pandas DataFrame
+objects, which means Nempy can easily source inputs from other python code, SQL databases, CSVs and other formats supported by
 the pandas' interface.
 
 Accuracy
