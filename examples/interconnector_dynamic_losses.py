@@ -32,7 +32,7 @@ market.set_unit_price_bids(price_bids)
 # NSW has no demand but VIC has 800 MW.
 demand = pd.DataFrame({
     'region': ['NSW', 'VIC'],
-    'demand': [0.0, 801.0],  # MW
+    'demand': [0.0, 800.0],  # MW
     'loss_function_demand': [0.0, 800.0]  # MW
 })
 

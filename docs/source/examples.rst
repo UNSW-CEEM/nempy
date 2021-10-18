@@ -22,8 +22,9 @@ ramping constraints or other factors are considered.
 
 
 2. Unit loss factors, capacities and ramp rates
---------------------------------------------
-In this example units are given loss factors, capacity values and ramp rates.
+-----------------------------------------------
+A simple example with two units in a one region market, units are given loss factors, capacity values and ramp rates.
+The effects of loss factors on dispatch and market prices are explained.
 
 .. literalinclude:: ../../examples/ramp_rates_and_loss_factors.py
     :linenos:
@@ -31,7 +32,12 @@ In this example units are given loss factors, capacity values and ramp rates.
 
 
 3. Interconnector with losses
----------------------------
+-----------------------------
+A simple example demonstrating how to implement a two region market with an interconnector. The interconnector is
+modelled simply, with a fixed percentage of losses. To make the interconnector flow and loss calculation easy to
+understand a single unit is modelled in the NSW region, NSW demand is set zero, and VIC region demand is set to 90 MW,
+thus all the power to meet VIC demand must flow across the interconnetcor.
+
 .. literalinclude:: ../../examples/interconnector_constant_loss_percentage.py
     :linenos:
     :language: python
@@ -39,8 +45,12 @@ In this example units are given loss factors, capacity values and ramp rates.
 
 4. Dynamic non-linear interconnector losses
 ----------------------------------------
-Implements creating loss functions as described in
+Demonstrates how to model region demand dependant interconnector loss functions as decribed in the AEMO
 :download:`Marginal Loss Factors documentation section 3 to 5  <../../docs/pdfs/Marginal Loss Factors for the 2020-21 Financial year.pdf>`.
+To make the interconnector flow and loss calculation easy to understand a single unit is modelled in the NSW region,
+NSW demand is set zero, and VIC region demand is set to 800 MW, thus all the power to meet VIC demand must flow across
+the interconnetcor.
+
 
 .. literalinclude:: ../../examples/interconnector_dynamic_losses.py
     :linenos:
@@ -63,6 +73,13 @@ co-optimisation constraints as described in section 6.2 and 6.3 of
 Demonstrates using nempy to recreate historical dispatch intervals by implementing a simple energy market with unit bids,
 unit maximum capacity constraints and interconnector models, all sourced from historical data published by AEMO.
 
+To get graphs working install plotly.
+
+.. image:: ../../examples/charts/energy_market_only_qld_prices.png
+  :width: 600
+
+*Results from example: for the QLD region a reasonable fit between modelled prices and historical prices is obtained.*
+
 .. literalinclude:: ../../examples/recreating_historical_dispatch.py
     :linenos:
     :language: python
@@ -73,6 +90,13 @@ Demonstrates using nempy to recreate historical dispatch intervals by implementi
 features of the nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
 dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
 conditions of the next interval, rather the historical initial conditions are always used.
+
+To get graphs working install plotly.
+
+.. image:: ../../examples/charts/energy_market_only_qld_prices.png
+  :width: 600
+
+*Results from example: for the QLD region a very close fit between modelled prices and historical prices is obtained.*
 
 .. literalinclude:: ../../examples/all_features_example.py
     :linenos:
