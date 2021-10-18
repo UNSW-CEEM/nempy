@@ -17,25 +17,28 @@ Find nempy and more information at https://github.com/UNSW-CEEM/nempy.
 Dispatch Procedure Outline
 --------------------------
 The main step of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
-least cost set of dispatch levels for generators and scheduled loads. Note, as the objective is technically to maximise the
-value of trade in the market, loads are treated as a negative costs. The construction of the MIP as implemented by
-Nempy proceeds roughly as follows:
+least cost set of dispatch levels for generators and scheduled loads. Note, in this optimisation the dispatch of
+scheduled is treated as a negative cost, this makes the least cost optimisation equivalent to maximising the value of
+market trade. The construction of the MIP as implemented by Nempy proceeds roughly as follows:
 
 #. Bids from generators and loads are preprocessed, some FCAS bids are excluded if they do not meet a set of inclusion
-criteria set out by AEMO (:download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`).
-#. For each bid from a generator a decision variable in the MIP is created, and the cost of the variable is the bid price
-submitted by the generator, but is adjusted by a loss factor if one is provided.
+   criteria set out by AEMO (:download:`FCAS Model in NEMDE <../../docs/pdfs/FCAS Model in NEMDE.pdf>`).
+#. For each bid from a generator and scheduled load a decision variable in the MIP is created, the cost of the
+   variable is the bid price, and the price is adjusted by a loss factor if one is provided.
 #. For each market region a constraint forcing generation to equal demand is created.
 #. The rest of the market features are implemented as additional variables and/or constraints in the MIP, for example:
+
    - unit ramp rates are converted to a set MW ramp that units can achieve over the dispatch interval, and the sum of a
      unit's dispatch is limited by this MW value
    - interconnectors are formulated as additional decision variables that link the supply equals demand constraints
      of the interconnected regions, and are combined with constraints sets that enforce interconnector losses as a
      function of power flow
+
 #. The MIP is solved to determined interconnector flows and dispatch targets, the MIP is then converted to a linear
    problem, and re-solved, such that market prices can be determined from constraint shadow prices.
 
 Other steps in the dispatch procedure that are not implemented by Nempy are:
+
 #. The preprocessing step to calculate of FCAS market and network constraint right hand side values (right hand side
 values need to be provided as inputs to Nempy)
 #. Multiple re-runs of the optimisation to the operational settings for DC link between mainland synchronous region and
