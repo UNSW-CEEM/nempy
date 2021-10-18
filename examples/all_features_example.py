@@ -2,15 +2,16 @@
 
 import sqlite3
 import pandas as pd
+import plotly.graph_objects as go
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, \
     constraints
 
-con = sqlite3.connect('market_management_system.db')
+con = sqlite3.connect('historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
+xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
@@ -158,10 +159,37 @@ for interval in dispatch_intervals:
     # Save prices from this interval
     prices = market.get_energy_prices()
     prices['time'] = interval
-    outputs.append(prices.loc[:, ['time', 'region', 'price']])
+
+    # Getting historical prices for comparison. Note, ROP price, which is
+    # the regional reference node price before the application of any
+    # price scaling by AEMO, is used for comparison.
+    historical_prices = mms_db_manager.DISPATCHPRICE.get_data(interval)
+
+    prices = pd.merge(prices, historical_prices,
+                      left_on=['time', 'region'],
+                      right_on=['SETTLEMENTDATE', 'REGIONID'])
+
+    outputs.append(
+        prices.loc[:, ['time', 'region', 'price', 'ROP']])
+
+outputs = pd.concat(outputs)
+
+# Plot results for QLD market region.
+qld_prices = outputs[outputs['region'] == 'QLD1']
+
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['price'], name='Nempy price', mode='markers',
+                         marker_size=12, marker_symbol='circle'))
+fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['ROP'], name='Historical price', mode='markers',
+                         marker_size=8))
+fig.update_xaxes(title="Time")
+fig.update_yaxes(title="Price ($/MWh)")
+fig.update_layout(yaxis_range=[0.0, 100.0], title="QLD Region Price")
+fig.write_image('charts/full_featured_market_qld_prices.png')
+fig.show()
 
 con.close()
-print(pd.concat(outputs))
+print(outputs)
 #                   time region      price
 # 0  2019/01/01 12:00:00   NSW1  91.870167
 # 1  2019/01/01 12:00:00   QLD1  76.190796

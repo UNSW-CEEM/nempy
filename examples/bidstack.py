@@ -26,7 +26,7 @@ unit_info = pd.DataFrame({
 # The demand in the region\s being dispatched
 demand = pd.DataFrame({
     'region': ['NSW'],
-    'demand': [120.0]  # MW
+    'demand': [115.0]  # MW
 })
 
 # Create the market model
@@ -42,9 +42,32 @@ market.dispatch()
 print(market.get_unit_dispatch())
 #   unit service  dispatch
 # 0    A  energy      40.0
-# 1    B  energy      80.0
+# 1    B  energy      75.0
+
+# Understanding the dispatch results: Unit A's first bid is 20 MW at 50 $/MW,
+# and unit B's first bid is 50 MW at 50 $/MW, as demand for electricity is
+# 115 MW both these bids are need to meet demand and so both will be fully
+# dispatched. The next cheapest bid is 30 MW at 55 $/MW from unit B, combining
+# this with the first two bids we get 100 MW of generation, so all of this bid
+# will be dispatched. The next cheapest bid is 20 MW at 60 $/MW from unit A, by
+# dispatching 15 MW of this bid we get a total of 115 MW generation, and supply
+# meets demand so no more bids need to be dispatched. Adding up the dispatched
+# bids from each generator we can see that unit A will be dispatch for 40 MW
+# and unit B will be dispatch for 75 MW, as given by our bid stack market model.
 
 # Return the price of energy in each region.
 print(market.get_energy_prices())
 #   region  price
 # 0    NSW   60.0
+
+# Understanding the pricing result: In this case the marginal bid, the bid
+# that would be dispatch if demand increased is the 60 $/MW bid from unit
+# B, thus this bid sets the price.
+
+# Additional Detail: The above is a simplified interpretation
+# of the pricing result, note that the price is actually taken from the
+# underlying linear problem's shadow price for supply equals demand constraint.
+# The way the problem is formulated if supply sits exactly between two bids,
+# for example, in this case 120.0 MW, then price is set by the lower rather
+# than the higher bid. Note in practical use cases the demand is floating point
+# number so this situation is likely to occur.

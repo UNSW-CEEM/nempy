@@ -170,7 +170,7 @@ def test_one_interconnector():
         'loss_function': [constant_losses]
     })
 
-    # The points to linearly interpolate the loss function bewteen. In this example the loss function is linear so only
+    # The points to linearly interpolate the loss function bewtween. In this example the loss function is linear so only
     # three points are needed, but if a non linear loss function was used then more points would be better.
     interpolation_break_points = pd.DataFrame({
         'interconnector': ['little_link', 'little_link', 'little_link'],
