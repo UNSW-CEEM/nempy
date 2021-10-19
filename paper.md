@@ -30,7 +30,7 @@ bibliography: paper.bib
 
 Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM).
 Electricity markets are a way of co-ordinating the supply of electricity by private firms. The NEM is a gross pool spot 
-market that operates on 5 min dispatch basis. Described simply, this means all generators wishing to sell electricity 
+market that operates on 5 min dispatch basis (@nemfactsheet). Described simply, this means all generators wishing to sell electricity 
 must bid into the market every 5 minutes, market clearing proceeds by calculating the cheapest combination of generator 
 operating levels to meet forecast demand at the end of 5 the minute dispatch interval. The price of electricity is set as the 
 marginal cost of generation, which, under a simple market formulation, would be the cost of the next generation bid to be 
@@ -38,7 +38,7 @@ dispatched if demand for electricity were to increase. Real-world formulations r
 in order to manage the technical complexity of securely and reliably operating an electricity grid. For example, in the 
 case of the NEM additional markets for ancillary services have been introduced. One set of ancillary markets that have 
 been integrated into the market dispatch procedure are the Frequency Control Ancillary Services (FCAS) markets. In these 
-markets generators compete to provide the ability to rapidly change generation levels in order to stabilise the grid frequency. 
+markets generators compete to provide the ability to rapidly change generation levels in order to control the grid frequency. 
 Nempy is flexible in that it allows for formulation of very simple market models, for the formulation of market models 
 of near real-world complexity, and at the various levels of intermediate complexity. Simple models can be constructed 
 using just generator bids and electricity demand, so called bid stack models. More complete models can be constructed by 
@@ -72,15 +72,15 @@ include many of the NEM wholesale market features [@xenophon2018open].
 
 # Use cases
 Nempy has been designed as a flexible model of the NEM's dispatch procedure and to be re-usable in a number of 
-contexts. Some potential use case are outlined below:
+contexts. Some potential use cases are outlined below:
 
 1. As a tool for studying the dispatch process itself. Models of any energy system or electricity market are necessarily 
-simplifications, however to improve model performance it is often desirable to add additional detail. Nempy can be used 
+simplifications, however, to improve model performance it is often desirable to add additional detail. Nempy can be used 
 to study the impact of different simplifications on modelling outcomes, and thus provide guidance on how model 
-performance could be improved by adding additional detail. fig shows a simple example of such an analysis. The price
+performance could be improved by adding additional detail. Figure 1 shows a simple example of such an analysis. The price
 results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year are shown. When
 Nempy is configured with a full set of market features price results closely match historical prices. When the FCAS 
-markets and generic constraints (network and security) are removed from the model results differ significantly. Resorting
+markets and generic constraints (network and security) are removed from the model, results differ significantly. Resorting
 the results of the simpler market model, we can see that both models produce a similar number of medianly priced 
 intervals. However, the highest and lowest priced intervals of the simpler model are significantly lower. The average
 historical price is 81.4 $/MWh, the average price of the full featured model is 81.3 $/MWh, and the average price of the 
@@ -88,30 +88,36 @@ simpler model is 75 $/MWh. The close match between the results of the full featu
 for the attribution of the deviation of the simpler model explicitly to the simplification that have been made.  
 
 ![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year.
-  The historical prices, prior to scaling or capping are also shown for comparison. Results from two Nempy models are
+  The historical prices, prior to scaling or capping, are also shown for comparison. Results from two Nempy models are
   shown, one with a full set of dispatch features, and one without FCAS markets or generic constraints (network and 
-  security constraints). For the simpler model price results are shown both historical price order and resorted.\label{fig:example}](plot.svg)
-and referenced from text using \autoref{fig:Figure 1}.
+  security constraints). For the simpler model price results are shown both in historical price order and resorted.\label{fig:example}](plot.png)
 
 2. As a building block in agent based market models. Agent based models can be used to study electricity market 
 operation, and are particularly useful in modelling both the competitive nature of electricity markets and their complex 
 operational constraints [@ventosa]. In such models, agents must interact with a modelled environment, and a key part of that 
 environment is the market dispatch process. Thus, Nempy could be useful as a building block to create agent based models 
 of the NEM, and play a role in answering various questions about market operational outcomes. Such questions could 
-include: How does changing the demand for electricity effect market outcomes? How does the entry of new 
-generating technologies effect market outcomes? and How do patterns of generator ownership effect 
-market outcomes? Of course, another necessary component of agent based models are behavioural models 
-of the agents, a prototype behavioural model of NEM participants is being developed as part of the NEMPRO project [@nempro].
+include: 
 
-3. To answer counter factual questions about historical dispatch outcomes. For example: What would have been the impact 
-on market dispatch if a particular network constraint had not been present? or How would have dispatch outcomes 
-differed if a unit had offered a different bid into the market? The answers to such questions have direct, and 
-potentially large, financial implications for market participants. AEMO offers access to a production version of 
-the market dispatch engine to allow participants to answer such questions [@nemde]. However, access is restricted to registered 
-participants and is provided at a cost of $15,000 per year. Additionally, users of this service are not provided with a
-copy of the dispatch engine, but access it by submitting input files to AEMO. This prevents the use of this service to 
-answer questions about how changes to the dispatch process, rather than the inputs, would effect dispatch outcomes. 
-In contrast, access to Nempy is not restricted, it is free to use, and is open to modification.
+    * How does changing the demand for electricity effect market outcomes? 
+    * How does the entry of new generating technologies effect market outcomes? 
+    * How do patterns of generator ownership effect market outcomes? 
+
+    Of course, another necessary component of agent based models are the behavioural models of the agents, a prototype 
+    behavioural model of NEM participants is being developed as part of the NEMPRO project [@nempro].
+
+3. To answer counter factual questions about historical dispatch outcomes. For example:
+
+    * What would have been the impact on market dispatch if a particular network constraint had not been present? 
+    * How would have dispatch outcomes differed if a unit had offered a different bid into the market? 
+
+    The answers to such questions have direct, and  potentially large, financial implications for market participants. 
+    AEMO offers access to a production version of the market dispatch engine to allow participants to answer such questions 
+    [@nemde]. However, access is restricted to registered participants and is provided at a cost of $15,000 per year. 
+    Additionally, users of this service are not provided with a copy of the dispatch engine, but access it by submitting 
+    input files to AEMO. This prevents the use of this service to answer questions about how changes to the dispatch 
+    process, rather than the inputs, would effect dispatch outcomes. In contrast, access to Nempy is not restricted, it is 
+    free to use, and is open to modification.
 
 4. As a reference implementation of the NEM's dispatch procedure. While the Australian Energy Market Operator (AEMO) 
 has published several documents that describe aspects of the dispatch process [@fcasmodel; @faststart; @lossfactors; 
