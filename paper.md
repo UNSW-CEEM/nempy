@@ -90,7 +90,7 @@ for the attribution of the deviation of the simpler model explicitly to the simp
 ![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year.
   The historical prices, prior to scaling or capping are also shown for comparison. Results from two Nempy models are
   shown, one with a full set of dispatch features, and one without FCAS markets or generic constraints (network and 
-  security constraints). For the simpler model price results are shown both historical price order and resorted.\label{fig:example}](plot.svg)
+  security constraints). For the simpler model price results are shown both historical price order and resorted.\label{fig:example}](plot.png)
 and referenced from text using \autoref{fig:Figure 1}.
 
 2. As a building block in agent based market models. Agent based models can be used to study electricity market 
