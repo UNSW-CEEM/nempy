@@ -114,7 +114,8 @@ models by sourcing inputs from different data storage formats.
 
 Notes:
 
-- Information on solvers is provided is provided in the :ref:`reference documentation <spotmarket>` of the SpotMarket class.
+- Information on solvers is provided is provided in the `reference documentation <https://nempy.readthedocs.io/en/latest/markets.html#nempy.markets.SpotMarket.solver_name>`_
+  of the SpotMarket class.
 - The total runtime was calculated using the python time module and measuring the time taken from the loading of inputs
   to the extraction of results from the model. The runtime of different sub-process, i.e. loading of the XML file, was
   measure by inserting timing code into the Nempy source code where required.
