@@ -2,7 +2,7 @@ name: Run Nempy Tests
 on:
   push:
     branches:
-      -master
+      - master
 jobs:
   test on linux python 3.6:
     runs-on: ubuntu-latest
