@@ -103,21 +103,21 @@ include:
     * How does the entry of new generating technologies effect market outcomes? 
     * How do patterns of generator ownership effect market outcomes? 
 
-Of course, another necessary component of agent based models are the behavioural models of the agents, a prototype 
-behavioural model of NEM participants is being developed as part of the NEMPRO project [@nempro].
+    Of course, another necessary component of agent based models are the behavioural models of the agents, a prototype 
+    behavioural model of NEM participants is being developed as part of the NEMPRO project [@nempro].
 
 3. To answer counter factual questions about historical dispatch outcomes. For example:
 
     * What would have been the impact on market dispatch if a particular network constraint had not been present? 
     * How would have dispatch outcomes differed if a unit had offered a different bid into the market? 
 
-The answers to such questions have direct, and  potentially large, financial implications for market participants. 
-AEMO offers access to a production version of the market dispatch engine to allow participants to answer such questions 
-[@nemde]. However, access is restricted to registered participants and is provided at a cost of $15,000 per year. 
-Additionally, users of this service are not provided with a copy of the dispatch engine, but access it by submitting 
-input files to AEMO. This prevents the use of this service to answer questions about how changes to the dispatch 
-process, rather than the inputs, would effect dispatch outcomes. In contrast, access to Nempy is not restricted, it is 
-free to use, and is open to modification.
+    The answers to such questions have direct, and  potentially large, financial implications for market participants. 
+    AEMO offers access to a production version of the market dispatch engine to allow participants to answer such questions 
+    [@nemde]. However, access is restricted to registered participants and is provided at a cost of $15,000 per year. 
+    Additionally, users of this service are not provided with a copy of the dispatch engine, but access it by submitting 
+    input files to AEMO. This prevents the use of this service to answer questions about how changes to the dispatch 
+    process, rather than the inputs, would effect dispatch outcomes. In contrast, access to Nempy is not restricted, it is 
+    free to use, and is open to modification.
 
 4. As a reference implementation of the NEM's dispatch procedure. While the Australian Energy Market Operator (AEMO) 
 has published several documents that describe aspects of the dispatch process [@fcasmodel; @faststart; @lossfactors; 
