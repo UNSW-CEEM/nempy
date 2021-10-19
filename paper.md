@@ -77,7 +77,7 @@ contexts. Some potential use case are outlined below:
 1. As a tool for studying the dispatch process itself. Models of any energy system or electricity market are necessarily 
 simplifications, however to improve model performance it is often desirable to add additional detail. Nempy can be used 
 to study the impact of different simplifications on modelling outcomes, and thus provide guidance on how model 
-performance could be improved by adding additional detail. fig shows a simple example of such an analysis. The price
+performance could be improved by adding additional detail. Figure 1 shows a simple example of such an analysis. The price
 results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year are shown. When
 Nempy is configured with a full set of market features price results closely match historical prices. When the FCAS 
 markets and generic constraints (network and security) are removed from the model results differ significantly. Resorting
@@ -87,11 +87,10 @@ historical price is 81.4 $/MWh, the average price of the full featured model is 
 simpler model is 75 $/MWh. The close match between the results of the full featured model and historical prices allows 
 for the attribution of the deviation of the simpler model explicitly to the simplification that have been made.  
 
-![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year.
+![Figure1: Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year.
   The historical prices, prior to scaling or capping are also shown for comparison. Results from two Nempy models are
   shown, one with a full set of dispatch features, and one without FCAS markets or generic constraints (network and 
   security constraints). For the simpler model price results are shown both historical price order and resorted.\label{fig:example}](plot.png)
-and referenced from text using \autoref{fig:Figure 1}.
 
 2. As a building block in agent based market models. Agent based models can be used to study electricity market 
 operation, and are particularly useful in modelling both the competitive nature of electricity markets and their complex 
