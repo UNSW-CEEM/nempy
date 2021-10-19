@@ -10,7 +10,11 @@
 ## Introduction
 Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). The idea is 
 that you can start simple, like in the example below, and grow the complexity of your model by adding features such as 
-ramping constraints, interconnectors, FCAS markets and more. 
+ramping constraints, interconnectors, FCAS markets and more.
+
+A brief introduction to the NEM can be found at the link below:
+
+https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
 
 ## Motivation
 Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. The motivation for developing Nempy was to create a re-usable model of this process.
@@ -108,7 +112,7 @@ print(market.get_energy_prices())
 The example demonstrates the broad range of market features that can be implemented with nempy and the use of auxiliary 
 modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with nempy.
     
-Warning: this example downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
+Warning: this example downloads approximately 8.5 GB of data from AEMO.
 ```python
 # Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
 

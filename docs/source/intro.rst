@@ -16,6 +16,8 @@ documentation and has planned support until mid-2023.
 
 The Nempy source code is on GitHub: https://github.com/UNSW-CEEM/nempy.
 
+A brief introduction to the NEM can be found here: https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
+
 Dispatch Procedure Outline
 --------------------------
 The main task of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
