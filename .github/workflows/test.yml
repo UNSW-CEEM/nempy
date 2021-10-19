@@ -4,7 +4,7 @@ on:
     branches:
       -master
 jobs:
-  test on linux python 3.6
+  test on linux python 3.6:
   runs-on: ubuntu-latest
   steps:
     - uses: actions/checkout@v2
