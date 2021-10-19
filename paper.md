@@ -99,17 +99,17 @@ environment is the market dispatch process. Thus, Nempy could be useful as a bui
 of the NEM, and play a role in answering various questions about market operational outcomes. Such questions could 
 include: 
 
-* How does changing the demand for electricity effect market outcomes? 
-* How does the entry of new generating technologies effect market outcomes? 
-* How do patterns of generator ownership effect market outcomes? 
+    * How does changing the demand for electricity effect market outcomes? 
+    * How does the entry of new generating technologies effect market outcomes? 
+    * How do patterns of generator ownership effect market outcomes? 
 
 Of course, another necessary component of agent based models are the behavioural models of the agents, a prototype 
 behavioural model of NEM participants is being developed as part of the NEMPRO project [@nempro].
 
 3. To answer counter factual questions about historical dispatch outcomes. For example:
 
-* What would have been the impact on market dispatch if a particular network constraint had not been present? 
-* How would have dispatch outcomes differed if a unit had offered a different bid into the market? 
+    * What would have been the impact on market dispatch if a particular network constraint had not been present? 
+    * How would have dispatch outcomes differed if a unit had offered a different bid into the market? 
 
 The answers to such questions have direct, and  potentially large, financial implications for market participants. 
 AEMO offers access to a production version of the market dispatch engine to allow participants to answer such questions 
