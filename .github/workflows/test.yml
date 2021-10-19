@@ -1,6 +1,5 @@
 name: Run Nempy Tests
-  on: [push]
-
+on: [push]
   jobs:
     test on linux python 3.6
     runs-on: ubuntu-latest
