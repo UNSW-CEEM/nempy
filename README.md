@@ -107,6 +107,8 @@ print(market.get_energy_prices())
 ## A detailed example
 The example demonstrates the broad range of market features that can be implemented with nempy and the use of auxiliary 
 modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with nempy.
+    
+Warning: this example downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
 ```python
 # Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
 
@@ -131,9 +133,9 @@ if download_inputs:
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=1)
 
-    # This requires approximately 60 GB of storage.
-    xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=1)
+    # This requires approximately 3.5 GB of storage.
+    xml_cache_manager.populate_by_day(start_year=2019, start_month=1, start_day=1,
+                                      end_year=2019, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
