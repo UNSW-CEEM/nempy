@@ -5,17 +5,17 @@ on:
       -master
 jobs:
   test on linux python 3.6:
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v2
-    - name: Install Python 3
-      uses: actions/setup-python@v1
-      with:
-        python-version: 3.6
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install e .
-        pip install pytest
-    - name: Run tests with pytest
-      run: python -m pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.6
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
