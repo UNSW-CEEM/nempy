@@ -8,8 +8,8 @@ the introduction of an operating reserve market is being considered, as is the a
 model. Nempy allows users to easily configure a dispatch model to fit the relevant research question. Furthermore, if
 extra functionality is needed, the python implementation, open-source licencing and planned ongoing support from developers
 make it possible to adapt Nempy to your needs. Version 1 will be a stable release and ongoing minor updates or patches
-will remain backwards compatible. However, we are interested in receiving feedback to inform the ongoing maintenance,
-development and any future major updates.
+will remain backwards compatible. Currently the latest minor release is v1.1.0. However, we are interested in receiving
+feedback to inform the ongoing maintenance, development and any future major updates.
 
 Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, has detailed
 documentation and has planned support until mid-2023.
