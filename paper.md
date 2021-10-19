@@ -30,7 +30,7 @@ bibliography: paper.bib
 
 Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM).
 Electricity markets are a way of co-ordinating the supply of electricity by private firms. The NEM is a gross pool spot 
-market that operates on 5 min dispatch basis (@nemfactsheet). Described simply, this means all generators wishing to sell electricity 
+market that operates on 5 min dispatch basis [@nemfactsheet]. Described simply, this means all generators wishing to sell electricity 
 must bid into the market every 5 minutes, market clearing proceeds by calculating the cheapest combination of generator 
 operating levels to meet forecast demand at the end of 5 the minute dispatch interval. The price of electricity is set as the 
 marginal cost of generation, which, under a simple market formulation, would be the cost of the next generation bid to be 
