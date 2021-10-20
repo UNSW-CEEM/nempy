@@ -21,7 +21,7 @@ A more detailed introduction to Nempy, examples, and reference documentation can
 [readthedocs](https://nempy.readthedocs.io/en/latest/) page.
 
 ## Community
-Nempy is open-source and we welcome all forms of community engagment, some more info is provided below.
+Nempy is open-source and we welcome all forms of community engagement, some more info is provided below.
 
 ### Support
 You can seek suport for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly n.gorman<at>unsw.edu.au.
