@@ -70,9 +70,9 @@ dispatch procedure. Other more generalised models of the NEM [@grozev2005nemsim;
 Xenophon and Hill provides open-source code and data for modelling the NEM, but the dispatch functionality does not 
 include many of the NEM wholesale market features [@xenophon2018open].
 
-# Use cases
 Nempy has been designed as a flexible model of the NEM's dispatch procedure and to be re-usable in a number of 
-contexts. Some potential use cases are outlined below:
+contexts. The software is aimed at analysts and modellers studying the NEM either in industry or academic. It can be 
+used either as is, or as building block in a large modelling tool. Some potential use cases are outlined below:
 
 1. As a tool for studying the dispatch process itself. Models of any energy system or electricity market are necessarily 
 simplifications, however, to improve model performance it is often desirable to add additional detail. Nempy can be used 

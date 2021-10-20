@@ -16,11 +16,9 @@ A brief introduction to the NEM can be found at the link below:
 
 https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
 
-## Motivation
-Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. The motivation for developing Nempy was to create a re-usable model of this process.
-
 ## Documentation
-Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
+A more detailed introduction to Nempy, examples, and reference documentation can be found on the 
+[readthedocs](https://nempy.readthedocs.io/en/latest/) page.
 
 ## Community
 Nempy is open-source and we welcome all forms of community engagment, some more info is provided below.

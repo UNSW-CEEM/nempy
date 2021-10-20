@@ -18,6 +18,21 @@ The Nempy source code is on GitHub: https://github.com/UNSW-CEEM/nempy.
 
 A brief introduction to the NEM can be found here: https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
 
+Example use cases
+-----------------
+Nempy is intended for analysts and modellers studying the NEM either in industry or academic. It can be
+used either as is, or as building block in a large modelling tool. Some potential use case are:
+
+#. As a tool for studying the dispatch process itself. The example shown in the:ref:`section on model accuracy <Accuracy>`
+   below demonstrates how model simplifications effects accuracy, this is potentially useful information for other
+   NEM modeller either using Nempy or other modelling tools.
+#. As a building block in agent based market models, as part of the environment for agents to interact with.
+#. To answer counter factual questions about historical dispatch outcomes. For example, how removing a network
+   constraint would have effected dispatch and pricing outcomes?
+#. As a reference implementation of the NEM's dispatch procedure. Published documentation can lack detail, studying the
+   source code of Nempy may be useful for some NEM analysts to gain a better understanding of the dispatch procedure.
+
+
 Dispatch Procedure Outline
 --------------------------
 The main task of the dispatch procedure is the construction and solving of a mixed integer linear problem (MIP) to find the
