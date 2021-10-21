@@ -24,7 +24,7 @@ A more detailed introduction to Nempy, examples, and reference documentation can
 Nempy is open-source and we welcome all forms of community engagment, some more info is provided below.
 
 ### Support
-You can seek suport for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly n.gorman<at>unsw.edu.au.
+You can seek suport for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly n.gorman"<at>"unsw.edu.au.
 
 ### Reporting issues
 Issues with Nempy can be reported via the issues register (https://github.com/UNSW-CEEM/nempy/issues), issues submissions do not need to adhere to any particular format.
@@ -36,7 +36,7 @@ Contributions via pull requests are welcome. Contributions should; follow the PE
 This project is being lead by Nick Gorman, a PhD candidate at the University for New South Wales and the Collaboration 
 on Energy and Environmental Markets (CEEM). As part the project we hope to engage with and support prospective users of
 the software. Feel welcome to get in touch if you have any questions, want to provide feed back, have a feature request,
-are interested in collaborating or just want to discuss this project. You can contact Nick via n.gorman<at>unsw.edu.au.      
+are interested in collaborating or just want to discuss this project. You can contact Nick via n.gorman"<at>"unsw.edu.au.      
 
 ## Installation
 Installing nempy to use in your project is easy.
