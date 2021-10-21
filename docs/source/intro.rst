@@ -133,7 +133,7 @@ Notes:
   of the SpotMarket class.
 - The total runtime was calculated using the python time module and measuring the time taken from the loading of inputs
   to the extraction of results from the model. The runtime of different sub-process, i.e. loading of the XML file, was
-  measure by inserting timing code into the Nempy source code where required.
+  measured by inserting timing code into the Nempy source code where required.
 
 Documentation
 -------------
