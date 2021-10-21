@@ -84,7 +84,7 @@ markets and generic constraints (network and security) are removed from the mode
 the results of the simpler market model, we can see that both models produce a similar number of medianly priced 
 intervals. However, the highest and lowest priced intervals of the simpler model are significantly lower. The average
 historical price is 81.4 $/MWh, the average price of the full featured model is 81.3 $/MWh, and the average price of the 
-simpler model is 75.0 $/MWh. The close match between the results of the full featured model and historical prices allows 
+simpler model is 75.0 $/MWh. The close match between the results of the full featured model and actual prices allows 
 for the attribution of the deviation of the simpler model explicitly to the simplification that have been made.  
 
 ![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calendar year.
