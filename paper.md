@@ -78,19 +78,20 @@ used either as is, or as building block in a large modelling tool. Some potentia
 simplifications, however, to improve model performance it is often desirable to add additional detail. Nempy can be used 
 to study the impact of different simplifications on modelling outcomes, and thus provide guidance on how model 
 performance could be improved by adding additional detail. Figure 1 shows a simple example of such an analysis. The price
-results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year are shown. When
-Nempy is configured with a full set of market features price results closely match historical prices. When the FCAS 
+results from the New South Wales region for 1000 randomly selected intervals in the 2019 calendar year are shown. When
+Nempy is configured with a full set of market features price results closely match actual prices. When the FCAS 
 markets and generic constraints (network and security) are removed from the model, results differ significantly. Resorting
 the results of the simpler market model, we can see that both models produce a similar number of medianly priced 
 intervals. However, the highest and lowest priced intervals of the simpler model are significantly lower. The average
 historical price is 81.4 $/MWh, the average price of the full featured model is 81.3 $/MWh, and the average price of the 
-simpler model is 75 $/MWh. The close match between the results of the full featured model and historical prices allows 
+simpler model is 75.0 $/MWh. The close match between the results of the full featured model and historical prices allows 
 for the attribution of the deviation of the simpler model explicitly to the simplification that have been made.  
 
-![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calender year.
-  The historical prices, prior to scaling or capping, are also shown for comparison. Results from two Nempy models are
+![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calendar year.
+  The actual prices, prior to scaling or capping, are also shown for comparison. Results from two Nempy models are
   shown, one with a full set of dispatch features, and one without FCAS markets or generic constraints (network and 
-  security constraints). For the simpler model price results are shown both in historical price order and resorted.\label{fig:example}](plot.png)
+  security constraints). Actual prices, results from the full featured model, and the simpler model are shown in 
+  descending order for actual prices, results from the simpler model are also shown resorted.\label{fig:example}](plot.png)
 
 2. As a building block in agent based market models. Agent based models can be used to study electricity market 
 operation, and are particularly useful in modelling both the competitive nature of electricity markets and their complex 
