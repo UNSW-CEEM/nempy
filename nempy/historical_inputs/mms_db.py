@@ -154,7 +154,8 @@ class DBManager:
                                                          'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
         self.DUDETAIL = InputsByEffectiveDateVersionNo(
-            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY'],
+            table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY',
+                                                  'MAXCAPACITY'],
             table_primary_keys=['DUID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHCONSTRAINT = InputsBySettlementDate(
             table_name='DISPATCHCONSTRAINT', table_columns=['SETTLEMENTDATE', 'CONSTRAINTID', 'RHS',
