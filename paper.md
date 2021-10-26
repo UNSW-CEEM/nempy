@@ -29,7 +29,7 @@ bibliography: paper.bib
 # Summary
 
 Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM).
-Electricity markets are a way of co-ordinating the supply of electricity by private firms. The NEM is a gross pool spot 
+Electricity markets are a way of coordinating the supply of electricity by private firms. The NEM is a gross pool spot 
 market that operates on 5 min dispatch basis [@nemfactsheet]. Described simply, this means all generators wishing to sell electricity 
 must bid into the market every 5 minutes, market clearing proceeds by calculating the cheapest combination of generator 
 operating levels to meet forecast demand at the end of 5 the minute dispatch interval. The price of electricity is set as the 
@@ -39,7 +39,7 @@ in order to manage the technical complexity of securely and reliably operating a
 case of the NEM additional markets for ancillary services have been introduced. One set of ancillary markets that have 
 been integrated into the market dispatch procedure are the Frequency Control Ancillary Services (FCAS) markets. In these 
 markets generators compete to provide the ability to rapidly change generation levels in order to control the grid frequency. 
-Nempy is flexible in that it allows for formulation of very simple market models, for the formulation of market models 
+Nempy is flexible in that it allows for the formulation of very simple market models, for the formulation of market models 
 of near real-world complexity, and at the various levels of intermediate complexity. Simple models can be constructed 
 using just generator bids and electricity demand, so called bid stack models. More complete models can be constructed by 
 using the inbuilt features to create multiple market regions, ramp rate limits, loss factors, FCAS markets, FCAS trapezium 
@@ -71,8 +71,8 @@ Xenophon and Hill provides open-source code and data for modelling the NEM, but 
 include many of the NEM wholesale market features [@xenophon2018open].
 
 Nempy has been designed as a flexible model of the NEM's dispatch procedure and to be re-usable in a number of 
-contexts. The software is aimed at analysts and modellers studying the NEM either in industry or academic. It can be 
-used either as is, or as building block in a large modelling tool. Some potential use cases are outlined below:
+contexts. The software is aimed at analysts and modellers studying the NEM either in industry or academia. It can be 
+used either as is, or as building block in a larger modelling tool. Some potential use cases are outlined below:
 
 1. As a tool for studying the dispatch process itself. Models of any energy system or electricity market are necessarily 
 simplifications, however, to improve model performance it is often desirable to add additional detail. Nempy can be used 
@@ -85,7 +85,7 @@ the results of the simpler market model, we can see that both models produce a s
 intervals. However, the highest and lowest priced intervals of the simpler model are significantly lower. The average
 historical price is 81.4 $/MWh, the average price of the full featured model is 81.3 $/MWh, and the average price of the 
 simpler model is 75.0 $/MWh. The close match between the results of the full featured model and actual prices allows 
-for the attribution of the deviation of the simpler model explicitly to the simplification that have been made.  
+for the attribution of the deviation of the simpler model explicitly to the simplifications that have been made.  
 
 ![Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calendar year.
   The actual prices, prior to scaling or capping, are also shown for comparison. Results from two Nempy models are
@@ -100,9 +100,9 @@ environment is the market dispatch process. Thus, Nempy could be useful as a bui
 of the NEM, and play a role in answering various questions about market operational outcomes. Such questions could 
 include: 
 
-    * How does changing the demand for electricity effect market outcomes? 
-    * How does the entry of new generating technologies effect market outcomes? 
-    * How do patterns of generator ownership effect market outcomes? 
+    * How does changing the demand for electricity affect market outcomes? 
+    * How does the entry of new generating technologies affect market outcomes? 
+    * How do patterns of generator ownership affect market outcomes? 
 
     Of course, another necessary component of agent based models are the behavioural models of the agents, a prototype 
     behavioural model of NEM participants is being developed as part of the NEMPRO project [@nempro].
@@ -117,7 +117,7 @@ include:
     [@nemde]. However, access is restricted to registered participants and is provided at a cost of $15,000 per year. 
     Additionally, users of this service are not provided with a copy of the dispatch engine, but access it by submitting 
     input files to AEMO. This prevents the use of this service to answer questions about how changes to the dispatch 
-    process, rather than the inputs, would effect dispatch outcomes. In contrast, access to Nempy is not restricted, it is 
+    process, rather than the inputs, would affect dispatch outcomes. In contrast, access to Nempy is not restricted, it is 
     free to use, and is open to modification.
 
 4. As a reference implementation of the NEM's dispatch procedure. While the Australian Energy Market Operator (AEMO) 
@@ -125,7 +125,7 @@ has published several documents that describe aspects of the dispatch process [@
 @constraintviolation; @treatmentlossfactors], our experience developing Nempy has indicated that key 
 implementation details are often missing from the publicly available documentation. Through a process of testing various 
 implementation options, where the documentation was not explicit, Nempy has been refined in an attempt to better reflect 
-the actual dispatch procedure. As a result Nempy is a useful additional reference for analysts and modelers 
+the actual dispatch procedure. As a result, Nempy is a useful additional reference for analysts and modellers 
 looking to understand the NEM's dispatch procedure.
 
 # References
