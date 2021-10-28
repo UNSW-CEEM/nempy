@@ -72,18 +72,47 @@ market.set_interconnector_losses(loss_functions, interpolation_break_points)
 # Calculate dispatch.
 market.dispatch()
 
+# Return interconnector flow and losses.
+print(market.get_interconnector_flows())
+#   interconnector       flow    losses
+# 0    little_link  92.307692  4.615385
+
+# Understanding the interconnector flows: Losses are modelled as extra demand
+# in the regions on either side of the interconnector, in this case the losses
+# are split evenly between the regions. All demand in VIC must be supplied
+# across the interconnector, and losses in VIC will add to the interconnector
+# flow required, so we can write the equation:
+#
+# flow = vic_demand + flow * loss_pct_vic
+# flow - flow * loss_pct_vic = vic_demand
+# flow * (1 - loss_pct_vic) = vic_demand
+# flow = vic_demand / (1 - loss_pct_vic)
+#
+# Since interconnector losses are 5% and half occur in VIC the
+# loss_pct_vic = 2.5%. Thus:
+#
+# flow = 90 / (1 - 0.025) = 92.31
+#
+# Knowing the interconnector flow we can work out total losses
+#
+# losses = flow * loss_pct
+# losses = 92.31 * 0.05 = 4.62
+
 # Return the total dispatch of each unit in MW.
 print(market.get_unit_dispatch())
 #   unit service   dispatch
 # 0    A  energy  94.615385
 
-# Return interconnector flow and losses.
-print(market.get_interconnector_flows())
-#   interconnector       flow    losses
-# 0    little_link  92.307692  4.615385
+# Understanding dispatch results: Unit A must be dispatch to
+# meet supply in VIC plus all interconnector losses, therefore
+# dispatch is 90.0 + 4.62 = 94.62.
 
 # Return the price of energy in each region.
 print(market.get_energy_prices())
 #   region      price
 # 0    NSW  50.000000
 # 1    VIC  52.564103
+
+# Understanding pricing results: The marginal cost of supply in NSW is simply
+# the cost of unit A's bid. However, the marginal cost of supply in VIC also
+# includes the cost of paying for interconnector losses.

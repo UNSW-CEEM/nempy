@@ -2,15 +2,16 @@
 
 import sqlite3
 import pandas as pd
+import plotly.graph_objects as go
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, \
     constraints
 
-con = sqlite3.connect('market_management_system.db')
+con = sqlite3.connect('historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
+xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
@@ -21,9 +22,9 @@ if download_inputs:
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=1)
 
-    # This requires approximately 60 GB of storage.
-    xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=1)
+    # This requires approximately 3.5 GB of storage.
+    xml_cache_manager.populate_by_day(start_year=2019, start_month=1, start_day=1,
+                                      end_year=2019, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
@@ -158,43 +159,70 @@ for interval in dispatch_intervals:
     # Save prices from this interval
     prices = market.get_energy_prices()
     prices['time'] = interval
-    outputs.append(prices.loc[:, ['time', 'region', 'price']])
+
+    # Getting historical prices for comparison. Note, ROP price, which is
+    # the regional reference node price before the application of any
+    # price scaling by AEMO, is used for comparison.
+    historical_prices = mms_db_manager.DISPATCHPRICE.get_data(interval)
+
+    prices = pd.merge(prices, historical_prices,
+                      left_on=['time', 'region'],
+                      right_on=['SETTLEMENTDATE', 'REGIONID'])
+
+    outputs.append(
+        prices.loc[:, ['time', 'region', 'price', 'ROP']])
+
+outputs = pd.concat(outputs)
+
+# Plot results for QLD market region.
+qld_prices = outputs[outputs['region'] == 'QLD1']
+
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['price'], name='Nempy price', mode='markers',
+                         marker_size=12, marker_symbol='circle'))
+fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['ROP'], name='Historical price', mode='markers',
+                         marker_size=8))
+fig.update_xaxes(title="Time")
+fig.update_yaxes(title="Price ($/MWh)")
+fig.update_layout(yaxis_range=[0.0, 100.0], title="QLD Region Price")
+fig.write_image('charts/full_featured_market_qld_prices.png')
+fig.show()
 
 con.close()
-print(pd.concat(outputs))
-#                   time region      price
-# 0  2019/01/01 12:00:00   NSW1  91.870167
-# 1  2019/01/01 12:00:00   QLD1  76.190796
-# 2  2019/01/01 12:00:00    SA1  86.899534
-# 3  2019/01/01 12:00:00   TAS1  89.805037
-# 4  2019/01/01 12:00:00   VIC1  84.984255
-# 0  2019/01/01 12:05:00   NSW1  91.870496
-# 1  2019/01/01 12:05:00   QLD1  64.991736
-# 2  2019/01/01 12:05:00    SA1  87.462599
-# 3  2019/01/01 12:05:00   TAS1  90.178036
-# 4  2019/01/01 12:05:00   VIC1  85.556009
-# 0  2019/01/01 12:10:00   NSW1  91.870496
-# 1  2019/01/01 12:10:00   QLD1  64.991736
-# 2  2019/01/01 12:10:00    SA1  86.868556
-# 3  2019/01/01 12:10:00   TAS1  89.983716
-# 4  2019/01/01 12:10:00   VIC1  84.936150
-# 0  2019/01/01 12:15:00   NSW1  91.870496
-# 1  2019/01/01 12:15:00   QLD1  64.776456
-# 2  2019/01/01 12:15:00    SA1  86.844540
-# 3  2019/01/01 12:15:00   TAS1  89.582288
-# 4  2019/01/01 12:15:00   VIC1  84.990796
-# 0  2019/01/01 12:20:00   NSW1  91.870496
-# 1  2019/01/01 12:20:00   QLD1  64.776456
-# 2  2019/01/01 12:20:00    SA1  87.496112
-# 3  2019/01/01 12:20:00   TAS1  90.291144
-# 4  2019/01/01 12:20:00   VIC1  85.594840
-# 0  2019/01/01 12:25:00   NSW1  91.870167
-# 1  2019/01/01 12:25:00   QLD1  64.991736
-# 2  2019/01/01 12:25:00    SA1  87.519993
-# 3  2019/01/01 12:25:00   TAS1  90.488064
-# 4  2019/01/01 12:25:00   VIC1  85.630617
-# 0  2019/01/01 12:30:00   NSW1  91.870496
-# 1  2019/01/01 12:30:00   QLD1  64.991736
-# 2  2019/01/01 12:30:00    SA1  87.462000
-# 3  2019/01/01 12:30:00   TAS1  90.196284
-# 4  2019/01/01 12:30:00   VIC1  85.573321
+print(outputs)
+#                   time region      price       ROP
+# 0  2019/01/01 12:00:00   NSW1  91.870167  91.87000
+# 1  2019/01/01 12:00:00   QLD1  76.190796  76.19066
+# 2  2019/01/01 12:00:00    SA1  86.899534  86.89938
+# 3  2019/01/01 12:00:00   TAS1  89.805037  89.70523
+# 4  2019/01/01 12:00:00   VIC1  84.984255  84.98410
+# 0  2019/01/01 12:05:00   NSW1  91.870496  91.87000
+# 1  2019/01/01 12:05:00   QLD1  64.991736  64.99000
+# 2  2019/01/01 12:05:00    SA1  87.462599  87.46213
+# 3  2019/01/01 12:05:00   TAS1  90.178036  90.08096
+# 4  2019/01/01 12:05:00   VIC1  85.556009  85.55555
+# 0  2019/01/01 12:10:00   NSW1  91.870496  91.87000
+# 1  2019/01/01 12:10:00   QLD1  64.991736  64.99000
+# 2  2019/01/01 12:10:00    SA1  86.868556  86.86809
+# 3  2019/01/01 12:10:00   TAS1  89.983716  89.87995
+# 4  2019/01/01 12:10:00   VIC1  84.936150  84.93569
+# 0  2019/01/01 12:15:00   NSW1  91.870496  91.87000
+# 1  2019/01/01 12:15:00   QLD1  64.776456  64.78003
+# 2  2019/01/01 12:15:00    SA1  86.844540  86.84407
+# 3  2019/01/01 12:15:00   TAS1  89.582288  89.48585
+# 4  2019/01/01 12:15:00   VIC1  84.990796  84.99034
+# 0  2019/01/01 12:20:00   NSW1  91.870496  91.87000
+# 1  2019/01/01 12:20:00   QLD1  64.776456  64.78003
+# 2  2019/01/01 12:20:00    SA1  87.496112  87.49564
+# 3  2019/01/01 12:20:00   TAS1  90.291144  90.28958
+# 4  2019/01/01 12:20:00   VIC1  85.594840  85.59438
+# 0  2019/01/01 12:25:00   NSW1  91.870167  91.87000
+# 1  2019/01/01 12:25:00   QLD1  64.991736  64.99000
+# 2  2019/01/01 12:25:00    SA1  87.519993  87.51983
+# 3  2019/01/01 12:25:00   TAS1  90.488064  90.38750
+# 4  2019/01/01 12:25:00   VIC1  85.630617  85.63046
+# 0  2019/01/01 12:30:00   NSW1  91.870496  91.87000
+# 1  2019/01/01 12:30:00   QLD1  64.991736  64.99000
+# 2  2019/01/01 12:30:00    SA1  87.462000  87.46153
+# 3  2019/01/01 12:30:00   TAS1  90.196284  90.09919
+# 4  2019/01/01 12:30:00   VIC1  85.573321  85.57286

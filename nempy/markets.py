@@ -16,7 +16,6 @@ class SpotMarket:
 
     Examples
     --------
-
     Define the unit information data needed to initialise the market, in this example all units are in the same
     region.
 
@@ -58,6 +57,13 @@ class SpotMarket:
 
     dispatch_interval : int
         The length of the dispatch interval in minutes, used for interpreting ramp rates.
+
+    Attributes
+    ----------
+    solver_name : str
+        The solver to use must be one of solver options of the mip-python package that is used to interface to solvers.
+        Currently the only support solvers are CBC and Gurobi, so allowed solver names are 'CBC' and 'GUROBI'. Default
+        value is CBC, CBC works out of the box after installing Nempy, but Gurobi must be installed separately.
 
     Raises
     ------
@@ -2813,7 +2819,9 @@ class SpotMarket:
                 self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                     self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
-        if 'generic_deficit' in self._decision_variables and allow_over_constrained_dispatch_re_run:
+        if ('generic_deficit' in self._decision_variables or 'fcas_deficit' in self._decision_variables) \
+                and allow_over_constrained_dispatch_re_run:
+
             fcas_ceiling_price_violated = False
             if 'fcas' in self._market_constraints_rhs_and_type:
                 if self._market_constraints_rhs_and_type['fcas']['price'].max() >= fcas_market_ceiling_price:
@@ -2830,14 +2838,16 @@ class SpotMarket:
                     energy_floor_price_violated = True
 
             generic_cons_violated = False
-            if (self._decision_variables['generic_deficit']['value'].max() > 0.0001 or
-                    self._decision_variables['generic_deficit']['value'].min() < -0.0001):
-                generic_cons_violated = True
+            if 'generic_deficit' in self._decision_variables:
+                if (self._decision_variables['generic_deficit']['value'].max() > 0.0001 or
+                        self._decision_variables['generic_deficit']['value'].min() < -0.0001):
+                    generic_cons_violated = True
 
             fcas_cons_violated = False
-            if (self._decision_variables['fcas_deficit']['value'].max() > 0.0001 or
-                    self._decision_variables['fcas_deficit']['value'].min() < -0.0001):
-                fcas_cons_violated = True
+            if 'fcas_deficit' in self._decision_variables:
+                if (self._decision_variables['fcas_deficit']['value'].max() > 0.0001 or
+                        self._decision_variables['fcas_deficit']['value'].min() < -0.0001):
+                    fcas_cons_violated = True
 
             if ((fcas_ceiling_price_violated or energy_ceiling_price_violated or energy_floor_price_violated) and
                     (generic_cons_violated or fcas_cons_violated)):

@@ -10,22 +10,24 @@
 ## Introduction
 Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). The idea is 
 that you can start simple, like in the example below, and grow the complexity of your model by adding features such as 
-ramping constraints, interconnectors, FCAS markets and more. 
+ramping constraints, interconnectors, FCAS markets and more.
 
-## Motivation
-Operational dispatch is a important part of the NEM's decision making process. It allows information from generation operators, dispatchable or flexible loads, network operators, and the market operator to be simulatenous considered on a near real time basis in order to minimize costs while ensuring secure and reliable supply, and it creates market signals for longer term decisions. Nempy allows for modelling of the dispatch process in a high level of detail. Potential use cases include studying historical dispatch outcomes, studying the dispatch process itself, or as a building block in part of a larger operational market model.
+A brief introduction to the NEM can be found at the link below:
+
+https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
 
 ## Documentation
-Find it on [readthedocs](https://nempy.readthedocs.io/en/latest/)
+A more detailed introduction to Nempy, examples, and reference documentation can be found on the 
+[readthedocs](https://nempy.readthedocs.io/en/latest/) page.
 
 ## Community
 Nempy is open-source and we welcome all forms of community engagment, some more info is provided below.
 
 ### Support
-You can seek suport for using Nempy using the discussion tab, checking the issues register, or by contacting Nick directly.
+You can seek suport for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly n.gorman at unsw.edu.au.
 
 ### Reporting issues
-Issues with Nempy can be reported via the issues register, issues submissions do not need to adhere to any particular format.
+Issues with Nempy can be reported via the issues register (https://github.com/UNSW-CEEM/nempy/issues), issues submissions do not need to adhere to any particular format.
 
 ### Contributing
 Contributions via pull requests are welcome. Contributions should; follow the PEP8 style guide (with exception of line length up to 120 rather than 80), ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour, please highlight this in your pull request description), implement automated tests for new features, and provided doc strings for public interfaces. 
@@ -34,7 +36,7 @@ Contributions via pull requests are welcome. Contributions should; follow the PE
 This project is being lead by Nick Gorman, a PhD candidate at the University for New South Wales and the Collaboration 
 on Energy and Environmental Markets (CEEM). As part the project we hope to engage with and support prospective users of
 the software. Feel welcome to get in touch if you have any questions, want to provide feed back, have a feature request,
-are interested in collaborating or just want to discuss this project. You can contact Nick via n.gorman<@>unsw.edu.au.      
+are interested in collaborating or just want to discuss this project. You can contact Nick via n.gorman at unsw.edu.au.      
 
 ## Installation
 Installing nempy to use in your project is easy.
@@ -107,6 +109,8 @@ print(market.get_energy_prices())
 ## A detailed example
 The example demonstrates the broad range of market features that can be implemented with nempy and the use of auxiliary 
 modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with nempy.
+    
+Warning: this example downloads approximately 8.5 GB of data from AEMO.
 ```python
 # Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
 
@@ -131,9 +135,9 @@ if download_inputs:
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=1)
 
-    # This requires approximately 60 GB of storage.
-    xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=1)
+    # This requires approximately 3.5 GB of storage.
+    xml_cache_manager.populate_by_day(start_year=2019, start_month=1, start_day=1,
+                                      end_year=2019, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,

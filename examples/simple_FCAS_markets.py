@@ -127,12 +127,23 @@ print(market.get_unit_dispatch())
 # 3    B   raise_6s       5.0
 # 4    B  raise_reg      10.0
 
+# Understanding the dispatch results: Starting with the raise regulation
+# service we can see that only unit B has bid to provide this service so
+# 10 MW of it's raise regulation bid must be dispatch. For the raise 6 s
+# service while unit B is cheaper it's provision of 10 MW of raise
+# regulation means it can only provide 5 MW of raise 6 s, so 5 MW must be
+# provided by unit A. For the energy service unit A is cheaper so all
+# 100 MW of it's energy bid are dispatched, leaving the remaining 95 MW to
+# provided by unit B. Also, note that these energy and FCAS dispatch levels are
+# permitted by the FCAS trapezium constraints. Further explanation of these
+# constraints are provided here: docs/pdfs/FCAS Model in NEMDE.pdf.
+
 # Return the price of energy.
 print(market.get_energy_prices())
 #   region  price
 # 0    NSW   75.0
 
-# Note:
+#  Understanding energy price results:
 #  A marginal unit of energy would have to come from unit B, as unit A is fully
 #  dispatch, this would cost 60 $/MW/h. However, to turn unit B up, you would
 #  need it to dispatch less raise_6s, this would cost - 20 $/MW/h, and the
@@ -145,7 +156,7 @@ print(market.get_fcas_prices())
 # 0    NSW   raise_6s   35.0
 # 1    NSW  raise_reg   45.0
 
-# Note:
+# Understanding FCAS price results:
 # A marginal unit of raise_reg would have to come from unit B as it is the only
 # provider, this would cost 30 $/MW/h. It would also require unit B to provide
 # less raise_6s, this would cost -20 $/MW/h, extra raise_6s would then be
