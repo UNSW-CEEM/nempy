@@ -1,0 +1,105 @@
+name: Run Nempy Tests
+on:
+  push:
+    branches:
+      - master
+jobs:
+  test-on-linux-python-three-six:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.6
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-on-linux-python-three-six-oldest-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.6
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas==1.0.0
+          pip install mip==1.11.0
+          pip install requests==2.0.0
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-on-linux-python-seven-eight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.7
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-on-linux-python-three-eight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-on-windows-python-three-eight:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          choco install python --version 3.8.0
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-on-mac-python-three-eight:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest

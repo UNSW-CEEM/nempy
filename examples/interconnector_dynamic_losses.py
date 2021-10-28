@@ -83,18 +83,66 @@ market.set_interconnector_losses(loss_functions,
 # Calculate dispatch.
 market.dispatch()
 
+# Return interconnector flow and losses.
+print(market.get_interconnector_flows())
+#   interconnector        flow      losses
+# 0      VIC1-NSW1  860.102737  120.205473
+
+# Understanding the interconnector flows: In this case it is not simple to
+# analytically derive and explain the interconnector flow result. The loss
+# model is constructed within the underlying mixed integer linear problem
+# as set of constraints and the interconnector flow and losses are
+# determined as part of the problem solution. However, the loss model can
+# be explained at a high level, and the results shown to be consistent. The
+# first step in the interconnector model is to drive the loss function as a
+# function  of regional demand, which is a pre-market model creation step, the
+# mathematics is explained in
+# docs/pdfs/Marginal Loss Factors for the 2020-21 Financial year.pdf. The loss
+# function is then evaluated at the given break points and linearly interpolated
+# between those points in the market model. So for our model the losses are
+# interpolated between 800 MW and 1000 MW. We can show the losses are consistent
+# with this approach:
+#
+# Losses at a flow of 800 MW
+print(loss_functions['loss_function'].iloc[0](800))
+# 107.0464
+# Losses at a flow of 1000 MW
+print(loss_functions['loss_function'].iloc[0](1000))
+# 150.835
+# Then interpolating by taking the weighted sum of the two losses based on the
+# relative difference between the actual flow and the interpolation break points:
+# Weighting of 800 MW break point = 1 - ((860.102737 - 800.0)/(1000 - 800))
+# Weighting of 800 MW break point = 0.7
+# Weighting of 1000 MW break point = 1 - ((1000 - 860.102737)/(1000 - 800))
+# Weighting of 1000 MW break point = 0.3
+# Weighed sum of losses = 107.0464 * 0.7 + 150.835 * 0.3 = 120.18298
+#
+# We can also see that the flow and loss results are consistent with the supply
+# equals demand constraint, all demand in the VIC region is supplied by the
+# interconnector, so the interconnector flow minus the VIC region interconnector
+# losses should equal the VIC region demand. Note that the VIC region loss
+# share is 50%:
+# VIC region demand = interconnector flow - losses * VIC region loss share
+# 800 = 860.102737 - 120.205473 * 0.5
+# 800 = 800
+
 # Return the total dispatch of each unit in MW.
 print(market.get_unit_dispatch())
 #   unit service    dispatch
 # 0    A  energy  920.205473
 
-# Return interconnector flow and losses.
-print(market.get_interconnector_flows())
-#   interconnector        flow      losses
-# 0      VIC1-NSW1  860.102737  120.205473
+# Understanding the dispatch results: Unit A is the only generator and it must
+# be dispatch to meet demand plus losses:
+# dispatch = VIC region demand + NSW region demand + losses
+# dispatch = 920.205473
 
 # Return the price of energy in each region.
 print(market.get_energy_prices())
 #   region      price
 # 0    NSW  50.000000
 # 1    VIC  62.292869
+
+# Understanding the pricing results: Pricing in the NSW region is simply the
+# marginal cost of supply from unit A. The marginal cost of supply in the
+# VIC region is the cost of unit A to meet both marginal demand and the
+# marginal losses on the interconnector.

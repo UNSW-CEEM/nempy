@@ -55,7 +55,7 @@ html_static_path = ['_static']
 
 master_doc = 'index'
 
-autodoc_mock_imports = ["pandas", "numpy", "mip"]
+autodoc_mock_imports = ["pandas", "numpy", "mip", "xmltodict"]
 
 autodoc_member_order = 'bysource'
 

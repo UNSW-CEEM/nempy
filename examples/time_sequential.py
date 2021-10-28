@@ -13,16 +13,16 @@ xml_cache_manager = xml_cache.XMLCacheManager('cache_directory')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 5 GB of storage.
     mms_db_manager.populate(start_year=2019, start_month=1,
                             end_year=2019, end_month=1)
 
-    # This requires approximately 60 GB of storage.
-    xml_cache_manager.populate(start_year=2019, start_month=1,
-                               end_year=2019, end_month=1)
+    # This requires approximately 3.5 GB of storage.
+    xml_cache_manager.populate_by_day(start_year=2019, start_month=1, start_day=1,
+                                      end_year=2019, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,

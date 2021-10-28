@@ -16,7 +16,6 @@ class SpotMarket:
 
     Examples
     --------
-
     Define the unit information data needed to initialise the market, in this example all units are in the same
     region.
 
@@ -58,6 +57,13 @@ class SpotMarket:
 
     dispatch_interval : int
         The length of the dispatch interval in minutes, used for interpreting ramp rates.
+
+    Attributes
+    ----------
+    solver_name : str
+        The solver to use must be one of solver options of the mip-python package that is used to interface to solvers.
+        Currently the only support solvers are CBC and Gurobi, so allowed solver names are 'CBC' and 'GUROBI'. Default
+        value is CBC, CBC works out of the box after installing Nempy, but Gurobi must be installed separately.
 
     Raises
     ------
