@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="nempy",
-    version="1.1.0",
+    version="1.1.1",
     description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure.",
     packages=find_packages(),
     long_description=long_description,
@@ -31,7 +31,7 @@ setup(
 
     extras_require={
         "dev": [
-            "pytest==6.0.1",
+            "pytest>=6.2.5",
             "twine",
         ],
     },
