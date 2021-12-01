@@ -71,14 +71,46 @@ jobs:
       - name: Run tests with pytest
         run: python -m pytest
 
-  test-dev-install-on-linux-python-three-one:
+  test-on-linux-python-three-nine:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Install Python 3
         uses: actions/setup-python@v1
         with:
-          python-version: 3.1.0
+          python-version: 3.9
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-on-linux-python-three-ten:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.10
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install e .
+          pip install pytest
+      - name: Run tests with pytest
+        run: python -m pytest
+
+  test-dev-install-on-linux-python-three-ten:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Python 3
+        uses: actions/setup-python@v1
+        with:
+          python-version: 3.10
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
