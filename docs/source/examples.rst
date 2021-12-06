@@ -83,6 +83,9 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
 to false to stop the script re-downloading data for subsequent runs.
 
+.. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
+install kaleido==0.2.1
+
 .. literalinclude:: ../../examples/recreating_historical_dispatch.py
     :linenos:
     :language: python
@@ -102,6 +105,9 @@ conditions of the next interval, rather the historical initial conditions are al
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
 to false to stop the script re-downloading data for subsequent runs.
 
+.. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
+install kaleido==0.2.1
+
 .. literalinclude:: ../../examples/all_features_example.py
     :linenos:
     :language: python
@@ -117,6 +123,9 @@ of demonstrating how Nempy can be used to create time sequential models, histori
 
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
 to false to stop the script re-downloading data for subsequent runs.
+
+.. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
+install kaleido==0.2.1
 
 .. literalinclude:: ../../examples/time_sequential.py
     :linenos:

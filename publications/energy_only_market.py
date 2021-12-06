@@ -1,4 +1,7 @@
-# Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
+# Notice:
+# - This script downloads large volumes of historical market data from AEMO's nemweb
+#   portal. The boolean on line 20 can be changed to prevent this happening repeatedly
+#   once the data has been downloaded.
 
 import sqlite3
 import pandas as pd

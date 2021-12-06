@@ -1,4 +1,9 @@
-# Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
+# Notice:
+# - This script downloads large volumes of historical market data from AEMO's nemweb
+#   portal. The boolean on line 20 can be changed to prevent this happening repeatedly
+#   once the data has been downloaded.
+# - This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1
+#   pip install plotly==5.3.1 and pip install kaleido==0.2.1
 
 import sqlite3
 import pandas as pd
