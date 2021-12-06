@@ -81,10 +81,10 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
 *Results from example: for the QLD region a reasonable fit between modelled prices and historical prices is obtained.*
 
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
-to false to stop the script re-downloading data for subsequent runs.
+             to false to stop the script re-downloading data for subsequent runs.
 
 .. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
-install kaleido==0.2.1
+          install kaleido==0.2.1
 
 .. literalinclude:: ../../examples/recreating_historical_dispatch.py
     :linenos:
@@ -103,10 +103,10 @@ conditions of the next interval, rather the historical initial conditions are al
 *Results from example: for the QLD region a very close fit between modelled prices and historical prices is obtained.*
 
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
-to false to stop the script re-downloading data for subsequent runs.
+             to false to stop the script re-downloading data for subsequent runs.
 
 .. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
-install kaleido==0.2.1
+          install kaleido==0.2.1
 
 .. literalinclude:: ../../examples/all_features_example.py
     :linenos:
@@ -122,10 +122,10 @@ some what problematic as participants also dynamically change their bids based o
 of demonstrating how Nempy can be used to create time sequential models, historical bids are used in this example.
 
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
-to false to stop the script re-downloading data for subsequent runs.
+             to false to stop the script re-downloading data for subsequent runs.
 
 .. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
-install kaleido==0.2.1
+          install kaleido==0.2.1
 
 .. literalinclude:: ../../examples/time_sequential.py
     :linenos:
