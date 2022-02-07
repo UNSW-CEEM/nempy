@@ -825,6 +825,7 @@ class InputsBySettlementDate(_MultiDataSource):
         ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        2
 
         When we call get_data the output is filtered by SETTLEMENTDATE.
 
@@ -888,6 +889,7 @@ class InputsByIntervalDateTime(_MultiDataSource):
         ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        2
 
         When we call get_data the output is filtered by INTERVAL_DATETIME.
 
@@ -956,6 +958,7 @@ class InputsByDay(_MultiDataSource):
         ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        2
 
         When we call get_data the output is filtered by SETTLEMENTDATE and the results from the appropriate market
         day starting at 04:05:00 are retrieved. In the results below note when the output changes
@@ -1046,6 +1049,7 @@ class InputsStartAndEnd(_SingleDataSource):
         ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        2
 
         When we call get_data the output is filtered by START_DATE and END_DATE.
 
@@ -1128,6 +1132,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
         ...   'RHS': [1.0, 2.0, 2.0, 3.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        4
 
         >>> data = pd.DataFrame({
         ...   'SETTLEMENTDATE' : ['2019/01/02 00:00:00', '2019/01/02 00:00:00', '2019/01/03 00:00:00',
@@ -1138,6 +1143,7 @@ class InputsByMatchDispatchConstraints(_AllHistDataSource):
         ...   'GENCONID_VERSIONNO': [1, 2, 2, 3]})
 
         >>> data.to_sql('DISPATCHCONSTRAINT', con=con, if_exists='append', index=False)
+        4
 
         When we call get_data the output is filtered by the contents of DISPATCHCONSTRAINT.
 
@@ -1220,6 +1226,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         ...   'INITIALMW': [1.0, 2.0, 2.0, 3.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        4
 
         We also need to add data to DISPATCHINTERCONNECTORRES because the results of the get_data method are filtered
         against this table
@@ -1229,6 +1236,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         ...   'SETTLEMENTDATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00', '2019/01/02 00:00:00']})
 
         >>> data.to_sql('DISPATCHINTERCONNECTORRES', con=con, if_exists='append', index=False)
+        3
 
         When we call get_data the output is filtered by the contents of DISPATCHCONSTRAINT.
 
@@ -1345,6 +1353,7 @@ class InputsByEffectiveDateVersionNo(_SingleDataSource):
         ...   'INITIALMW': [1.0, 2.0, 2.0, 3.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        4
 
         When we call get_data the output is filtered by most recent effective date and highest version no.
 
@@ -1450,6 +1459,7 @@ class InputsNoFilter(_SingleDataSource):
         ...   'INITIALMW': [1.0, 2.0]})
 
         >>> data.to_sql('EXAMPLE', con=con, if_exists='append', index=False)
+        2
 
         When we call get_data all data in the table is returned.
 
