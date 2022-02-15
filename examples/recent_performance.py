@@ -1,5 +1,5 @@
 # Notice:
-# - This script downloads large volumes of historical market data (~30GB) from AEMO's nemweb
+# - This script downloads large volumes of historical market data (~84 GB) from AEMO's nemweb
 #   portal. The boolean on line 21 can be changed to prevent this happening repeatedly
 #   once the data has been downloaded.
 
@@ -18,14 +18,14 @@ xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2022')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
-    # This requires approximately 24 GB of storage.
+    # This requires approximately 4 GB of storage.
     mms_db_manager.populate(start_year=2022, start_month=1,
                             end_year=2022, end_month=1)
 
-    # This requires approximately 4 GB of storage.
+    # This requires approximately 80 GB of storage.
     xml_cache_manager.populate_by_day(start_year=2022, start_month=1, start_day=1,
                                       end_year=2022, end_month=1, end_day=31)
 

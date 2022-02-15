@@ -146,7 +146,7 @@ Median price error: 0.00
 5% percentile price: error -0.050
 95% percentile price: error 1.084
 
-.. warning:: Warning this script downloads approximately 30 GB of data from AEMO. The download_inputs flag can be set
+.. warning:: Warning this script downloads approximately 84 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
 
 .. literalinclude:: ../../examples/recent_performance.py
@@ -169,7 +169,7 @@ Median price error: 0.000
 5% percentile price: error 0.000
 95% percentile price: error 0.051
 
-.. warning:: Warning this script downloads approximately 30 GB of data from AEMO. The download_inputs flag can be set
+.. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
 
 .. literalinclude:: ../../examples/performance_on_older_data.py
