@@ -695,7 +695,7 @@ class UnitData:
         >>> unit_data.add_fcas_trapezium_constraints()
         Traceback (most recent call last):
            ...
-        units.MethodCallOrderError: Call get_processed_bids before add_fcas_trapezium_constraints.
+        nempy.historical_inputs.units.MethodCallOrderError: Call get_processed_bids before add_fcas_trapezium_constraints.
 
         After calling get_processed_bids it goes away.
 
@@ -710,7 +710,7 @@ class UnitData:
         >>> unit_data.get_fcas_max_availability()
         Traceback (most recent call last):
            ...
-        units.MethodCallOrderError: Call add_fcas_trapezium_constraints before get_fcas_max_availability.
+        nempy.historical_inputs.units.MethodCallOrderError: Call add_fcas_trapezium_constraints before get_fcas_max_availability.
 
         After calling it the error goes away.
 
