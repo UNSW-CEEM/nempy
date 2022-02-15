@@ -151,3 +151,5 @@ venv_docs_build/*
 
 !/nempy/market_management_system.db
 !/nempy/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded
+!/market_management_system.db
+!/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded
