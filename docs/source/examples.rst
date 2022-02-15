@@ -141,10 +141,10 @@ adjustments, scaling, capping etc.
 
 Summary of results:
 
-Mean price error: -0.255
-Median price error: 0.00
-5% percentile price: error -0.050
-95% percentile price: error 1.084
+| Mean price error: -0.255
+| Median price error: 0.00
+| 5% percentile price: error -0.050
+| 95% percentile price: error 1.084
 
 .. warning:: Warning this script downloads approximately 84 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
@@ -164,10 +164,10 @@ dispatch adjustments, scaling, capping etc.
 
 Summary of results:
 
-Mean price error: -0.240
-Median price error: 0.000
-5% percentile price: error 0.000
-95% percentile price: error 0.051
+| Mean price error: -0.240
+| Median price error: 0.000
+| 5% percentile price: error 0.000
+| 95% percentile price: error 0.051
 
 .. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
