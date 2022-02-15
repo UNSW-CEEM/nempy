@@ -11,23 +11,23 @@ from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, constraints
 
-con = sqlite3.connect('historical_mms_2022.db')
+con = sqlite3.connect('historical_mms_2015.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2022')
+xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2015')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 24 GB of storage.
-    mms_db_manager.populate(start_year=2022, start_month=1,
-                            end_year=2022, end_month=1)
+    mms_db_manager.populate(start_year=2015, start_month=1,
+                            end_year=2015, end_month=2)
 
     # This requires approximately 4 GB of storage.
-    xml_cache_manager.populate_by_day(start_year=2022, start_month=1, start_day=1,
-                                      end_year=2022, end_month=1, end_day=31)
+    xml_cache_manager.populate_by_day(start_year=2015, start_month=1, start_day=1,
+                                      end_year=2015, end_month=1, end_day=31)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
@@ -36,8 +36,8 @@ raw_inputs_loader = loaders.RawInputsLoader(
 
 # A list of intervals we want to recreate historical dispatch for.
 def get_test_intervals(number=100):
-    start_time = datetime(year=2022, month=1, day=1, hour=0, minute=0)
-    end_time = datetime(year=2022, month=2, day=1, hour=0, minute=0)
+    start_time = datetime(year=2015, month=1, day=1, hour=0, minute=0)
+    end_time = datetime(year=2015, month=2, day=1, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
@@ -187,7 +187,7 @@ outputs = pd.concat(outputs)
 
 outputs['error'] = outputs['price'] - outputs['ROP']
 
-outputs.to_csv('jan_2022_nempy.csv')
+outputs.to_csv('jan_2015_nempy.csv')
 
 print('\n Summary of error in energy price across all regions. \n'
       'Comparison is against ROP, the region price prior to \n'
@@ -200,7 +200,7 @@ print('95% percentile price: error {}'.format(outputs['error'].quantile(0.95)))
 # Summary of error in energy price across all regions.
 # Comparison is against ROP, the region price prior to
 # any post dispatch adjustments, scaling, capping etc.
-# Mean price error: -0.2551808835554955
-# Median price error: 0.0
-# 5% percentile price: error -0.05010103219386006
-# 95% percentile price: error 1.0842529204604627
+# Mean price error: -0.23951554913803164
+# Median price error: -7.105427357601002e-15
+# 5% percentile price: error -0.0004980100438178425
+# 95% percentile price: error 0.0509752876906997

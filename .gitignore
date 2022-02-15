@@ -149,5 +149,5 @@ examples/cache_directory/*
 nempy/historical_inputs/test_nemde_cache/
 venv_docs_build/*
 
-!/market_management_system.db
-!/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded
+!/nempy/market_management_system.db
+!/nempy/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded

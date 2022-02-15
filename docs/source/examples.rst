@@ -131,17 +131,48 @@ of demonstrating how Nempy can be used to create time sequential models, histori
     :linenos:
     :language: python
 
-8. Demonstrate Nempy performance on recent data
--------------------------------------------------
-This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a  energy market using all the
-features of the Nempy market model, all inputs sourced from historical data published by AEMO. A set of random dispatch
+8. Nempy performance on recent data (Jan 2022)
+----------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a energy market using all the
+features of the Nempy market model, all inputs sourced from historical data published by AEMO. A set of 100 random dispatch
 intervals from a recent month are dispatched and compared to historical results to see if Nempy is keeping up with any
-recent changes to the NEM's dispatch procedure.
+recent changes to the NEM's dispatch procedure. Comparison is against ROP, the region price prior to any post dispatch
+adjustments, scaling, capping etc.
+
+Summary of results:
+
+Mean price error: -0.255
+Median price error: 0.00
+5% percentile price: error -0.050
+95% percentile price: error 1.084
 
 .. warning:: Warning this script downloads approximately 30 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
 
 .. literalinclude:: ../../examples/recent_performance.py
+    :linenos:
+    :language: python
+
+
+8. Nempy performance on older data (Jan 2015)
+---------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a energy market using all the
+features of the Nempy market model, all inputs sourced from historical data published by AEMO. A set of 100 random dispatch
+intervals from January 2015 are dispatched and compared to historical results to see how well Nempy performs for
+replicating older versions of the NEM's dispatch procedure. Comparison is against ROP, the region price prior to any post
+dispatch adjustments, scaling, capping etc.
+
+Summary of results:
+
+Mean price error: -0.240
+Median price error: 0.000
+5% percentile price: error 0.000
+95% percentile price: error 0.051
+
+.. warning:: Warning this script downloads approximately 30 GB of data from AEMO. The download_inputs flag can be set
+             to false to stop the script re-downloading data for subsequent runs.
+
+.. literalinclude:: ../../examples/performance_on_older_data.py
     :linenos:
     :language: python
 

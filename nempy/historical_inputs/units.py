@@ -601,18 +601,18 @@ class UnitData:
         [591 rows x 12 columns]
 
         >>> price_bids
-                unit    service        1      2       3       4       5       6       7        8         9        10
-        0     AGLHAL     energy  -971.50   0.00  270.86  358.30  406.87  484.59  562.31  1326.64  10277.37  13600.02
-        1     AGLSOM     energy  -984.74   0.00   83.70  108.32  142.79  279.67  444.12   985.73  13097.94  14278.73
-        2    ANGAST1     energy -1005.67   0.00  125.71  201.34  300.89  382.14  593.34  1382.65  10678.25  14582.27
-        9      ARWF1     energy  -969.10 -63.00    2.00    4.00    8.00   16.00   32.00    64.00    128.00  14051.95
-        23    BALBG1     energy  -994.80   0.00   19.92   47.37   75.18  109.45  298.44   443.13  10047.49  14424.60
-        ..       ...        ...      ...    ...     ...     ...     ...     ...     ...      ...       ...       ...
-        306    YWPS4   lower_6s     0.03   0.05    0.16    0.30    1.90   25.04   30.04    99.00   4600.00   9899.00
-        307    YWPS4  lower_reg     0.05   1.90    4.78    9.40   14.00   29.00   64.90   240.90  11990.00  13050.00
-        308    YWPS4  raise_60s     0.17   1.80    4.80   10.01   21.00   39.00   52.00   102.00   4400.00  11999.00
-        309    YWPS4   raise_6s     0.48   1.75    4.90   20.70   33.33   99.90  630.00  1999.00   6000.00  12299.00
-        310    YWPS4  raise_reg     0.05   2.70    9.99   19.99   49.00   95.50  240.00   450.50    950.50  11900.00
+                unit     service           1          2           3           4           5           6           7            8             9            10
+        0     AGLHAL      energy  -971.50000   0.000000  270.863915  358.298915  406.873915  484.593915  562.313915  1326.641540  10277.372205  13600.018785
+        1     AGLSOM      energy  -984.74292   0.000000   83.703148  108.321721  142.787723  279.666989  444.119057   985.727663  13097.937562  14278.732950
+        2    ANGAST1      energy -1005.67390   0.000000  125.709237  201.335915  300.887574  382.135969  593.337544  1382.650761  10678.245470  14582.271550
+        3      ARWF1      energy  -969.10000 -63.001191    1.996346    4.002383    8.004766   15.999841   31.999682    63.999364    127.998728  14051.950000
+        4     BALBG1      energy  -994.80000   0.000000   19.915896   47.372376   75.177036  109.447896  298.440000   443.133660  10047.489948  14424.600000
+        ..       ...         ...         ...        ...         ...         ...         ...         ...         ...          ...           ...           ...
+        586  ASQENC1    raise_6s     0.03000   0.300000    0.730000    0.990000    1.980000    5.000000    9.900000    17.700000    100.000000  10000.000000
+        587  ASTHYD1    raise_6s     0.00000   0.490000    1.450000    4.950000    9.950000   15.000000   60.000000   200.000000   1000.000000  14000.000000
+        588   VENUS1  raise_5min     0.00000   1.000000    2.780000    3.980000    4.980000    8.600000    9.300000    14.600000     20.000000   1000.000000
+        589   VENUS1   raise_60s     0.00000   1.000000    2.780000    3.980000    4.980000    8.600000    9.300000    14.600000     20.000000   1000.000000
+        590   VENUS1    raise_6s     0.01000   0.600000    2.780000    3.980000    4.980000    8.600000    9.300000    14.000000     20.000000   1000.000000
         <BLANKLINE>
         [591 rows x 12 columns]
 
@@ -695,7 +695,7 @@ class UnitData:
         >>> unit_data.add_fcas_trapezium_constraints()
         Traceback (most recent call last):
            ...
-        nempy.historical_inputs.units.MethodCallOrderError: Call get_processed_bids before add_fcas_trapezium_constraints.
+        units.MethodCallOrderError: Call get_processed_bids before add_fcas_trapezium_constraints.
 
         After calling get_processed_bids it goes away.
 
@@ -710,7 +710,7 @@ class UnitData:
         >>> unit_data.get_fcas_max_availability()
         Traceback (most recent call last):
            ...
-        nempy.historical_inputs.units.MethodCallOrderError: Call add_fcas_trapezium_constraints before get_fcas_max_availability.
+        units.MethodCallOrderError: Call add_fcas_trapezium_constraints before get_fcas_max_availability.
 
         After calling it the error goes away.
 
@@ -1673,21 +1673,26 @@ def _scaling_for_uigf(BIDPEROFFER_D, ugif_values):
             high_break_point = high_break_point - (enablement_max - availability)
         return high_break_point
 
-    # Scale high break points.
-    fcas_semi_scheduled['HIGHBREAKPOINT'] = \
-        fcas_semi_scheduled.apply(lambda x: get_new_high_break_point(x['UIGF'], x['HIGHBREAKPOINT'],
-                                                                     x['ENABLEMENTMAX']),
-                                  axis=1)
+    if not fcas_semi_scheduled.empty:
+        # Scale high break points.
+        fcas_semi_scheduled['HIGHBREAKPOINT'] = \
+            fcas_semi_scheduled.apply(lambda x: get_new_high_break_point(x['UIGF'], x['HIGHBREAKPOINT'],
+                                                                         x['ENABLEMENTMAX']),
+                                      axis=1)
 
-    # Adjust ENABLEMENTMAX.
-    fcas_semi_scheduled['ENABLEMENTMAX'] = \
-        np.where(fcas_semi_scheduled['ENABLEMENTMAX'] > fcas_semi_scheduled['UIGF'],
-                 fcas_semi_scheduled['UIGF'], fcas_semi_scheduled['ENABLEMENTMAX'])
+        # Adjust ENABLEMENTMAX.
+        fcas_semi_scheduled['ENABLEMENTMAX'] = \
+            np.where(fcas_semi_scheduled['ENABLEMENTMAX'] > fcas_semi_scheduled['UIGF'],
+                     fcas_semi_scheduled['UIGF'], fcas_semi_scheduled['ENABLEMENTMAX'])
 
-    fcas_semi_scheduled.drop(['UIGF'], axis=1)
+        fcas_semi_scheduled.drop(['UIGF'], axis=1)
 
-    # Combined bids back together.
-    BIDPEROFFER_D = pd.concat([energy_bids, fcas_not_semi_scheduled, fcas_semi_scheduled])
+        # Combined bids back together.
+        BIDPEROFFER_D = pd.concat([energy_bids, fcas_not_semi_scheduled, fcas_semi_scheduled])
+
+    else:
+        # Combined bids back together.
+        BIDPEROFFER_D = pd.concat([energy_bids, fcas_not_semi_scheduled])
 
     return BIDPEROFFER_D
 
@@ -2171,5 +2176,4 @@ def _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
     ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
     return ic
-
 
