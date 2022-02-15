@@ -194,13 +194,13 @@ print('\n Summary of error in energy price across all regions. \n'
       'any post dispatch adjustments, scaling, capping etc.')
 print('Mean price error: {}'.format(outputs['error'].mean()))
 print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
-print('5% percentile price: error {}'.format(outputs['error'].quantile(0.05)))
-print('95% percentile price: error {}'.format(outputs['error'].quantile(0.95)))
+print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
+print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
 
 # Summary of error in energy price across all regions.
 # Comparison is against ROP, the region price prior to
 # any post dispatch adjustments, scaling, capping etc.
 # Mean price error: -0.2551808835554955
 # Median price error: 0.0
-# 5% percentile price: error -0.05010103219386006
-# 95% percentile price: error 1.0842529204604627
+# 5% percentile price error: -0.05010103219386006
+# 95% percentile price error: 1.0842529204604627

@@ -113,7 +113,7 @@ fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['ROP'], name='Histor
 fig.update_xaxes(title="Time")
 fig.update_yaxes(title="Price ($/MWh)")
 fig.update_layout(yaxis_range=[0.0, 100.0], title="QLD Region Price")
-# fig.write_image('charts/energy_market_only_qld_prices.png')
+fig.write_image('charts/energy_market_only_qld_prices.png')
 fig.show()
 
 print(outputs)
