@@ -668,7 +668,19 @@ class UnitData:
         price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
         price_bids = price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
                                         '6', '7', '8', '9', '10']]
+
+        # Price bids  coming from xml have already been scaled by loss factors, so we need to undo this.
+        price_bids = self._unscale_price_bids(price_bids, unit_info)
+
         return volume_bids, price_bids
+
+    @staticmethod
+    def _unscale_price_bids(price_bids, unit_info):
+        price_bids = pd.merge(price_bids, unit_info.loc[:, ['unit', 'loss_factor']], on='unit')
+        for col in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']:
+            price_bids[col] = np.where(price_bids['service'] == 'energy', price_bids[col] * price_bids['loss_factor'],
+                                       price_bids[col])
+        return price_bids.drop(columns=['loss_factor'])
 
     def add_fcas_trapezium_constraints(self):
         """Load the fcas trapezium constraints into the UnitData class so subsequent method calls can access them.

@@ -80,7 +80,9 @@ class RawInputsLoader:
     def get_unit_price_bids(self):
         """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.BIDDAYOFFER_D.get_data <nempy.historical_inputs.mms_db.DBManager.BIDDAYOFFER_D>`
         """
-        return self.mms_db.BIDDAYOFFER_D.get_data(self.interval)
+        # If you change this to source data from MMS then you need to also change units.UnitData.get_processed_bids
+        # to not undo scaling by loss factors.
+        return self.xml.get_unit_price_bids()
 
     def get_unit_details(self):
         """Direct interface to :attr:`nempy.historical_inputs.mms_db.DBManager.DUDETAILSUMMARY.get_data <nempy.historical_inputs.mms_db.DBManager.DUDETAILSUMMARY>`

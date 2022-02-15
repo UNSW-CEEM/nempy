@@ -112,19 +112,6 @@ class DBManager:
 
     def __init__(self, connection):
         self.con = connection
-        self.BIDPEROFFER_D = InputsByIntervalDateTime(
-            table_name='BIDPEROFFER_D', table_columns=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE', 'BANDAVAIL1',
-                                                       'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4', 'BANDAVAIL5',
-                                                       'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
-                                                       'BANDAVAIL10', 'MAXAVAIL', 'ENABLEMENTMIN', 'ENABLEMENTMAX',
-                                                       'LOWBREAKPOINT', 'HIGHBREAKPOINT'],
-            table_primary_keys=['INTERVAL_DATETIME', 'DUID', 'BIDTYPE'], con=self.con)
-        self.BIDDAYOFFER_D = InputsByDay(
-            table_name='BIDDAYOFFER_D', table_columns=['SETTLEMENTDATE', 'DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2',
-                                                       'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5', 'PRICEBAND6',
-                                                       'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10', 'T1',
-                                                       'T2', 'T3', 'T4', 'MINIMUMLOAD'],
-            table_primary_keys=['SETTLEMENTDATE', 'DUID', 'BIDTYPE'], con=self.con)
         self.DISPATCHREGIONSUM = InputsBySettlementDate(
             table_name='DISPATCHREGIONSUM', table_columns=['SETTLEMENTDATE', 'REGIONID', 'TOTALDEMAND',
                                                            'DEMANDFORECAST', 'INITIALSUPPLY'],
@@ -283,8 +270,6 @@ class DBManager:
                 self.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
                 self.DISPATCHREGIONSUM.add_data(year=year, month=month)
                 self.DISPATCHLOAD.add_data(year=year, month=month)
-                self.BIDPEROFFER_D.add_data(year=year, month=month)
-                self.BIDDAYOFFER_D.add_data(year=year, month=month)
                 self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
                 self.DISPATCHPRICE.add_data(year=year, month=month)
 
@@ -686,6 +671,7 @@ class _MultiDataSource(_MMSTable):
         if 'INTERVENTION' in data.columns:
             data = data[data['INTERVENTION'] == 0]
         data = data.loc[:, self.table_columns]
+        data = data.drop_duplicates(subset=self.table_primary_keys)
         with self.con:
             data.to_sql(self.table_name, con=self.con, if_exists='append', index=False)
             self.con.commit()

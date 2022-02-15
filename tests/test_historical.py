@@ -8,6 +8,9 @@ from nempy.historical_inputs import loaders, xml_cache, mms_db, units, \
     interconnectors, constraints, demand
 from tests import historical_market_builder
 
+test_db = 'F:/nempy_test_files/historical_mms.db'
+test_xml_cache = 'F:/nempy_test_files/nemde_cache'
+
 
 # These tests require some additional clean up and will probably not run on your machine. ##############################
 
@@ -36,10 +39,26 @@ def get_test_intervals_august_2020(number=100):
     return times_formatted
 
 
-def test_ramp_rate_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+def test_xml_price_bid_loader_vs_mms_db_loader():
+    test_db = 'F:/nempy_test_files/historical_mms.db'
+    test_xml_cache = 'F:/nempy_test_files/nemde_cache'
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
+    xml_cache_manager.load_interval('2019/01/01 00:00:00')
+    xml_bids = xml_cache_manager.get_unit_price_bids()
+    mms_bids = mms_database.BIDDAYOFFER_D.get_data('2019/01/01 00:00:00')
+    mms_bids = mms_bids.loc[:, ['DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2', 'PRICEBAND3', 'PRICEBAND4', 'PRICEBAND5',
+                                'PRICEBAND6', 'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9',  'PRICEBAND10']]
+    mms_bids = mms_bids.sort_values(['DUID', 'BIDTYPE'])
+    xml_bids = xml_bids.sort_values(['DUID', 'BIDTYPE'])
+    assert_frame_equal(xml_bids.reset_index(drop=True), mms_bids.reset_index(drop=True), check_less_precise=3)
+
+
+def test_ramp_rate_constraints():
+    con = sqlite3.connect(test_db)
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -77,9 +96,9 @@ def test_ramp_rate_constraints():
 
 
 def test_ramp_rate_constraints_where_constraints_violated():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -129,9 +148,9 @@ def test_ramp_rate_constraints_where_constraints_violated():
 
 
 def test_fast_start_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -169,9 +188,9 @@ def test_fast_start_constraints():
 
 
 def test_fast_start_constraints_where_constraints_violated():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -221,9 +240,9 @@ def test_fast_start_constraints_where_constraints_violated():
 
 
 def test_capacity_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -263,9 +282,9 @@ def test_capacity_constraints():
 
 
 def test_capacity_constraint_where_constraints_violated():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -392,9 +411,9 @@ def ignore_test_find_fcas_trapezium_scaled_availability_erros():
 
 
 def test_all_units_and_service_dispatch_historically_present_in_market():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -419,9 +438,9 @@ def test_all_units_and_service_dispatch_historically_present_in_market():
 
 
 def test_slack_in_generic_constraints():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -466,9 +485,9 @@ def test_slack_in_generic_constraints():
 
 
 def test_slack_in_generic_constraints_with_fcas_interface():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -514,9 +533,9 @@ def test_slack_in_generic_constraints_with_fcas_interface():
 
 
 def test_hist_dispatch_values_meet_demand():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
@@ -550,9 +569,9 @@ def test_hist_dispatch_values_meet_demand():
 
 
 def test_against_10_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
@@ -592,9 +611,9 @@ def test_against_10_interval_benchmark():
 
 
 def test_against_100_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
@@ -635,9 +654,9 @@ def test_against_100_interval_benchmark():
 
 
 def test_against_1000_interval_benchmark():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms.db')
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
     outputs = []
@@ -660,6 +679,7 @@ def test_against_1000_interval_benchmark():
         market_builder.set_region_demand_constraints()
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
+        market_builder.set_solver('GUROBI')
         market_builder.dispatch(calc_prices=True)
         market = market_builder.get_market_object()
 
@@ -674,3 +694,5 @@ def test_against_1000_interval_benchmark():
     outputs.to_csv('latest_1000_interval_run.csv', index=False)
     benchmark = pd.read_csv('1000_interval_benchmark.csv')
     assert_frame_equal(outputs.reset_index(drop=True), benchmark.reset_index(drop=True), check_less_precise=3)
+
+

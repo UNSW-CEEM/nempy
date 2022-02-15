@@ -58,3 +58,4 @@ def test_download_to_df_raises_on_data_not_on_nemweb():
         mms_db._download_to_df(
             url=url, table_name='DISPATCHREGIONSUM', year=2050, month=3)
 
+

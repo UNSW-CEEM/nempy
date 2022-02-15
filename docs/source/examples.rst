@@ -92,7 +92,7 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
 
 7. Detailed recreation of historical dispatch
 ------------------------------------------
-This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a simple energy market using all the
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a  energy market using all the
 features of the Nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
 dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
 conditions of the next interval, rather the historical initial conditions are always used.
@@ -128,6 +128,20 @@ of demonstrating how Nempy can be used to create time sequential models, histori
           install kaleido==0.2.1
 
 .. literalinclude:: ../../examples/time_sequential.py
+    :linenos:
+    :language: python
+
+8. Demonstrate Nempy performance on recent data
+-------------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a  energy market using all the
+features of the Nempy market model, all inputs sourced from historical data published by AEMO. A set of random dispatch
+intervals from a recent month are dispatched and compared to historical results to see if Nempy is keeping up with any
+recent changes to the NEM's dispatch procedure.
+
+.. warning:: Warning this script downloads approximately 30 GB of data from AEMO. The download_inputs flag can be set
+             to false to stop the script re-downloading data for subsequent runs.
+
+.. literalinclude:: ../../examples/recent_performance.py
     :linenos:
     :language: python
 

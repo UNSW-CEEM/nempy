@@ -444,8 +444,96 @@ class XMLCacheManager:
                             value = 0.0
                         trades_by_unit_and_type[our_name].append(value)
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
-        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG', R5MI='RAISE5MIN',
-                            L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC', L6SE='LOWER6SEC')
+        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
+                            R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
+                            L6SE='LOWER6SEC')
+        trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
+        return trades_by_unit_and_type
+
+    def get_unit_price_bids(self):
+        """Get the unit volume bids
+
+        Examples
+        --------
+        >>> manager = XMLCacheManager('test_nemde_cache')
+
+        >>> manager.load_interval('2019/01/01 00:00:00')
+
+        >>> manager.get_unit_price_bids()
+                 DUID     BIDTYPE  PRICEBAND1  PRICEBAND2  PRICEBAND3  PRICEBAND4  PRICEBAND5  PRICEBAND6  PRICEBAND7  PRICEBAND8  PRICEBAND9  PRICEBAND10
+        0      AGLHAL      ENERGY    -1000.00        0.00      278.81      368.81      418.81      498.81      578.81     1365.56    10578.87     13998.99
+        1      AGLSOM      ENERGY    -1000.00        0.00       85.00      110.00      145.00      284.00      451.00     1001.00    13300.87     14499.96
+        2     ANGAST1      ENERGY    -1000.00        0.00      125.00      200.20      299.19      379.98      589.99     1374.85    10618.00     14500.00
+        3       APD01   LOWER5MIN        0.00        1.00        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00
+        4       APD01  LOWER60SEC        0.00        1.00        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00
+        ...       ...         ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...
+        1021    YWPS4   LOWER6SEC        0.03        0.05        0.16        0.30        1.90       25.04       30.04       99.00     4600.00      9899.00
+        1022    YWPS4   RAISE5MIN        0.05        1.78        4.48       14.50       30.03       49.00       87.70      100.00    11990.00     12400.40
+        1023    YWPS4    RAISEREG        0.05        2.70        9.99       19.99       49.00       95.50      240.00      450.50      950.50     11900.00
+        1024    YWPS4  RAISE60SEC        0.17        1.80        4.80       10.01       21.00       39.00       52.00      102.00     4400.00     11999.00
+        1025    YWPS4   RAISE6SEC        0.48        1.75        4.90       20.70       33.33       99.90      630.00     1999.00     6000.00     12299.00
+        <BLANKLINE>
+        [1026 rows x 12 columns]
+
+
+        Returns
+        --------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            DUID              unique identifier of a dispatch unit, \n
+                              (as `str`)
+            BIDTYPE           the service the bid applies to, \n
+                              (as `str`)
+            PRICEBAND1        the volume bid in the first bid band,
+                              in MW, (as `np.float64`)
+                 :
+            PRICEBAND10       the volume bid in the tenth bid band,
+                              in MW, (as `np.float64`)
+            ================  ========================================
+
+
+        """
+        traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
+        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], PRICEBAND1=[], PRICEBAND2=[], PRICEBAND3=[], PRICEBAND4=[],
+                                       PRICEBAND5=[], PRICEBAND6=[], PRICEBAND7=[], PRICEBAND8=[], PRICEBAND9=[],
+                                       PRICEBAND10=[])
+        name_map = dict(BIDTYPE='@TradeType', PRICEBAND1='@PriceBand1', PRICEBAND2='@PriceBand2',
+                        PRICEBAND3='@PriceBand3', PRICEBAND4='@PriceBand4', PRICEBAND5='@PriceBand5',
+                        PRICEBAND6='@PriceBand6', PRICEBAND7='@PriceBand7', PRICEBAND8='@PriceBand8',
+                        PRICEBAND9='@PriceBand9', PRICEBAND10='@PriceBand10')
+        for trader in traders:
+            if type(trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']
+                    ['TradeTypePriceStructure']) != list:
+                trades = trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']
+                for _, trade in trades.items():
+                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
+                    for our_name, aemo_name in name_map.items():
+                        if aemo_name in trade:
+                            if aemo_name == '@TradeType':
+                                value = trade[aemo_name]
+                            else:
+                                value = float(trade[aemo_name])
+                        else:
+                            value = 0.0
+                        trades_by_unit_and_type[our_name].append(value)
+            else:
+                for trade in trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']['TradeTypePriceStructure']:
+                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
+                    for our_name, aemo_name in name_map.items():
+                        if aemo_name in trade:
+                            if aemo_name == '@TradeType':
+                                value = trade[aemo_name]
+                            else:
+                                value = float(trade[aemo_name])
+                        else:
+                            value = 0.0
+                        trades_by_unit_and_type[our_name].append(value)
+        trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
+        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
+                            R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
+                            L6SE='LOWER6SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
         return trades_by_unit_and_type
 

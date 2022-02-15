@@ -70,8 +70,8 @@ class ConstraintData:
         type_map = {'LE': '<=', 'EQ': '=', 'GE': '>='}
         self.generic_rhs['type'] = self.generic_rhs['type'].apply(lambda x: type_map[x])
 
-        bid_type_map = dict(ENOF='energy', LDOF='energy', L5RE='lower_reg', R5RE='raise_reg', R5MI='raise_5min',
-                            L5MI='lower_5min', R60S='raise_60s', L60S='lower_60s', R6SE='raise_6s',
+        bid_type_map = dict(ENOF='energy', LDOF='energy', DROF='energy', L5RE='lower_reg', R5RE='raise_reg',
+                            R5MI='raise_5min', L5MI='lower_5min', R60S='raise_60s', L60S='lower_60s', R6SE='raise_6s',
                             L6SE='lower_6s')
 
         self.unit_generic_lhs = self.raw_inputs_loader.get_constraint_unit_lhs()
