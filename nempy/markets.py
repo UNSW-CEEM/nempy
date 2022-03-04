@@ -2339,30 +2339,6 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='coefficient', data_type=np.float64, must_be_real_number=True))
         schema.validate(interconnector_coefficients)
 
-    def remove_generic_constraint_set(self, constraint_set):
-        """
-        Removes the specified list/series of constraint equations referred here as constraint set.
-        """
-        if constraint_set in self._constraints_rhs_and_type['generic']['set'].to_list():
-            
-            unit_mtx = self._generic_constraint_lhs['unit']
-            idx = unit_mtx[unit_mtx['set'] == constraint_set].index
-            self._generic_constraint_lhs['unit'].drop(labels=None, axis=0, index=idx, inplace=True)
-
-            ic_mtx = self._generic_constraint_lhs['interconnectors']
-            idx = ic_mtx[ic_mtx['set'] == constraint_set].index
-            self._generic_constraint_lhs['interconnectors'].drop(labels=None, axis=0, index=idx, inplace=True)
-        
-            rhs_mtx = self._constraints_rhs_and_type['generic']
-            const_id = rhs_mtx[rhs_mtx['set'] == constraint_set]['constraint_id']
-            idx = const_id.index
-            self._constraints_rhs_and_type['generic'].drop(labels=None, axis=0, index=idx, inplace=True)
-            
-            lhs_cof_mtx = self._lhs_coefficients['generic_deficit']
-            idx = lhs_cof_mtx[lhs_cof_mtx['constraint_id'] == int(const_id)].index
-            self._lhs_coefficients['generic_deficit'].drop(labels=None, axis=0, index=idx, inplace=True)
-        return 
-
     def make_constraints_elastic(self, constraints_key, violation_cost):
         """Make a set of constraints elastic, so they can be violated at a predefined cost.
 
@@ -2883,13 +2859,13 @@ class SpotMarket:
                         prices = si.price_constraints(constraints_to_price)
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
-        
+
         # Calculate Marginal Values for Generic Constraints
         constraints_to_price = list(self._constraints_rhs_and_type['generic']['constraint_id'])
         prices = si.price_constraints(constraints_to_price)
         self._constraints_rhs_and_type['generic']['marginal_value'] = \
             self._constraints_rhs_and_type['generic']['constraint_id'].map(prices)
-
+            
     def _get_linear_model(self, si):
         self._remove_unused_interpolation_weights(si)
         self._disable_unused_link_pair(si)
