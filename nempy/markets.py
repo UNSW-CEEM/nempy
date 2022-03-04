@@ -2860,6 +2860,12 @@ class SpotMarket:
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
+        # Calculate Marginal Values for Generic Constraints
+        constraints_to_price = list(self._constraints_rhs_and_type['generic']['constraint_id'])
+        prices = si.price_constraints(constraints_to_price)
+        self._constraints_rhs_and_type['generic']['marginal_value'] = \
+            self._constraints_rhs_and_type['generic']['constraint_id'].map(prices)
+            
     def _get_linear_model(self, si):
         self._remove_unused_interpolation_weights(si)
         self._disable_unused_link_pair(si)
@@ -3519,6 +3525,26 @@ class SpotMarket:
         fcas_availability['availability'] = fcas_availability['dispatch'] + fcas_availability['service_slack']
         return fcas_availability.loc[:, ['unit', 'service', 'availability']]
 
+    def get_constraint_marginal_values(self):
+        """
+        Returns the marginal values of binding constraints (non-zero values).
+        """
+        marginal_vals = self._constraints_rhs_and_type['generic']
+        print(marginal_vals)
+        nonzero_vals = marginal_vals[marginal_vals['marginal_value'] != 0]
+        return nonzero_vals
+
+    def get_constraint_mapping(self, constraint_set):
+        """
+        Returns unit DUIDs and coefficients involved in constraint,
+        Returns interconnectors and coefficients involed in constraint 
+        """
+        unit_mtx = self._generic_constraint_lhs['unit']
+        sel_units = unit_mtx[unit_mtx['set'] == constraint_set]
+
+        ic_mtx = self._generic_constraint_lhs['interconnectors']
+        sel_ics = ic_mtx[ic_mtx['set'] == constraint_set]
+        return {'units': sel_units, 'interconnectors': sel_ics}
 
 class ModelBuildError(Exception):
     """Raise for building model components in wrong order."""
