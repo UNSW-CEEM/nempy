@@ -2812,7 +2812,7 @@ class SpotMarket:
                 self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                     self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
 
-        if 'generic_deficit' in self._decision_variables and allow_over_constrained_dispatch_re_run:
+        if allow_over_constrained_dispatch_re_run:
             fcas_ceiling_price_violated = False
             if 'fcas' in self._market_constraints_rhs_and_type:
                 if self._market_constraints_rhs_and_type['fcas']['price'].max() >= fcas_market_ceiling_price:
@@ -2829,27 +2829,32 @@ class SpotMarket:
                     energy_floor_price_violated = True
 
             deficit_variables = []
+            lhs_deficit_variables = []
 
             generic_cons_violated = False
-            if (self._decision_variables['generic_deficit']['value'].max() > 0.0001 or
-                    self._decision_variables['generic_deficit']['value'].min() < -0.0001):
-                generic_cons_violated = True
-                deficit_variables.append(self._decision_variables['generic_deficit'].copy())
+            if 'generic_deficit' in self._decision_variables:
+                if (self._decision_variables['generic_deficit']['value'].max() > 0.0001 or
+                        self._decision_variables['generic_deficit']['value'].min() < -0.0001):
+                    generic_cons_violated = True
+                    deficit_variables.append(self._decision_variables['generic_deficit'].copy())
+                    lhs_deficit_variables.append(self._lhs_coefficients['generic_deficit'])
 
             fcas_cons_violated = False
-            if (self._decision_variables['fcas_deficit']['value'].max() > 0.0001 or
-                    self._decision_variables['fcas_deficit']['value'].min() < -0.0001):
-                fcas_cons_violated = True
-                deficit_variables.append(self._decision_variables['fcas_deficit'].copy())
+            if 'fcas_deficit' in self._decision_variables:
+                if (self._decision_variables['fcas_deficit']['value'].max() > 0.0001 or
+                        self._decision_variables['fcas_deficit']['value'].min() < -0.0001):
+                    fcas_cons_violated = True
+                    deficit_variables.append(self._decision_variables['fcas_deficit'].copy())
+                    lhs_deficit_variables.append(self._lhs_coefficients['fcas_deficit'])
 
             if ((fcas_ceiling_price_violated or energy_ceiling_price_violated or energy_floor_price_violated) and
                     (generic_cons_violated or fcas_cons_violated)):
                 variables = pd.concat(deficit_variables)
-                active_violation_variables = variables[(variables['value'] > 0.0001) | (variables['value'] > 0.0001)]
-                lhs = pd.concat([self._lhs_coefficients['generic_deficit'], self._lhs_coefficients['fcas_deficit']])
+                active_violation_variables = variables[(variables['value'] > 0.0) | (variables['value'] < -0.0)]
+                lhs = pd.concat(lhs_deficit_variables)
                 variables_and_cons = pd.merge(active_violation_variables, lhs, on='variable_id')
-                variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.0001) * \
-                    variables_and_cons['coefficient'] * -1
+                variables_and_cons['adjuster'] = (variables_and_cons['value'] + 0.01) * \
+                                                 variables_and_cons['coefficient'] * -1
                 variables_and_cons.apply(lambda x: si.update_rhs(x['constraint_id'], x['adjuster']), axis=1)
                 si.linear_mip_model.optimize()
 
