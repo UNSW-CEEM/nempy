@@ -2828,21 +2828,23 @@ class SpotMarket:
                 if self._market_constraints_rhs_and_type['demand']['price'].min() <= energy_market_floor_price:
                     energy_floor_price_violated = True
 
+            deficit_variables = []
+
             generic_cons_violated = False
             if (self._decision_variables['generic_deficit']['value'].max() > 0.0001 or
                     self._decision_variables['generic_deficit']['value'].min() < -0.0001):
                 generic_cons_violated = True
+                deficit_variables.append(self._decision_variables['generic_deficit'].copy())
 
             fcas_cons_violated = False
             if (self._decision_variables['fcas_deficit']['value'].max() > 0.0001 or
                     self._decision_variables['fcas_deficit']['value'].min() < -0.0001):
                 fcas_cons_violated = True
+                deficit_variables.append(self._decision_variables['fcas_deficit'].copy())
 
             if ((fcas_ceiling_price_violated or energy_ceiling_price_violated or energy_floor_price_violated) and
                     (generic_cons_violated or fcas_cons_violated)):
-                generic_variables = self._decision_variables['generic_deficit'].copy()
-                fcas_variables = self._decision_variables['fcas_deficit'].copy()
-                variables = pd.concat([generic_variables, fcas_variables])
+                variables = pd.concat(deficit_variables)
                 active_violation_variables = variables[(variables['value'] > 0.0001) | (variables['value'] > 0.0001)]
                 lhs = pd.concat([self._lhs_coefficients['generic_deficit'], self._lhs_coefficients['fcas_deficit']])
                 variables_and_cons = pd.merge(active_violation_variables, lhs, on='variable_id')
