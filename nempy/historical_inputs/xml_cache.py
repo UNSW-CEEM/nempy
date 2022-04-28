@@ -7,7 +7,7 @@ import os
 import numpy as np
 from pathlib import Path
 from datetime import datetime, timedelta, time
-from time import time as t
+from time import sleep
 
 pd.set_option('display.width', None)
 
@@ -161,9 +161,15 @@ class XMLCacheManager:
         year, month, day = self._get_market_year_month_day_as_str()
         base_url = "https://www.nemweb.com.au/Data_Archive/Wholesale_Electricity/NEMDE/{year}/NEMDE_{year}_{month}/NEMDE_Market_Data/NEMDE_Files/NemSpdOutputs_{year}{month}{day}_loaded.zip"
         url = base_url.format(year=year, month=month, day=day)
-        r = requests.get(url)
-        z = zipfile.ZipFile(io.BytesIO(r.content))
-        z.extractall(self.cache_folder)
+        try:
+            r = requests.get(url)
+            z = zipfile.ZipFile(io.BytesIO(r.content))
+            z.extractall(self.cache_folder)
+        except zipfile.BadZipFile:
+            sleep(100)
+            r = requests.get(url)
+            z = zipfile.ZipFile(io.BytesIO(r.content))
+            z.extractall(self.cache_folder)
 
     def _get_market_year_month_day(self):
         date_time = self._get_interval_datetime_object()
