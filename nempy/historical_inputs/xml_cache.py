@@ -46,15 +46,6 @@ class XMLCacheManager:
 
     def populate_by_day(self, start_year, start_month, end_year, end_month, start_day, end_day, verbose=True):
         """Download data to the cache from the AEMO website. Data downloaded is inclusive of the start and end date.
-
-        Examples
-        -------
-
-        >>> manager = XMLCacheManager('test_nemde_cache')
-
-        >>> manager.populate_by_day(start_year=2022, start_month=11, end_year=2022,
-        ...                         end_month=11, start_day=1, end_day=1)
-
         """
 
         start = datetime(year=start_year, month=start_month, day=start_day) - timedelta(days=1)
