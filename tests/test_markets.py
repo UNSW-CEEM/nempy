@@ -784,3 +784,58 @@ def test_one_region_energy_market_with_elastic_unit_generic_constraints():
     assert_frame_equal(market.get_energy_prices(), expected_prices)
     assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
 
+
+def test_setting_constraint_on_unit_with_no_bid_volume_doesnt_raise_error():
+    # Unit 'C' is on outage, energy bids all 0
+    volume_bids = pd.DataFrame({
+        'unit': ['A', 'B', 'C'],
+        '1': [20.0, 50.0, 0.0],
+        '2': [20.0, 30.0, 0.0],
+        '3': [5.0, 10.0, 0.0]
+    })
+
+    price_bids = pd.DataFrame({
+        'unit': ['A', 'B', 'C'],
+        '1': [50.0, 50.0, 0.0],
+        '2': [60.0, 55.0, 0.0],
+        '3': [100.0, 80.0, 0.0]
+    })
+
+    unit_info = pd.DataFrame({
+        'unit': ['A', 'B', 'C'],
+        'region': ['NSW', 'NSW', 'NSW'],
+    })
+
+    # Max capacity also set to 0 for unit 'C'
+    max_capacity = pd.DataFrame({
+        'unit': ['A', 'B', 'C'],
+        'capacity': [50.0, 100.0, 0.0],
+    })
+
+    demand = pd.DataFrame({
+        'region': ['NSW'],
+        'demand': [120.0]
+    })
+
+    market = markets.SpotMarket(unit_info=unit_info,
+                                market_regions=['NSW'])
+    market.set_unit_volume_bids(volume_bids)
+    market.set_unit_price_bids(price_bids)
+    market.set_demand_constraints(demand)
+    market.set_unit_bid_capacity_constraints(max_capacity)
+
+    market.dispatch()
+
+    expected_prices = pd.DataFrame({
+        'region': ['NSW'],
+        'price': [60.0]
+    })
+
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'service': ['energy', 'energy'],
+        'dispatch': [40.0, 80.0]
+    })
+
+    assert_frame_equal(market.get_energy_prices(), expected_prices)
+    assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)

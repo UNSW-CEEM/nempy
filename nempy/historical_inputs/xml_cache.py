@@ -48,9 +48,6 @@ class XMLCacheManager:
         """Download data to the cache from the AEMO website. Data downloaded is inclusive of the start and end date."""
 
         start = datetime(year=start_year, month=start_month, day=start_day) - timedelta(days=1)
-        if end_month == 12:
-            end_month = 0
-            end_year += 1
         end = datetime(year=end_year, month=end_month, day=end_day)
         download_date = start
         while download_date <= end:

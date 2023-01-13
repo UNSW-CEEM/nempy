@@ -386,8 +386,8 @@ class InterfaceToSolver:
         1              2    =  20.0    0.0
 
         """
-        slack = constraints_type_and_rhs['constraint_id'].apply(lambda x: self.mip_model.constr_by_name(str(x)).slack,
-                                                                self.mip_model)
+        slack = constraints_type_and_rhs['constraint_id'].apply(
+            lambda x: getattr(self.mip_model.constr_by_name(str(x)), "slack", 0.0))
         return slack
 
     def price_constraints(self, constraint_ids_to_price):
