@@ -565,7 +565,6 @@ class SpotMarket:
         """
         self._check_unit_volume_bids_set()
         self._validate_unit_limits(unit_limits)
-        unit_limits = self._filter_unit_bid_capacity_constraints_to_remove_those_with_zero_bid_volume(unit_limits)
         rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self._next_constraint_id)
         self._constraints_rhs_and_type['uigf_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['uigf_capacity'] = variable_map
