@@ -1279,7 +1279,7 @@ class SpotMarket:
 
         On a unit basis for generators they take the form of:
 
-            Energy dispatch + Regulation lower target <= initial output - ramp down rate * (dispatch interval / 60)
+            Energy dispatch - Regulation lower target >= initial output - ramp down rate * (dispatch interval / 60)
 
         Examples
         --------
