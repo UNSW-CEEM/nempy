@@ -33,8 +33,8 @@ checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by 
 
 ## Future support and maintenance
 Planning to continue support and maintenance for Nempy after the PhD project is complete is currently underway. If Nempy
-is useful to your work, research, or business, please reach out and inform us so we can consider your Nempy use case and
-needs in our planning.
+is useful to your work, research, or business, please reach out and inform us so we can consider your use case and
+needs.
 
 ### Reporting issues
 Issues with Nempy can be reported via the issues register (https://github.com/UNSW-CEEM/nempy/issues), issues submissions do not need to adhere to any particular format.
