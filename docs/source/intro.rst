@@ -6,17 +6,32 @@ NEM evolves, constraints and ancillary service markets are becoming increasingly
 As part of the ongoing reform process significant changes to the dispatch process have also been proposed, for example,
 the introduction of an operating reserve market is being considered, as is the adoption of a dynamic intra-regional loss
 model. Nempy allows users to easily configure a dispatch model to fit the relevant research question. Furthermore, if
-extra functionality is needed, the python implementation, open-source licencing and planned ongoing support from developers
-make it possible to adapt Nempy to your needs. Version 1 will be a stable release and ongoing minor updates or patches
-will remain backwards compatible. Currently the latest minor release is v1.1.0. However, we are interested in receiving
-feedback to inform the ongoing maintenance, development and any future major updates.
+extra functionality is needed, the python implementation, open-source licencings. Version 1 will be a stable release 
+and ongoing minor updates or patches will remain backwards compatible. Currently, the latest minor release is v1.1.0. 
+However, we are interested in receiving feedback to inform the ongoing maintenance, development and any future major updates.
 
-Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, has detailed
-documentation and has planned support until mid-2023.
+Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, and has detailed
+documentation.
 
 The Nempy source code is on GitHub: https://github.com/UNSW-CEEM/nempy.
 
 A brief introduction to the NEM can be found here: https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
+
+Author
+-------
+Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
+Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. (https://www.ceem.unsw.edu.au/). 
+
+Support
+-------
+You can seek support for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), 
+checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
+
+Future support and maintenance
+-----------------------------
+Planning to continue support and maintenance for Nempy after the PhD project is complete is currently underway. If Nempy
+is useful to your work, research, or business, please reach out and inform us so we can consider your Nempy use case and
+needs in our planning.
 
 Example use cases
 -----------------
@@ -144,24 +159,12 @@ more complex examples show how features can be combined to build models more sui
 documentation aims to cover all the package's public APIs (the classes, methods and functions accessible to the user),
 describing their use, inputs, outputs and any side effects.
 
-Support
--------
-Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
-Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. As part of this
-project we plan to engage with and support software users, this can be facilitated through the PhD until mid-2023. If
-Nempy is used sufficiently broadly we would look to continue support beyond this timeframe.
-
-
 Ongoing work
 ------------
 Maintenance:
 
 1. Retest Nempy on 2020 and 2021 historical data, previous testing has been against 2019 data.
-
-Enhancements:
-
-* No enhancements are currently planned for Nempy. However, development is active on a market participant behavioural
-  modelling package that would strongly complement the functionality of Nempy, https://github.com/UNSW-CEEM/NEMPRO .
+2. New NEM market features such as Fast Frequency Response markets will be added to Nempy.
 
 Dependencies
 ------------
