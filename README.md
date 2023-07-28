@@ -23,8 +23,18 @@ A more detailed introduction to Nempy, examples, and reference documentation can
 ## Community
 Nempy is open-source and we welcome all forms of community engagement, some more info is provided below.
 
-### Support
-You can seek suport for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly n.gorman at unsw.edu.au.
+## Author
+Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
+Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. (https://www.ceem.unsw.edu.au/). 
+
+## Support
+You can seek support for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), 
+checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
+
+## Future support and maintenance
+Planning to continue support and maintenance for Nempy after the PhD project is complete is currently underway. If Nempy
+is useful to your work, research, or business, please reach out and inform us so we can consider your Nempy use case and
+needs in our planning.
 
 ### Reporting issues
 Issues with Nempy can be reported via the issues register (https://github.com/UNSW-CEEM/nempy/issues), issues submissions do not need to adhere to any particular format.
@@ -32,11 +42,6 @@ Issues with Nempy can be reported via the issues register (https://github.com/UN
 ### Contributing
 Contributions via pull requests are welcome. Contributions should; follow the PEP8 style guide (with exception of line length up to 120 rather than 80), ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour, please highlight this in your pull request description), implement automated tests for new features, and provided doc strings for public interfaces. 
 
-### Get in touch
-This project is being lead by Nick Gorman, a PhD candidate at the University for New South Wales and the Collaboration 
-on Energy and Environmental Markets (CEEM). As part the project we hope to engage with and support prospective users of
-the software. Feel welcome to get in touch if you have any questions, want to provide feed back, have a feature request,
-are interested in collaborating or just want to discuss this project. You can contact Nick via n.gorman at unsw.edu.au.      
 
 ## Installation
 Installing nempy to use in your project is easy.
