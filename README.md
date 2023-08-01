@@ -11,7 +11,7 @@
 - [Community](https://github.com/UNSW-CEEM/nempy#community)
 - [Author](https://github.com/UNSW-CEEM/nempy#author)
 - [Citation](https://github.com/UNSW-CEEM/nempy#citation)
-- [Licence](https://github.com/UNSW-CEEM/nempy#licence)
+- [License](https://github.com/UNSW-CEEM/nempy#license)
 - [Examples](https://github.com/UNSW-CEEM/nempy#examples)
 
 ## Introduction
