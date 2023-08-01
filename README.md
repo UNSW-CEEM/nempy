@@ -39,22 +39,38 @@ A more detailed introduction to Nempy, examples, and reference documentation can
 [readthedocs](https://nempy.readthedocs.io/en/latest/) page.
 
 ## Community
-Nempy is open-source and we welcome all forms of community engagement, some more info is provided below.
+
+Nempy is open-source and we welcome all forms of community engagement.
 
 ### Support
-You can seek support for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), 
-checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
+
+You can seek support for using Nempy using the [discussion tab on GitHub](https://github.com/UNSW-CEEM/nempy/discussions), checking the [issues register](https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
+
+If you cannot find a pre-existing issue related to your enquiry, you can submit a new one via the [issues register](https://github.com/UNSW-CEEM/nempy/issues). Issues submissions do not need to adhere to any particular format.
 
 ### Future support and maintenance
+
 Planning to continue support and maintenance for Nempy after the PhD project is complete is currently underway. If Nempy
 is useful to your work, research, or business, please reach out and inform us so we can consider your use case and
 needs.
 
-### Reporting issues
-Issues with Nempy can be reported via the issues register (https://github.com/UNSW-CEEM/nempy/issues), issues submissions do not need to adhere to any particular format.
-
 ### Contributing
-Contributions via pull requests are welcome. Contributions should; follow the PEP8 style guide (with exception of line length up to 120 rather than 80), ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour, please highlight this in your pull request description), implement automated tests for new features, and provided doc strings for public interfaces. 
+
+Contributions via pull requests are welcome. Contributions should:
+
+1. Follow the PEP8 style guide (with exception of line length up to 120 rather than 80)
+2. Ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour; if you are, please highlight this in your pull request description)
+3. Implement automated tests for new features
+4. Provide doc strings for public interfaces
+
+#### Installation for development
+
+Nempy uses [`poetry`](https://python-poetry.org/docs/) as a dependency and project management tool. To install Nempy for development, clone or fork the repo and then run the following command in the main directory to install required dependencies and the source code as an editable project:
+
+```bash
+poetry install --with=dev
+```
+You can then work within the virtual environment using `poetry shell` or run commands within it using `poetry run`.
 
 ## Author
 
