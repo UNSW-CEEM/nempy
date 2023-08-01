@@ -1,7 +1,7 @@
 # Nempy
 
 [![Current build](https://github.com/UNSW-CEEM/nempy/actions/workflows/test.yml/badge.svg)](https://github.com/UNSW-CEEM/nempy/actions/workflows/test.yml)
-[![Documentation](https://readthedocs.org/projects/nempy/badge/?version=latest)](https://nemseer.readthedocs.io/en/latest/?badge=latest)
+[![Documentation](https://readthedocs.org/projects/nempy/badge/?version=latest)](https://nempy.readthedocs.io/en/latest/?badge=latest)
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.03596/status.svg)](https://doi.org/10.21105/joss.03596)
 
 ## Table of Contents
