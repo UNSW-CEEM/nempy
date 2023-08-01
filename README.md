@@ -48,7 +48,7 @@ Nempy is open-source and we welcome all forms of community engagement.
 
 You can seek support for using Nempy using the [discussion tab on GitHub](https://github.com/UNSW-CEEM/nempy/discussions), checking the [issues register](https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
 
-If you cannot find a pre-existing issue related to your enquiry, you can submit a new one via the [issues register](https://github.com/UNSW-CEEM/nempy/issues). Issues submissions do not need to adhere to any particular format.
+If you cannot find a pre-existing issue related to your enquiry, you can submit a new one via the [issues register](https://github.com/UNSW-CEEM/nempy/issues). Issue submissions do not need to adhere to any particular format.
 
 ### Future support and maintenance
 
