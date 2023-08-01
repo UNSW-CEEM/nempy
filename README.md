@@ -1,6 +1,5 @@
 ## Table of Contents
 - [Introduction](https://github.com/UNSW-CEEM/nempy#introduction)
-- [Motivation](https://github.com/UNSW-CEEM/nempy#motivation)
 - [Documentation](https://github.com/UNSW-CEEM/nempy#documentation)
 - [Community](https://github.com/UNSW-CEEM/nempy#community)
 - [Installation](https://github.com/UNSW-CEEM/nempy#installation)
