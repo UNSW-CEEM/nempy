@@ -17,8 +17,8 @@
 ## Introduction
 
 Nempy is a Python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). The idea is 
-that you can start simple, like in the [example below](https://github.com/UNSW-CEEM/nempy#a-simple-example), and grow the complexity of your model by adding features such as 
-ramping constraints, interconnectors, FCAS markets and more.
+that you can start simple and grow the complexity of your model by adding features such as 
+ramping constraints, interconnectors, FCAS markets and more. See the [examples](https://github.com/UNSW-CEEM/nempy#examples) below.
 
 | ![nempy-accuracy](https://github.com/UNSW-CEEM/nempy/blob/3c1447f4e4e26bd8777faf59eec1e0afa093f340/plot.png) | 
 |:--:| 
