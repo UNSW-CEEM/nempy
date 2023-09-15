@@ -29,6 +29,11 @@ optional = true
 [tool.poetry.group.dev.dependencies]
 pytest = ">=6.2.5"
 
+[tool.poetry.group.docs.dependencies]
+Sphinx = "^5"
+sphinx_rtd_theme = "*"
+autodocsumm = "*"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
