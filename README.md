@@ -1,61 +1,98 @@
+# Nempy
+
+[![Current build](https://github.com/UNSW-CEEM/nempy/actions/workflows/test.yml/badge.svg)](https://github.com/UNSW-CEEM/nempy/actions/workflows/test.yml)
+[![Documentation](https://readthedocs.org/projects/nempy/badge/?version=latest)](https://nempy.readthedocs.io/en/latest/?badge=latest)
+[![DOI](https://joss.theoj.org/papers/10.21105/joss.03596/status.svg)](https://doi.org/10.21105/joss.03596)
+
 ## Table of Contents
 - [Introduction](https://github.com/UNSW-CEEM/nempy#introduction)
+- [Installation](https://github.com/UNSW-CEEM/nempy#installation)
 - [Documentation](https://github.com/UNSW-CEEM/nempy#documentation)
 - [Community](https://github.com/UNSW-CEEM/nempy#community)
-- [Installation](https://github.com/UNSW-CEEM/nempy#installation)
-- [A simple example](https://github.com/UNSW-CEEM/nempy#a-simple-example)
-- [A detailed example](https://github.com/UNSW-CEEM/nempy#a-detailed-example)
+- [Author](https://github.com/UNSW-CEEM/nempy#author)
+- [Citation](https://github.com/UNSW-CEEM/nempy#citation)
+- [License](https://github.com/UNSW-CEEM/nempy#license)
+- [Examples](https://github.com/UNSW-CEEM/nempy#examples)
 
 ## Introduction
-Nempy is a python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). The idea is 
-that you can start simple, like in the [example below](https://github.com/UNSW-CEEM/nempy#a-simple-example), and grow the complexity of your model by adding features such as 
-ramping constraints, interconnectors, FCAS markets and more.
 
-A brief introduction to the NEM can be found at the link below:
+Nempy is a Python package for modelling the dispatch procedure of the Australian National Electricity Market (NEM). The idea is 
+that you can start simple and grow the complexity of your model by adding features such as 
+ramping constraints, interconnectors, FCAS markets and more. See the [examples](https://github.com/UNSW-CEEM/nempy#examples) below.
 
-https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf
+| ![nempy-accuracy](https://github.com/prakaa/nempy/assets/40549624/6a994cee-3255-4e3d-b04b-6d4d7e155065) | 
+|:--:| 
+| *Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calendar year. The actual prices, prior to scaling or capping, are also shown for comparison. Results from two Nempy models are shown, one with a full set of dispatch features, and one without FCAS markets or generic constraints (network and security constraints). Actual prices, results from the full featured model, and the simpler model are shown in descending order for actual prices, results from the simpler model are also shown resorted.* |
+
+For further details, refer to the [documentation](https://nempy.readthedocs.io/en/latest/intro.html#).
+
+For a brief introduction to the NEM, refer to this [ document](https://aemo.com.au/-/media/Files/Electricity/NEM/National-Electricity-Market-Fact-Sheet.pdf).
+
+## Installation
+Installing Nempy to use in your project is easy.
+
+```bash
+pip install nempy
+```
 
 ## Documentation
+
 A more detailed introduction to Nempy, examples, and reference documentation can be found on the 
 [readthedocs](https://nempy.readthedocs.io/en/latest/) page.
 
 ## Community
-Nempy is open-source and we welcome all forms of community engagement, some more info is provided below.
 
-## Author
-Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
-Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. (https://www.ceem.unsw.edu.au/). 
+Nempy is open-source and we welcome all forms of community engagement.
 
-## Support
-You can seek support for using Nempy using the discussion tab on GitHub (https://github.com/UNSW-CEEM/nempy/discussions), 
-checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
+### Support
 
-## Future support and maintenance
+You can seek support for using Nempy using the [discussion tab on GitHub](https://github.com/UNSW-CEEM/nempy/discussions), checking the [issues register](https://github.com/UNSW-CEEM/nempy/issues), or by contacting Nick directly (n.gorman at unsw.edu.au).
+
+If you cannot find a pre-existing issue related to your enquiry, you can submit a new one via the [issues register](https://github.com/UNSW-CEEM/nempy/issues). Issue submissions do not need to adhere to any particular format.
+
+### Future support and maintenance
+
 Planning to continue support and maintenance for Nempy after the PhD project is complete is currently underway. If Nempy
 is useful to your work, research, or business, please reach out and inform us so we can consider your use case and
 needs.
 
-### Reporting issues
-Issues with Nempy can be reported via the issues register (https://github.com/UNSW-CEEM/nempy/issues), issues submissions do not need to adhere to any particular format.
-
 ### Contributing
-Contributions via pull requests are welcome. Contributions should; follow the PEP8 style guide (with exception of line length up to 120 rather than 80), ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour, please highlight this in your pull request description), implement automated tests for new features, and provided doc strings for public interfaces. 
 
+Contributions via pull requests are welcome. Contributions should:
 
-## Installation
-Installing nempy to use in your project is easy.
+1. Follow the PEP8 style guide (with exception of line length up to 120 rather than 80)
+2. Ensure that all existing automated tests continue to pass (unless you are explicitly changing intended behavour; if you are, please highlight this in your pull request description)
+3. Implement automated tests for new features
+4. Provide doc strings for public interfaces
 
-`pip install nempy`
+#### Installation for development
 
-To install for development purposes, such as adding new features. Download the source code, unzip, cd into the directory, then install.
+Nempy uses [`poetry`](https://python-poetry.org/docs/) as a dependency and project management tool. To install Nempy for development, clone or fork the repo and then run the following command in the main directory to install required dependencies and the source code as an editable project:
 
-`pip install e .[dev]`
+```bash
+poetry install --with=dev
+```
+You can then work within the virtual environment using `poetry shell` or run commands within it using `poetry run`.
 
-Then the test suite can be run using.
+## Author
 
-`python -m pytest`
+Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
+Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. (https://www.ceem.unsw.edu.au/). 
 
-## A simple example
+## Citation
+
+If you use Nempy, please cite the package via the [JOSS paper](https://doi.org/10.5281/zenodo.7397514) (suggested citation below):
+> Gorman et al., (2022). Nempy: A Python package for modelling the Australian National Electricity Market dispatch procedure. Journal of Open Source Software, 7(70), 3596, https://doi.org/10.21105/joss.03596
+
+## License
+
+Nempy was created by Nicholas Gormans. It is licensed under the terms of [the BSD 3-Clause Licence](./LICENSE).
+
+## Examples
+<details>
+
+<summary>A simple example</summary>
+
 ```python
 import pandas as pd
 from nempy import markets
@@ -110,11 +147,18 @@ print(market.get_energy_prices())
 # 0    NSW   60.0
 ```
 
-## A detailed example
-The example demonstrates the broad range of market features that can be implemented with nempy and the use of auxiliary 
-modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with nempy.
-    
-Warning: this example downloads approximately 8.5 GB of data from AEMO.
+</details>
+
+<details>
+
+<summary>A detailed example</summary>
+
+The example demonstrates the broad range of market features that can be implemented with Nempy and the use of auxiliary 
+modelling tools for accessing historical market data published by AEMO and preprocessing it for compatibility with Nempy.
+
+> [!WARNING]  
+> This example downloads approximately 8.5 GB of data from AEMO.
+
 ```python
 # Notice: this script downloads large volumes of historical market data from AEMO's nemweb portal.
 
@@ -317,3 +361,5 @@ print(pd.concat(outputs))
 # 3  2019/01/01 12:30:00   TAS1  90.196284
 # 4  2019/01/01 12:30:00   VIC1  85.573321
 ```
+</details>
+    
