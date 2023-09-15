@@ -3,7 +3,7 @@ name="nempy"
 version="1.1.6"
 description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure."
 authors=["Nicholas Gorman <n.gorman@unsw.edu.au>",]
-license = "GPL-3.0-or-later"
+license = "BSD-3-Clause"
 readme = "README.md"
 classifiers=[
     "Programming Language :: Python :: 3",
@@ -18,7 +18,7 @@ repository="https://github.com/UNSW-CEEM/nempy"
 
 [tool.poetry.dependencies]
 python = ">=3.8,<3.12"
-pandas = ">=2.0"
+pandas = "<3.0.0"
 mip = ">=1.11.0,<2.0.0"
 xmltodict = "==0.12.0"
 requests = ">=2.0.0, <3.0.0"
