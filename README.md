@@ -20,7 +20,7 @@ Nempy is a Python package for modelling the dispatch procedure of the Australian
 that you can start simple and grow the complexity of your model by adding features such as 
 ramping constraints, interconnectors, FCAS markets and more. See the [examples](https://github.com/UNSW-CEEM/nempy#examples) below.
 
-| ![nempy-accuracy](https://github.com/UNSW-CEEM/nempy/blob/3c1447f4e4e26bd8777faf59eec1e0afa093f340/plot.png) | 
+| ![nempy-accuracy](https://github.com/prakaa/nempy/assets/40549624/6a994cee-3255-4e3d-b04b-6d4d7e155065) | 
 |:--:| 
 | *Dispatch price results from the New South Wales region for 1000 randomly selected intervals in the 2019 calendar year. The actual prices, prior to scaling or capping, are also shown for comparison. Results from two Nempy models are shown, one with a full set of dispatch features, and one without FCAS markets or generic constraints (network and security constraints). Actual prices, results from the full featured model, and the simpler model are shown in descending order for actual prices, results from the simpler model are also shown resorted.* |
 
