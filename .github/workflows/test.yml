@@ -49,3 +49,41 @@ jobs:
         run: |
           source $VENV
           python -m pytest
+          
+  publish:
+    if: github.event_name == 'release' && github.event.action == 'created'
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repo so the workflow can access it
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      # Install the specified version of poetry
+      - name: Get poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.4.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      # Load cached poetry env if it exists
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v2
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      # Build and publish to PyPI
+      - name: Build and publish # publish tsgen to PyPI
+        env:
+          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: poetry publish -u $PYPI_USERNAME -p $PYPI_PASSWORD --build
