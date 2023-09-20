@@ -450,7 +450,7 @@ class XMLCacheManager:
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
         bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
                             R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
-                            L6SE='LOWER6SEC')
+                            L6SE='LOWER6SEC', R1SE='RAISE1SEC', L1SE='LOWER1SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
         return trades_by_unit_and_type
 
@@ -537,7 +537,7 @@ class XMLCacheManager:
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
         bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
                             R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
-                            L6SE='LOWER6SEC')
+                            L6SE='LOWER6SEC', R1SE='RAISE1SEC', L1SE='LOWER1SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
         return trades_by_unit_and_type
 
