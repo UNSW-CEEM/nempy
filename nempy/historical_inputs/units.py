@@ -68,9 +68,9 @@ class UnitData:
         self.dispatch_interval = 5  # minutes
         self.dispatch_type_name_map = {'GENERATOR': 'generator', 'LOAD': 'load'}
         self.service_name_mapping = {'ENERGY': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
-                                     'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
-                                     'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
-                                     'RAISE1SEC': 'raise_1s', 'LOWER1SEC': 'lower_1s'}
+                                     'RAISE6SEC': 'raise_6s', 'RAISE1SEC': 'raise_1s',
+                                     'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min', 'LOWER6SEC': 'lower_6s',
+                                     'LOWER1SEC': 'lower_1s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
 
         self.volume_bids = self.raw_input_loader.get_unit_volume_bids()
         self.fast_start_profiles = self.raw_input_loader.get_unit_fast_start_parameters()

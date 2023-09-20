@@ -122,19 +122,22 @@ class DBManager:
                                                       'AVAILABILITY', 'RAISEREGENABLEMENTMAX', 'RAISEREGENABLEMENTMIN',
                                                       'LOWERREGENABLEMENTMAX', 'LOWERREGENABLEMENTMIN',
                                                       'SEMIDISPATCHCAP', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC',
-                                                      'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'LOWERREG', 'RAISEREG',
+                                                      'LOWER1SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC', 'RAISE1SEC',
+                                                      'LOWERREG', 'RAISEREG',
                                                       'RAISEREGAVAILABILITY', 'RAISE6SECACTUALAVAILABILITY',
+                                                      'RAISE1SECACTUALAVAILABILITY',
                                                       'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
                                                       'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
+                                                      'LOWER1SECACTUALAVAILABILITY',
                                                       'LOWER60SECACTUALAVAILABILITY', 'LOWER5MINACTUALAVAILABILITY',
                                                       'LOWERREGACTUALAVAILABILITY', 'RAISE1SEC', 'LOWER1SEC',
                                                       'RAISE1SECACTUALAVAILABILITY', 'LOWER1SECACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
             table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
-                                                       'RAISE60SECROP', 'RAISE5MINROP', 'RAISEREGROP',
-                                                       'LOWER6SECROP', 'LOWER60SECROP', 'LOWER5MINROP',
-                                                       'LOWERREGROP', 'RAISE1SECROP', 'LOWER1SECROP'],
+                                                       'RAISE1SECROP', 'RAISE60SECROP', 'RAISE5MINROP', 'RAISEREGROP',
+                                                       'LOWER6SECROP', 'LOWER1SECROP', 'LOWER60SECROP', 'LOWER5MINROP',
+                                                       'LOWERREGROP'],
             table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
@@ -446,17 +449,19 @@ class _MMSTable:
             'MWBREAKPOINT': 'REAL', 'DEMANDCOEFFICIENT': 'REAL', 'INTERCONNECTORID': 'TEXT', 'REGIONFROM': 'TEXT',
             'REGIONTO': 'TEXT', 'MWFLOW': 'REAL', 'MWLOSSES': 'REAL', 'MINIMUMLOAD': 'REAL', 'MAXCAPACITY': 'REAL',
             'SEMIDISPATCHCAP': 'REAL', 'RRP': 'REAL', 'SCHEDULE_TYPE': 'TEXT', 'LOWER5MIN': 'REAL',
-            'LOWER60SEC': 'REAL', 'LOWER1SEC': 'REAL', 'LOWER6SEC': 'REAL', 'RAISE5MIN': 'REAL', 'RAISE60SEC': 'REAL',
+            'LOWER60SEC': 'REAL', 'LOWER6SEC': 'REAL', 'LOWER1SEC': 'REAL', 'RAISE5MIN': 'REAL', 'RAISE60SEC': 'REAL',
             'RAISE6SEC': 'REAL', 'RAISE1SEC': 'REAL', 'LOWERREG': 'REAL', 'RAISEREG': 'REAL', 'RAISEREGAVAILABILITY': 'REAL',
-            'RAISE1SECACTUALAVAILABILITY': 'REAL', 'RAISE6SECACTUALAVAILABILITY': 'REAL', 'RAISE60SECACTUALAVAILABILITY': 'REAL',
-            'RAISE5MINACTUALAVAILABILITY': 'REAL', 'RAISEREGACTUALAVAILABILITY': 'REAL', 'LOWER1SECACTUALAVAILABILITY': 'REAL',
-            'LOWER6SECACTUALAVAILABILITY': 'REAL', 'LOWER60SECACTUALAVAILABILITY': 'REAL',
+            'RAISE6SECACTUALAVAILABILITY': 'REAL', 'RAISE1SECACTUALAVAILABILITY': 'REAL',
+            'RAISE60SECACTUALAVAILABILITY': 'REAL',
+            'RAISE5MINACTUALAVAILABILITY': 'REAL', 'RAISEREGACTUALAVAILABILITY': 'REAL',
+            'LOWER6SECACTUALAVAILABILITY': 'REAL', 'LOWER1SECACTUALAVAILABILITY': 'REAL',
+            'LOWER60SECACTUALAVAILABILITY': 'REAL',
             'LOWER5MINACTUALAVAILABILITY': 'REAL', 'LOWERREGACTUALAVAILABILITY': 'REAL', 'LHS': 'REAL',
             'VIOLATIONDEGREE': 'REAL', 'MARGINALVALUE': 'REAL', 'RAISE6SECROP': 'REAL', 'RAISE1SECROP': 'REAL',
-            'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER1SECROP': 'REAL',
-            'LOWER6SECROP': 'REAL', 'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL',
-            'FROM_REGION_TLF': 'REAL', 'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT',
-            'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
+            'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER6SECROP': 'REAL',
+            'LOWER1SECROP': 'REAL', 'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL',
+            'FROM_REGION_TLF': 'REAL', 'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT',
+            'FROMREGION': 'TEXT', 'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -671,7 +676,8 @@ class _MultiDataSource(_MMSTable):
         data = _download_to_df(self.url, self.table_name, year, month)
         if 'INTERVENTION' in data.columns:
             data = data[data['INTERVENTION'] == 0]
-        data = data.loc[:, self.table_columns]
+        columns = [col for col in self.table_columns if col in data.columns]
+        data = data.loc[:, columns]
         data = data.drop_duplicates(subset=self.table_primary_keys)
         with self.con:
             data.to_sql(self.table_name, con=self.con, if_exists='append', index=False)
