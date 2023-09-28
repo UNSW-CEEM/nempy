@@ -25,7 +25,6 @@ class RHSCalc:
         self.rhs_constraint_equations = self._format_rhs_constraint_equations(
             inputs['GenericConstraintCollection']['GenericConstraint'])
         self._resolved_values = {}
-        x = 1
 
     @staticmethod
     def _reformat_scada_data(scada_data):
@@ -43,13 +42,16 @@ class RHSCalc:
             else:
                 entry = scada_type_set['ScadaValuesCollection']['ScadaValues']
                 add_entry(new_format, entry, True)
+
             if 'BadScadaValuesCollection' in scada_type_set:
                 if type(scada_type_set['BadScadaValuesCollection']['ScadaValues']) == list:
                     for entry in scada_type_set['BadScadaValuesCollection']['ScadaValues']:
                         add_entry(new_format, entry, False)
                 else:
-                    entry = scada_type_set['BadScadaValuesCollection']['ScadaValues']
+                    entry = scada_type_set[('BadScadaValuesCollection'
+                                            '')]['ScadaValues']
                     add_entry(new_format, entry, False)
+
         return new_format
 
     @staticmethod
@@ -147,26 +149,75 @@ def rpn_calc(equation):
     stack = []
     ignore_groups = []
     group_result = None
-    for term in equation:
+    multi_term_operators = ['ADD', 'SUB', 'MUL', 'DIV', 'MAX', 'MIN']
+    for i, term in enumerate(equation):
         if '@GroupID' in term and term['@GroupID'] not in ignore_groups:
+            # Groups are evaluate separately with their own stack. If a group exists we extract it from the main
+            # equation calculate the result for the group and then save the group id in a list of groups to ignore
+            # so that terms in this group are skipped in future iterations of the for loop.
             group = collect_group(equation, term['@GroupID'])
             group_result = rpn_calc(group)
             ignore_groups.append(term['@GroupID'])
         elif '@GroupID' not in term:
             if group_result is not None:
+                # If a group result has just been calculated the next term is treated as a multiplier to be applied to
+                # the group result. Then the final value is added to the stack. See AEMO Constraint Implementation
+                # Guidelines section A.3 Groups.
                 stack.insert(0, group_result * float(term['@Multiplier']))
                 group_result = None
-            elif term['@SpdType'] == 'U' and '@Value' not in term:
+            elif term['@SpdType'] == 'U' and '@Value' not in term and '@Operation' not in term:
+                # If the term type is U then the multiplier is applied to the top element of the stack.  See AEMO
+                # Constraint Implementation Guidelines section A.2 Top stack element.
                 if len(stack) == 0:
-                    stack.append(0.0)
+                    stack.insert(0, 0.0)
                 stack[0] = stack[0] * float(term['@Multiplier'])
             elif '@Operation' not in term:
-                if len(stack) == 0:
-                    stack.append(0.0)
-                if '@Value' in term:
-                    stack[0] += float(term['@Multiplier']) * float(term['@Value'])
+                if (i == len(equation) - 1 or '@Operation' not in equation[i + 1] or
+                        equation[i + 1]['@Operation'] not in multi_term_operators):
+                    # If there is no operator in the term, and the next term is not a multi term operator then value of
+                    # the term has the multiplier applied and is added to the top of the stack. See AEMO Constraint
+                    # Implementation Guidelines section A.2 No RPN operators.
+                    if len(stack) == 0:
+                        stack.insert(0, 0.0)
+                    if '@Value' in term:
+                        stack[0] += float(term['@Multiplier']) * float(term['@Value'])
+                    else:
+                        stack[0] += float(term['@Multiplier'])
+                elif (i < len(equation) - 1 and '@Operation' in equation[i + 1]
+                      and equation[i + 1]['@Operation'] not in multi_term_operators):
+                    # If the next term is a multi term operator then apply that operation to the current term and the
+                    # next term.
+                    if equation[i + 1]['@Operation'] == 'ADD':
+                        stack.insert(0, (float(term['@Value']) + float(equation[i + 1]['@Value'])) *
+                                     float(equation[i + 1]['@Multiplier']))
+                        raise ValueError('Need to add something to skip next term.')
                 else:
-                    stack[0] += float(term['@Multiplier'])
+                    raise ValueError('Undefined RPN behaviour')
+            elif term['@Operation'] == 'ADD':
+                if len(stack) < 2:
+                    raise ValueError('Attempting to perform multi value operation on stack with less than 2 elements.')
+                next_top_element = (stack[0] + stack[1]) * float(term['@Multiplier'])
+                stack.pop(0)
+                stack[0] = next_top_element
+
+            elif term['@Operation'] == 'STEP':
+                # For terms that are STEP operators if their value is greater than zero result is the value with the
+                # multiplier applied otherwise zero is returned. See AEMO Constraint Implementation Guidelines section
+                # A.6.1 Step function.
+                if term['@SpdType'] == 'U':
+                    if float(stack[0]) > 0.0:
+                        stack[0] = float(term['@Multiplier'])
+                    else:
+                        stack[0] = 0.0
+                else:
+                    if float(term['@Value']) > 0.0:
+                        stack.insert(0, float(term['@Multiplier']))
+                    else:
+                        stack.insert(0, 0.0)
+
+            elif term['@Operation'] == 'PUSH':
+                stack.insert(0, float(term['@Multiplier']) * float(term['@Value']))
+
     return stack[0]
 
 

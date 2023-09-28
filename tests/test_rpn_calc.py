@@ -41,3 +41,30 @@ def test_top_stack_element():
     ]
 
     assert rpn_calc(equation) == 1118.222
+
+
+def test_step_one_of_two():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.1"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'STEP',
+         '@Value': '500'},
+        {'@TermID': '2', '@SpdID': 'BW02.NBAY2', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'STEP',
+         '@Value': '0'}
+    ]
+
+    assert rpn_calc(equation) == 0
+
+
+def test_step_two_of_two():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.1"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'CONSTANT', '@SpdType': 'C', '@Multiplier': '2'},
+        {'@TermID': '2', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'PUSH',
+         '@Value': '400'},
+        {'@TermID': '2', '@SpdID': '', '@SpdType': 'U', '@Multiplier': '500', '@Operation': 'STEP'},
+        {'@TermID': '2', '@SpdID': '', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'ADD'}
+    ]
+
+    assert rpn_calc(equation) == 502
