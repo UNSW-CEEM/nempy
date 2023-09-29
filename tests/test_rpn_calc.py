@@ -1,4 +1,4 @@
-from nempy.historical_inputs.rhs_calculator import rpn_calc
+from nempy.historical_inputs.rhs_calculator import rpn_calc, rpn_stack
 
 
 def test_no_rpn_operators():
@@ -68,3 +68,255 @@ def test_step_two_of_two():
     ]
 
     assert rpn_calc(equation) == 502
+
+
+def test_square():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.2"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1 ', '@SpdType': 'I', '@Multiplier': '1', '@Operation': 'POW2',
+         '@Value': '100'}
+    ]
+
+    assert rpn_calc(equation) == 10000
+
+
+def test_cube():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.3"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1 ', '@SpdType': 'I', '@Multiplier': '1', '@Operation': 'POW3',
+         '@Value': '100'}
+    ]
+
+    assert rpn_calc(equation) == 1000000
+
+
+def test_sqrt():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.4"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1 ', '@SpdType': 'I', '@Multiplier': '1', '@Operation': 'SQRT',
+         '@Value': '100'}
+    ]
+
+    assert rpn_calc(equation) == 10
+
+
+def test_absolute_value():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.5"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1 ', '@SpdType': 'I', '@Multiplier': '1', '@Operation': 'ABS',
+         '@Value': '-100'}
+    ]
+
+    assert rpn_calc(equation) == 100
+
+
+def test_negation():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.6.6"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1', '@SpdType': 'I', '@Multiplier': '1', '@Operation': 'NEG',
+         '@Value': '100'}
+    ]
+
+    assert rpn_calc(equation) == -100
+
+
+def test_add():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.7.1"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'MW_MN_8', '@SpdType': 'A', '@Multiplier': '1', '@Value': '100'},
+        {'@TermID': '1', '@SpdID': 'MW_MN_16', '@SpdType': 'A', '@Multiplier': '2', '@Operation': 'ADD',
+         '@Value': '200'}
+    ]
+
+    assert rpn_calc(equation) == 600
+
+
+def test_sub():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.7.2"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'MW_MN_8', '@SpdType': 'A', '@Multiplier': '1', '@Value': '100'},
+        {'@TermID': '1', '@SpdID': 'MW_MN_16', '@SpdType': 'A', '@Multiplier': '2', '@Operation': 'SUB',
+         '@Value': '200'}
+    ]
+
+    assert rpn_calc(equation) == -200
+
+
+def test_multiply():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.7.3"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'MW_MN_8', '@SpdType': 'A', '@Multiplier': '1', '@Value': '10'},
+        {'@TermID': '1', '@SpdID': 'MW_MN_16', '@SpdType': 'A', '@Multiplier': '2', '@Operation': 'MUL',
+         '@Value': '20'}
+    ]
+
+    assert rpn_calc(equation) == 400
+
+
+def test_divide():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.7.4"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'MW_MN_8', '@SpdType': 'A', '@Multiplier': '1', '@Value': '10'},
+        {'@TermID': '1', '@SpdID': 'MW_MN_16', '@SpdType': 'A', '@Multiplier': '2', '@Operation': 'DIV',
+         '@Value': '20'}
+    ]
+
+    assert rpn_calc(equation) == 1.0
+
+
+def test_max():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.7.5"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Value': '500'},
+        {'@TermID': '1', '@SpdID': 'BW02.NBAY2', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'MAX',
+         '@Value': '650'},
+        # {'@TermID': '1', '@SpdID': 'ER01.NEPS1', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'MAX',
+        #  '@Value': '670'},
+        # {'@TermID': '1', '@SpdID': 'TALWA1.NDT13T', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'MAX',
+        #  '@Value': '250'}
+    ]
+
+    assert rpn_calc(equation) == 650
+
+
+def test_min():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.7.6"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Value': '500'},
+        {'@TermID': '1', '@SpdID': 'BW02.NBAY2', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'MIN',
+         '@Value': '650'},
+        # {'@TermID': '1', '@SpdID': 'ER01.NEPS1', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'MAX',
+        #  '@Value': '670'},
+        # {'@TermID': '1', '@SpdID': 'TALWA1.NDT13T', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'MAX',
+        #  '@Value': '250'}
+    ]
+
+    assert rpn_calc(equation) == 500
+
+
+def test_push():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.1"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1', '@SpdType': 'I', '@Multiplier': '1', '@Value': '100'},
+        {'@TermID': '1', '@SpdID': 'TALWA1.NDT13T', '@SpdType': 'T', '@Multiplier': '0.5', '@Operation': 'PUSH',
+         '@Value': '350'},
+    ]
+
+    assert rpn_stack(equation) == [175.0, 100]
+
+    assert rpn_calc(equation) == 175.0
+
+
+def test_duplicate():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.2"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'NSW1-QLD1', '@SpdType': 'I', '@Multiplier': '1', '@Value': '200'},
+        {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '0.5', '@Operation': 'DUP'},
+    ]
+
+    assert rpn_stack(equation) == [100.0, 200]
+
+    assert rpn_calc(equation) == 100
+
+
+def test_exchange():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.3"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Value': '660'},
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'PUSH',
+         '@Value': '500'},
+        {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'EXCH'},
+    ]
+
+    assert rpn_stack(equation) == [1320.0, 500]
+
+    assert rpn_calc(equation) == 1320
+
+
+def test_roll_stack_down():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.4"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Value': '660'},
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY2', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'PUSH',
+         '@Value': '550'},
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY3', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'PUSH',
+         '@Value': '500'},
+        {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'RSD'},
+    ]
+
+    assert rpn_stack(equation) == [1320.0, 500, 550]
+
+    assert rpn_calc(equation) == 1320
+
+
+def test_roll_stack_up():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.4"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY1', '@SpdType': 'T', '@Multiplier': '1', '@Value': '660'},
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY2', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'PUSH',
+         '@Value': '550'},
+        {'@TermID': '1', '@SpdID': 'BW01.NBAY3', '@SpdType': 'T', '@Multiplier': '1', '@Operation': 'PUSH',
+         '@Value': '500'},
+        {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'RSU'},
+    ]
+
+    assert rpn_stack(equation) == [1100.0, 660, 500]
+
+    assert rpn_calc(equation) == 1100
+
+
+def test_pop():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.4"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'YWPS1.VYP21', '@SpdType': 'T', '@Multiplier': '1', '@Value': '100'},
+        {'@TermID': '1', '@SpdID': 'YWPS2.VYP22', '@SpdType': 'T', '@Multiplier': '-1', '@Operation': 'PUSH',
+         '@Value': '350'},
+        {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'POP'},
+    ]
+
+    assert rpn_calc(equation) == 100
+
+
+def test_exchange_if_less_than_or_equal_to_zero():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.8.4"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'YWPS1.VYP21', '@SpdType': 'T', '@Multiplier': '1', '@Value': '100'},
+        {'@TermID': '1', '@SpdID': 'YWPS2.VYP22', '@SpdType': 'T', '@Multiplier': '-1', '@Operation': 'PUSH',
+         '@Value': '350'},
+        {'@TermID': '1', '@SpdType': 'S', '@Multiplier': '1', '@Operation': 'POP', '@Value': '0'},
+        {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'EXLEZ'},
+    ]
+
+    assert rpn_calc(equation) == 200
+
+
+def test_branching():
+    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.9.3"""
+
+    equation = [
+        {'@TermID': '1', '@SpdID': 'YWPS1_220_ON', '@SpdType': 'S', '@Multiplier': '1', '@Value': '1'},
+        {'@TermID': '1', '@SpdID': 'YWPS1.VYP21', '@SpdType': 'T', '@Multiplier': '1', '@Value': '100'},
+        {'@TermID': '1', '@SpdID': 'YWPS2.VYP22', '@SpdType': 'T', '@Multiplier': '-1', '@Value': '350'},
+        {'@TermID': '1', '@SpdType': 'B', '@Multiplier': '1', '@ParameterTerm1': '1', '@ParameterTerm2': '2',
+         '@ParameterTerm3': '3'},
+    ]
+
+    assert rpn_calc(equation) == 100
