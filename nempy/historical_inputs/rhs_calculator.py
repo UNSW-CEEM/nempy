@@ -2,14 +2,14 @@ from nempy.historical_inputs import xml_cache
 
 
 class RHSCalc:
-    def __init__(self, xml):
+    def __init__(self, xml_cache_manager):
         """
 
         Examples
         --------
         >>> xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2014_12')
         >>> xml_cache_manager.load_interval('2014/12/05 00:00:00')
-        >>> rhs_calculator = RHSCalc(xml_cache_manager.xml)
+        >>> rhs_calculator = RHSCalc(xml_cache_manager)
 
         Parameters
         ----------
@@ -19,13 +19,13 @@ class RHSCalc:
         -------
 
         """
-        inputs = xml['NEMSPDCaseFile']['NemSpdInputs']
+        inputs = xml_cache_manager.xml['NEMSPDCaseFile']['NemSpdInputs']
         self.scada_data = self._reformat_scada_data(inputs['ConstraintScadaDataCollection']['ConstraintScadaData'])
         self.generic_equations = self._format_generic_equations(inputs['GenericEquationCollection']['GenericEquation'])
         self.rhs_constraint_equations = self._format_rhs_constraint_equations(
             inputs['GenericConstraintCollection']['GenericConstraint'])
-        self.nemde_rhs_values = self._format_nemde_rhs_values(
-            inputs['GenericConstraintCollection']['GenericConstraint'])
+        self.unit_initial_mw = self._format_initial_conditions(xml_cache_manager.get_unit_initial_conditions())
+        self.nemde_rhs_values = self._format_nemde_rhs_values(xml_cache_manager.get_constraint_rhs())
         self._resolved_values = {}
 
     @staticmethod
@@ -79,11 +79,23 @@ class RHSCalc:
         return new_format
 
     @staticmethod
+    def _format_initial_conditions(initial_conditions):
+        return initial_conditions.set_index('DUID')['INITIALMW'].to_dict()
+
+    @staticmethod
     def _format_nemde_rhs_values(constraints):
-        new_format = {}
-        for entry in constraints:
-            new_format[entry['@ConstraintID']] = entry['@RHS']
-        return new_format
+        return constraints.set_index('set')['rhs'].to_dict()
+
+    def get_rhs_equations_that_dont_reference_generic_equations(self):
+        equations_to_return = []
+        for equation in self.rhs_constraint_equations.keys():
+            references_generic = False
+            for term in self.rhs_constraint_equations[equation]:
+                if term['@SpdID'] in self.generic_equations.keys():
+                    references_generic = True
+            if not references_generic:
+                equations_to_return.append(equation)
+        return equations_to_return
 
     def get_nemde_rhs(self, constraint_id):
         return float(self.nemde_rhs_values[constraint_id])
@@ -114,24 +126,35 @@ class RHSCalc:
     def _resolve_term_values(self, equation):
         for term in equation:
             if '@Value' not in term:
-                term['@Value'] = self._resolve_term_value(term)
+                value, default_flag = self._resolve_term_value(term)
+                if value is not  None:
+                    term["@Value"] = value
             else:
                 raise ValueError('Term value already present')
         return equation
 
     def _resolve_term_value(self, term):
         spd_id = term['@SpdID']
+        default_flag = False
         if spd_id in self.generic_equations:
             value = self._compute_generic_equation(spd_id)
         elif spd_id in self.scada_data:
             value = self.scada_data[spd_id]['@Value']
             if not self.scada_data[spd_id]['@GoodValues']:
                 raise ValueError('Scada data not good value')
+        elif spd_id in self.unit_initial_mw:
+            value = self.unit_initial_mw[spd_id]
         elif '@Default' in term:
-            value = term['@Default']
+            # if term['@SpdType'] == 'U':
+            #     value = term['@Default']
+            # else:
+            #     value = 1
+            value = None
+            default_flag = True
+
         else:
             raise ValueError('Equation value could not be resolved.')
-        return value
+        return value, default_flag
 
     def _compute_generic_equation(self, equation_id):
         """
@@ -159,8 +182,8 @@ class RHSCalc:
 
 def rpn_stack(equation):
     stack = []
-    ignore_groups = []
-    group_result = None
+    # ignore_groups = []
+    # group_result = None
     multi_term_operators = ['ADD', 'SUB', 'MUL', 'DIV', 'MAX', 'MIN']
     skip_next_term = False
     pop_flag = False
@@ -171,30 +194,40 @@ def rpn_stack(equation):
             skip_next_term = False
             assert term['@Operation'] in multi_term_operators
             continue
-        elif '@GroupID' in term and term['@GroupID'] not in ignore_groups:
+        elif term['@SpdType'] == 'G':
             # Groups are evaluate separately with their own stack. If a group exists we extract it from the main
             # equation calculate the result for the group and then save the group id in a list of groups to ignore
             # so that terms in this group are skipped in future iterations of the for loop.
-            group = collect_group(equation, term['@GroupID'])
+            group_id = equation[i+1]['@GroupTerm']
+            group = collect_group(equation, group_id)
             group_result = rpn_calc(group)
-            ignore_groups.append(term['@GroupID'])
-        elif '@GroupID' not in term:
-            if group_result is not None:
-                # If a group result has just been calculated the next term is treated as a multiplier to be applied to
-                # the group result. Then the final value is added to the stack. See AEMO Constraint Implementation
-                # Guidelines section A.3 Groups.
+            # ignore_groups.append(term['@GroupID'])
+            if len(stack) == 0 or ('@Operation' in term and term['@Operation'] == 'PUSH'):
                 stack.insert(0, group_result * float(term['@Multiplier']))
-                group_result = None
-            elif term['@SpdType'] == 'U' and '@Value' not in term and '@Operation' not in term:
+            else:
+                stack[0] += group_result * float(term['@Multiplier'])
+        # elif '@GroupID' in term and term['@GroupID'] not in ignore_groups:
+        #
+        #     group = collect_group(equation, term['@GroupID'])
+        #     group_result = rpn_calc(group)
+        elif '@GroupTerm' not in term:
+            # if group_result is not None:
+            #     # If a group result has just been calculated the next term is treated as a multiplier to be applied to
+            #     # the group result. Then the final value is added to the stack. See AEMO Constraint Implementation
+            #     # Guidelines section A.3 Groups.
+            #     stack.insert(0, group_result * float(term['@Multiplier']))
+            #     group_result = None
+            if term['@SpdType'] == 'U' and '@Value' not in term and '@Operation' not in term:
                 stack = type_u_no_operator(stack, term)
             elif term['@SpdType'] == 'B':
                 stack = branching(stack, term, equation)
             elif '@Operation' not in term:
                 if (1 == len(equation[i:]) or '@Operation' not in equation[i + 1] or equation[i + 1]['@Operation']
-                        not in multi_term_operators):
+                        not in multi_term_operators or (equation[i + 1]['@Operation'] in multi_term_operators and
+                                                        equation[i + 1]['@SpdType'] == 'U')):
                     stack = no_operator(stack, term)
                 elif (1 < len(equation[i:]) and '@Operation' in equation[i + 1]
-                      and equation[i + 1]['@Operation'] in multi_term_operators):
+                      and equation[i + 1]['@Operation'] in multi_term_operators and equation[i + 1]['@SpdType'] != 'U'):
                     # If the next term is a multi term operator then apply that operation to the current term and the
                     # next term.
                     if equation[i + 1]['@Operation'] == 'ADD':
@@ -222,8 +255,12 @@ def rpn_stack(equation):
                 stack = divide_on_stack(stack, term)
             elif term['@Operation'] == 'MAX' and term['@SpdType'] == 'U':
                 stack = max_on_stack(stack, term)
+            elif term['@Operation'] == 'MAX':
+                stack = hybrid_max(stack, term)
             elif term['@Operation'] == 'MIN' and term['@SpdType'] == 'U':
                 stack = min_on_stack(stack, term)
+            elif term['@Operation'] == 'MIN':
+                stack = hybrid_min(stack, term)
             elif term['@Operation'] == 'STEP':
                 stack = step(stack, term)
             elif term['@Operation'] == 'POW2':
@@ -256,6 +293,13 @@ def rpn_stack(equation):
 
 def rpn_calc(equation):
     return rpn_stack(equation)[0]
+
+
+def get_default_if_needed(term):
+    if '@Value' not in term:
+        return term['@Default']
+    else:
+        return term['@Value']
 
 
 def no_operator(stack, term):
@@ -375,7 +419,9 @@ def add_on_equation(stack, term, next_term):
     # Where a term without an operator, with a value, and with the next term being an ADD operator, then the term value
     # and the ADD operator value are summed and added to the stack.
     # See AEMO Constraint Implementation Guidelines section A.7.1 Add.
-    stack.insert(0, (float(term['@Value']) + float(next_term['@Value'])) * float(next_term['@Multiplier']))
+    value_one = get_default_if_needed(term)
+    value_two = get_default_if_needed(next_term)
+    stack.insert(0, (float(value_one) + float(value_two)) * float(next_term['@Multiplier']))
     return stack
 
 
@@ -395,7 +441,9 @@ def subtract_on_equation(stack, term, next_term):
     # Where a term without an operator, with a value, and with the next term being an SUB operator, then
     # SUB operator value is subtracted from the term value and the result added to the stack.
     # See AEMO Constraint Implementation Guidelines section A.7.2 Add.
-    stack.insert(0, (float(term['@Value']) - float(next_term['@Value'])) * float(next_term['@Multiplier']))
+    value_one = get_default_if_needed(term)
+    value_two = get_default_if_needed(next_term)
+    stack.insert(0, (float(value_one) - float(value_two)) * float(next_term['@Multiplier']))
     return stack
 
 
@@ -415,7 +463,9 @@ def multipy_on_equation(stack, term, next_term):
     # Where a term without an operator, with a value, and with the next term being an MUL operator, then
     # MUL operator value is multiplied with the term value and the result added to the stack.
     # See AEMO Constraint Implementation Guidelines section A.7.3 Add.
-    stack.insert(0, (float(term['@Value']) * float(next_term['@Value'])) * float(next_term['@Multiplier']))
+    value_one = get_default_if_needed(term)
+    value_two = get_default_if_needed(next_term)
+    stack.insert(0, (float(value_one) * float(value_two)) * float(next_term['@Multiplier']))
     return stack
 
 
@@ -435,7 +485,9 @@ def divide_on_equation(stack, term, next_term):
     # Where a term without an operator, with a value, and with the next term being an DIV operator, then
     # the term value is divide by DIV operator value and the result added to the stack.
     # See AEMO Constraint Implementation Guidelines section A.7.4 Add.
-    stack.insert(0, (float(term['@Value']) / float(next_term['@Value'])) * float(next_term['@Multiplier']))
+    value_one = get_default_if_needed(term)
+    value_two = get_default_if_needed(next_term)
+    stack.insert(0, (float(value_one) / float(value_two)) * float(next_term['@Multiplier']))
     return stack
 
 
@@ -455,7 +507,17 @@ def max_on_equation(stack, term, next_term):
     # Where a term without an operator, with a value, and with the next term being an MAX operator, then
     # the maximum of the term value and the operator value is taken and added to the top of the stack.
     # See AEMO Constraint Implementation Guidelines section A.7.5 Add.
-    stack.insert(0, max(float(term['@Value']), float(next_term['@Value'])) * float(next_term['@Multiplier']))
+    value_one = get_default_if_needed(term)
+    value_two = get_default_if_needed(next_term)
+    stack.insert(0, max(float(value_one), float(value_two)) * float(next_term['@Multiplier']))
+    return stack
+
+
+def hybrid_max(stack, term):
+    value_one = get_default_if_needed(term)
+    next_top_element = max(float(value_one), stack[0]) * float(term['@Multiplier'])
+    stack.pop(0)
+    stack.insert(0, next_top_element)
     return stack
 
 
@@ -471,11 +533,21 @@ def min_on_stack(stack, term):
     return stack
 
 
+def hybrid_min(stack, term):
+    value_one = get_default_if_needed(term)
+    next_top_element = min(float(value_one), stack[0]) * float(term['@Multiplier'])
+    stack.pop(0)
+    stack.insert(0, next_top_element)
+    return stack
+
+
 def min_on_equation(stack, term, next_term):
     # Where a term without an operator, with a value, and with the next term being an MIN operator, then
     # the minimum of the term value and the operator value is taken and added to the top of the stack.
     # See AEMO Constraint Implementation Guidelines section A.7.6 Add.
-    stack.insert(0, min(float(term['@Value']), float(next_term['@Value'])) * float(next_term['@Multiplier']))
+    value_one = get_default_if_needed(term)
+    value_two = get_default_if_needed(next_term)
+    stack.insert(0, min(float(value_one), float(value_two)) * float(next_term['@Multiplier']))
     return stack
 
 
@@ -483,7 +555,10 @@ def push(stack, term):
     # If a push operator is given the value of the operator with the multiplier applied is added to the top of the
     # stack.
     # See AEMO Constraint Implementation Guidelines section A.8.1 Push.
-    stack.insert(0, float(term['@Multiplier']) * float(term['@Value']))
+    if term['@SpdType'] not in ['C', 'G']:  # Condition found through empirical testing
+        stack.insert(0, float(term['@Multiplier']) * float(term['@Value']))
+    else:
+        stack.insert(0, float(term['@Multiplier']))
     return stack
 
 
@@ -575,16 +650,16 @@ def branching(stack, term, equation):
 def collect_group(equation, group_id):
     group = []
     for term in equation:
-        if '@GroupID' in term and term['@GroupID'] == group_id:
+        if '@GroupTerm' in term and term['@GroupTerm'] == group_id:
             term = term.copy()
-            del term['@GroupID']
+            del term['@GroupTerm']
             group.append(term)
     return group
 
 
 def are_groups(equation):
     for term in equation:
-        if '@GroupID' in term.keys():
+        if '@GroupTerm' in term.keys():
             return True
     return False
 
