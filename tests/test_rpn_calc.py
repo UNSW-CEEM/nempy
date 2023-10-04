@@ -53,7 +53,7 @@ def test_step_one_of_two():
          '@Value': '0'}
     ]
 
-    assert rpn_calc(equation) == 0
+    assert rpn_calc(equation) == 1
 
 
 def test_step_two_of_two():

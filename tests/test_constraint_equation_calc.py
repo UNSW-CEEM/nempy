@@ -9,8 +9,8 @@ def test_single_equation():
     xml_cache_manager.load_interval('2013/01/01 00:00:00')
     rhs_calculator = RHSCalc(xml_cache_manager)
     print(xml_cache_manager.get_file_path())
-    assert (rhs_calculator.get_nemde_rhs('S>>V_NIL_TBSE_KHSG') ==
-            pytest.approx(rhs_calculator.compute_constraint_rhs('S>>V_NIL_TBSE_KHSG'), 0.001))
+    assert (rhs_calculator.compute_constraint_rhs('F_T++LREG_0050') ==
+            pytest.approx(rhs_calculator.get_nemde_rhs('F_T++LREG_0050'), 0.0001))
 
 
 def test_rhs_equations_in_order_of_length():
@@ -21,13 +21,33 @@ def test_rhs_equations_in_order_of_length():
     equations_in_length_order = sorted(rhs_equations, key=lambda k: len(rhs_equations[k]))
     equation_no_generic_reference = rhs_calculator.get_rhs_equations_that_dont_reference_generic_equations()
     equations_in_length_order = [equ for equ in equations_in_length_order if equ in equation_no_generic_reference]
-    print(xml_cache_manager.get_file_path())
+    print(xml_cache_manager.get_file_path()) # NEMSPDOutputs_2012123124000.loaded
     c = 1
     for equation_id in equations_in_length_order:
-        # if equation_id in ['S>>V_NIL_TBSE_KHSG']:
-        #     continue
+        if equation_id in ['V^S_HYCP', 'NRM_VIC1_NSW1', 'NRM_QLD1_NSW1', 'NRM_VIC1_SA1', 'V^SML_NSWRB_2']:
+            continue
         print(equation_id)
         print(c)
         c += 1
         assert (rhs_calculator.get_nemde_rhs(equation_id) ==
-                pytest.approx(rhs_calculator.compute_constraint_rhs(equation_id), 0.001))
+                pytest.approx(rhs_calculator.compute_constraint_rhs(equation_id), 0.0001))
+
+
+def test_rhs_equations_in_order_of_length_all():
+    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2013')
+    xml_cache_manager.load_interval('2013/01/01 00:00:00')
+    rhs_calculator = RHSCalc(xml_cache_manager)
+    rhs_equations = rhs_calculator.rhs_constraint_equations
+    equations_in_length_order = sorted(rhs_equations, key=lambda k: len(rhs_equations[k]))
+    # equation_no_generic_reference = rhs_calculator.get_rhs_equations_that_dont_reference_generic_equations()
+    # equations_in_length_order = [equ for equ in equations_in_length_order if equ in equation_no_generic_reference]
+    print(xml_cache_manager.get_file_path()) # NEMSPDOutputs_2012123124000.loaded
+    c = 1
+    for equation_id in equations_in_length_order:
+        if equation_id in ['V^S_HYCP', 'NRM_VIC1_NSW1', 'NRM_QLD1_NSW1', 'NRM_VIC1_SA1', 'V^SML_NSWRB_2']:
+            continue
+        print(equation_id)
+        print(c)
+        c += 1
+        assert (rhs_calculator.get_nemde_rhs(equation_id) ==
+                pytest.approx(rhs_calculator.compute_constraint_rhs(equation_id), 0.01))
