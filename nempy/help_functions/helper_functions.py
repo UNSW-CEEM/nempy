@@ -40,3 +40,13 @@ def max_variable_index(newest_variable_data):
     # Find the maximum variable index already in use in the constraint matrix.
     max_index = newest_variable_data['INDEX'].max()
     return max_index
+
+
+def update_rhs_values(constraint_rhs_and_type, new_rhs_values):
+    new_rhs_values = new_rhs_values.rename(columns={'rhs': 'new_rhs'})
+    constraint_rhs_and_type = pd.merge(constraint_rhs_and_type, new_rhs_values, on='set', how='left')
+    constraint_rhs_and_type['rhs'] = np.where(~constraint_rhs_and_type['new_rhs'].isna,
+                                              constraint_rhs_and_type['new_rhs'],
+                                              constraint_rhs_and_type['rhs'])
+    constraint_rhs_and_type = constraint_rhs_and_type.drop(columns=['new_rhs'])
+    return constraint_rhs_and_type

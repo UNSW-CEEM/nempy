@@ -1,5 +1,5 @@
 import numpy as np
-
+import pandas as pd
 
 from nempy.historical_inputs import xml_cache
 
@@ -150,10 +150,77 @@ class RHSCalc:
         -------
 
         """
-        equation = self.rhs_constraint_equations[constraint_id]
-        equation = self._resolve_term_values(equation)
-        rhs = rpn_calc(equation)
+        if type(constraint_id) == list:
+            equation = self.rhs_constraint_equations[constraint_id]
+            equation = self._resolve_term_values(equation)
+            rhs = rpn_calc(equation)
+        else:
+            rhs = []
+            for id in constraint_id:
+                equation = self.rhs_constraint_equations[id]
+                equation = self._resolve_term_values(equation)
+                rhs.append(rpn_calc(equation))
+            rhs = pd.DataFrame({
+                'set': constraint_id,
+                'rhs': rhs
+            })
         return rhs
+
+    def get_rhs_constraint_equations_that_depend_value(self, spd_id, type):
+        """
+        Examples
+        --------
+        >>> xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2014_12')
+        >>> xml_cache_manager.load_interval('2014/12/05 00:00:00')
+        >>> rhs_calculator = RHSCalc(xml_cache_manager)
+        >>> rhs_calculator.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W')
+        ['F_MAIN++APD_TL_L5', 'F_MAIN++APD_TL_L6', 'F_MAIN++APD_TL_L60', 'F_MAIN++ML_L5_0400', 'F_MAIN++ML_L5_APD', 'F_MAIN++ML_L60_0400', 'F_MAIN++ML_L60_APD', 'F_MAIN++ML_L6_0400', 'F_MAIN++ML_L6_APD', 'F_MAIN++NIL_DYN_LREG', 'F_MAIN++NIL_DYN_RREG', 'F_MAIN++NIL_MG_R5', 'F_MAIN++NIL_MG_R6', 'F_MAIN++NIL_MG_R60', 'F_MAIN+APD_TL_L5', 'F_MAIN+APD_TL_L6', 'F_MAIN+APD_TL_L60', 'F_MAIN+ML_L5_0400', 'F_MAIN+ML_L5_APD', 'F_MAIN+ML_L60_0400', 'F_MAIN+ML_L60_APD', 'F_MAIN+ML_L6_0400', 'F_MAIN+ML_L6_APD', 'F_MAIN+NIL_DYN_LREG', 'F_MAIN+NIL_DYN_RREG', 'F_MAIN+NIL_MG_R5', 'F_MAIN+NIL_MG_R6', 'F_MAIN+NIL_MG_R60', 'F_T++LREG_0050', 'F_T++NIL_BB_TG_R5', 'F_T++NIL_BB_TG_R6', 'F_T++NIL_BB_TG_R60', 'F_T++NIL_MG_R5', 'F_T++NIL_MG_R6', 'F_T++NIL_MG_R60', 'F_T++NIL_ML_L5', 'F_T++NIL_ML_L6', 'F_T++NIL_ML_L60', 'F_T++NIL_TL_L5', 'F_T++NIL_TL_L6', 'F_T++NIL_TL_L60', 'F_T++NIL_WF_TG_R5', 'F_T++NIL_WF_TG_R6', 'F_T++NIL_WF_TG_R60', 'F_T++RREG_0050', 'F_T+LREG_0050', 'F_T+NIL_BB_TG_R5', 'F_T+NIL_BB_TG_R6', 'F_T+NIL_BB_TG_R60', 'F_T+NIL_MG_R5', 'F_T+NIL_MG_R6', 'F_T+NIL_MG_R60', 'F_T+NIL_ML_L5', 'F_T+NIL_ML_L6', 'F_T+NIL_ML_L60', 'F_T+NIL_TL_L5', 'F_T+NIL_TL_L6', 'F_T+NIL_TL_L60', 'F_T+NIL_WF_TG_R5', 'F_T+NIL_WF_TG_R6', 'F_T+NIL_WF_TG_R60', 'F_T+RREG_0050', 'T_V_NIL_BL1', 'V_T_NIL_BL1']
+
+        Parameters
+        ----------
+        spd_id
+        type
+
+        Returns
+        -------
+
+        """
+        dependent_generic_equations = []
+        for equation_id, equation in self.generic_equations.items():
+            for term in equation:
+                if (term["@SpdID"] == spd_id and term['@SpdType'] == type and equation_id not in
+                        dependent_generic_equations):
+                    dependent_generic_equations.append(equation_id)
+
+        dependent_rhs_equations = []
+        for equation_id, equation in self.rhs_constraint_equations.items():
+            for term in equation:
+                if ((term["@SpdID"] == spd_id and term['@SpdType'] == type and equation_id not in
+                     dependent_rhs_equations) or (term['@SpdID'] in dependent_generic_equations and
+                                                  term['@SpdType'] == 'X')):
+                    dependent_rhs_equations.append(equation_id)
+
+        return dependent_rhs_equations
+
+    def update_spd_id_value(self, spd_id, type, value):
+        if type in ['C', 'R', 'X']:
+            raise ValueError('Spd term values of type C can\'t be updated')
+        elif type in ['A', 'S', 'I', 'W']:
+            if len(self.scada_data[type][spd_id]) > 1:
+                raise ValueError('SPD ID and type has more than one value, update not possible.')
+            else:
+                self.scada_data[type][spd_id][0] = value
+        elif spd_id in self.unit_initial_mw and type == 'T':
+            self.unit_initial_mw[spd_id] = value
+        elif spd_id in self.entered_values and type == 'E':
+            self.entered_values[spd_id] = value
+        elif spd_id in self.msnsp_from_availbility and type == 'M':
+            self.msnsp_from_availbility[spd_id] = value
+        elif spd_id in self.msnsp_to_availbility and type == 'N':
+            self.msnsp_to_availbility[spd_id] = value
+        else:
+            raise ValueError('SPD ID could not be found, please check the ID and type provide exist in the raw '
+                             'XML file.')
 
     def _resolve_term_values(self, equation):
         for term in equation:
@@ -197,6 +264,8 @@ class RHSCalc:
             if len(scadas) > 0:
                 value = 0
                 for scada in scadas:
+                    if scada['@Can_Use_Value'] == 'False':
+                        raise ValueError("Bad SCADA value")
                     value += float(scada['@Value'])
         elif term['@SpdID'] in self.unit_initial_mw and term['@SpdType'] == 'T':
             value = self.unit_initial_mw[term['@SpdID']]
@@ -238,20 +307,24 @@ class RHSCalc:
 
 
 def rpn_stack(equation, full_equation=None):
-    stack = []
+    stack = [0.0]
     ignore_groups = []
     # group_result = None
     multi_term_operators = ['ADD', 'SUB', 'MUL', 'DIV', 'MAX', 'MIN']
     skip_next_term = False
     pop_flag = False
-    equation = remove_redundant_group_terms(equation)
-    equation = move_spd_type_g_to_top_of_group(equation)
+    # equation = remove_redundant_group_terms(equation)
+    # equation = move_spd_type_g_to_top_of_group(equation)
+    clear_group_values(equation)
+    # ignore_group = None
     for i, term in enumerate(equation):
 
-        if term['@SpdType'] == 'G':
+        if (term['@SpdType'] == 'G' and '@Value' not in term and
+                ('@GroupTerm' not in term or term['@GroupTerm'] not in ignore_groups)):
             # Groups are evaluate separately with their own stack. If a group exists we extract it from the main
             # equation calculate the result for the group and then save the group id in a list of groups to ignore
             # so that terms in this group are skipped in future iterations of the for loop.
+            remove_first_member = False
             if '@GroupTerm' not in term:
                 if '@GroupTerm' in equation[i+1]:
                     group_id = equation[i+1]['@GroupTerm']
@@ -259,26 +332,33 @@ def rpn_stack(equation, full_equation=None):
                     continue
             else:
                 group_id = term['@GroupTerm']
-                del term['@GroupTerm']
+                remove_first_member = True
             group = collect_group(equation, group_id)
+            if remove_first_member:
+                group.pop(0)
             group_result = rpn_calc(group, equation)
             term['@Value'] = group_result
             ignore_groups.append(group_id)
+            sub_groups_ids = get_sub_groups(group)
+            ignore_groups += sub_groups_ids
+            # ignore_group = group_id
 
         if '@GroupTerm' in term and term['@GroupTerm'] not in ignore_groups:
             group_id = term['@GroupTerm']
             group = collect_group(equation, group_id)
-            group_has_spd_type_term = False
-            for group_term in group:
-                if group_term['@SpdType'] == 'G':
-                    group_has_spd_type_term = True
-            if not group_has_spd_type_term:
-                group_result = rpn_calc(group, equation)
-                if len(stack) > 0:
-                    stack[0] += group_result
-                else:
-                    stack.append(group_result)
-                ignore_groups.append(term['@GroupTerm'])
+            # group_has_spd_type_term = False
+            # for group_term in group:
+            #     if group_term['@SpdType'] == 'G':
+            #         group_has_spd_type_term = True
+            # if not group_has_spd_type_term:
+            group_result = rpn_calc(group, equation)
+            if equation[i + len(group)]['@SpdType'] == 'G':
+                equation[i + len(group)]['@Value'] = group_result
+            else:
+                stack[0] += group_result
+            ignore_groups.append(term['@GroupTerm'])
+            sub_groups_ids = get_sub_groups(group)
+            ignore_groups += sub_groups_ids
 
         if skip_next_term:
             # If the last term was combined with a multi term operation then we skip the multi term operation because it
@@ -298,6 +378,8 @@ def rpn_stack(equation, full_equation=None):
         #     group = collect_group(equation, term['@GroupID'])
         #     group_result = rpn_calc(group)
         elif '@GroupTerm' not in term:
+            # if term['@SpdType'] != 'G':
+            #     ignore_group = None
             # if group_result is not None:
             #     # If a group result has just been calculated the next term is treated as a multiplier to be applied to
             #     # the group result. Then the final value is added to the stack. See AEMO Constraint Implementation
@@ -312,30 +394,30 @@ def rpn_stack(equation, full_equation=None):
                 else:
                     stack = branching(stack, term, equation)
             elif '@Operation' not in term:
-                if (1 == len(equation[i:]) or '@Operation' not in equation[i + 1] or equation[i + 1]['@Operation']
-                        not in multi_term_operators or (equation[i + 1]['@Operation'] in multi_term_operators and
-                                                        equation[i + 1]['@SpdType'] in ['U', 'G'])):
-                    stack = no_operator(stack, term)
-                elif (1 < len(equation[i:]) and '@Operation' in equation[i + 1]
-                      and equation[i + 1]['@Operation'] in multi_term_operators and equation[i + 1]['@SpdType'] != 'U'
-                      and equation[i + 1]['@SpdType'] != 'G'):
-                    # If the next term is a multi term operator then apply that operation to the current term and the
-                    # next term.
-                    if equation[i + 1]['@Operation'] == 'ADD':
-                        add_on_equation(stack, term, equation[i + 1])
-                    if equation[i + 1]['@Operation'] == 'SUB':
-                        subtract_on_equation(stack, term, equation[i + 1])
-                    if equation[i + 1]['@Operation'] == 'MUL':
-                        multipy_on_equation(stack, term, equation[i + 1])
-                    if equation[i + 1]['@Operation'] == 'DIV':
-                        divide_on_equation(stack, term, equation[i + 1])
-                    if equation[i + 1]['@Operation'] == 'MAX':
-                        max_on_equation(stack, term, equation[i + 1])
-                    if equation[i + 1]['@Operation'] == 'MIN':
-                        min_on_equation(stack, term, equation[i + 1])
-                    skip_next_term = True
-                else:
-                    raise ValueError('Undefined RPN behaviour')
+                # if (1 == len(equation[i:]) or '@Operation' not in equation[i + 1] or equation[i + 1]['@Operation']
+                #         not in multi_term_operators or (equation[i + 1]['@Operation'] in multi_term_operators and
+                #                                         equation[i + 1]['@SpdType'] in ['U', 'G'])):
+                stack = no_operator(stack, term)
+                # elif (1 < len(equation[i:]) and '@Operation' in equation[i + 1]
+                #       and equation[i + 1]['@Operation'] in multi_term_operators and equation[i + 1]['@SpdType'] != 'U'
+                #       and equation[i + 1]['@SpdType'] != 'G') and False:
+                #     # If the next term is a multi term operator then apply that operation to the current term and the
+                #     # next term.
+                #     if equation[i + 1]['@Operation'] == 'ADD':
+                #         add_on_equation(stack, term, equation[i + 1])
+                #     if equation[i + 1]['@Operation'] == 'SUB':
+                #         subtract_on_equation(stack, term, equation[i + 1])
+                #     if equation[i + 1]['@Operation'] == 'MUL':
+                #         multipy_on_equation(stack, term, equation[i + 1])
+                #     if equation[i + 1]['@Operation'] == 'DIV':
+                #         divide_on_equation(stack, term, equation[i + 1])
+                #     if equation[i + 1]['@Operation'] == 'MAX':
+                #         max_on_equation(stack, term, equation[i + 1])
+                #     if equation[i + 1]['@Operation'] == 'MIN':
+                #         min_on_equation(stack, term, equation[i + 1])
+                #     skip_next_term = True
+                # else:
+                #     raise ValueError('Undefined RPN behaviour')
             elif term['@Operation'] == 'ADD' and term['@SpdType'] == 'U':
                 stack = add_on_stack(stack, term)
             elif term['@Operation'] == 'ADD':
@@ -598,6 +680,7 @@ def multipy_on_equation(stack, term, next_term):
     value_one = get_default_if_needed(term)
     value_two = get_default_if_needed(next_term)
     stack.insert(0, (float(value_one) * float(value_two)) * float(next_term['@Multiplier']))
+    # stack[0] += (float(value_one) * float(value_two)) * float(next_term['@Multiplier'])
     return stack
 
 
@@ -806,28 +889,54 @@ def branching(stack, term, equation):
 def move_spd_type_g_to_top_of_group(equation):
     last_term_was_group_term = False
     start_group_position = None
+    start_position_group = None
+    groups_seen_already = []
     for i, term in enumerate(equation):
         if '@GroupTerm' in term:
             this_term_is_group_term = True
         else:
             this_term_is_group_term = False
 
-        if not last_term_was_group_term and this_term_is_group_term:
+        if not last_term_was_group_term and this_term_is_group_term and term['@GroupTerm'] not in groups_seen_already:
             start_group_position = i
+            start_position_group = term['@GroupTerm']
 
-        if last_term_was_group_term and this_term_is_group_term and term['@GroupTerm'] != equation[i-1]['@GroupTerm']:
+        if (last_term_was_group_term and this_term_is_group_term and term['@GroupTerm'] != equation[i-1]['@GroupTerm']
+           and term['@GroupTerm'] not in groups_seen_already):
             start_group_position = i
+            start_position_group = term['@GroupTerm']
 
-        if last_term_was_group_term and term['@SpdType'] == 'G':
+        if (last_term_was_group_term and term['@SpdType'] == 'G' and
+                equation[i - 1]['@GroupTerm'] == start_position_group):
             if start_group_position == 0:
                 equation.insert(start_group_position, equation.pop(i))
             else:
                 if equation[start_group_position - 1]['@SpdType'] != 'G':
                     equation.insert(start_group_position, equation.pop(i))
 
+        if this_term_is_group_term and term['@GroupTerm'] not in groups_seen_already:
+            groups_seen_already.append(term['@GroupTerm'])
+
         last_term_was_group_term = this_term_is_group_term
 
     return equation
+
+
+def move_branching_terms_to_top_of_their_group(equation):
+    for i, term in enumerate(equation):
+        if term['@SpdType'] == 'B' and i != 0:
+            if equation[i - 1] in [term['ParameterTerm1'], term['ParameterTerm2'], term['ParameterTerm3']]:
+                term_above = equation[i - 1]
+                equation[i - 1] = term
+                equation[i] = term_above
+
+
+def get_sub_groups(group):
+    sub_group_ids = []
+    for term in group:
+        if '@GroupTerm' in term and term['@GroupTerm'] not in sub_group_ids:
+            sub_group_ids.append(term['@GroupTerm'])
+    return sub_group_ids
 
 
 def remove_redundant_group_terms(equation):
@@ -837,13 +946,49 @@ def remove_redundant_group_terms(equation):
     return equation
 
 
+def clear_group_values(equation):
+    for i, term in enumerate(equation):
+        if term['@SpdType'] == 'G' and '@Value' in term:
+            del term['@Value']
+    return equation
+
+
+# def collect_group(equation, group_id):
+#     group = []
+#     for term in equation:
+#         if '@GroupTerm' in term and term['@GroupTerm'] == group_id:
+#             term = term.copy()
+#             del term['@GroupTerm']
+#             group.append(term)
+#     return group
+
+
 def collect_group(equation, group_id):
     group = []
-    for term in equation:
-        if '@GroupTerm' in term and term['@GroupTerm'] == group_id:
+    first_group_member_position = None
+    last_group_member_position = None
+    first_member_g_type = False
+    for i, term in enumerate(equation):
+        if '@GroupTerm' in term and term['@GroupTerm'] == group_id and first_group_member_position is None:
+            first_group_member_position = i
+            if term['@SpdType'] == 'G':
+                first_member_g_type = True
+
+        if '@GroupTerm' in term and term['@GroupTerm'] == group_id and first_group_member_position is not None:
+            last_group_member_position = i
+
+        if (last_group_member_position == i - 1 and '@GroupTerm' in term and term['@GroupTerm'] != group_id and first_member_g_type and
+            (equation[i - 1]['@SpdType'] == 'G' or equation[i - 1]['@GroupTerm'] == term['@GroupTerm'])):
+            last_group_member_position = i
+
+    for i, term in enumerate(equation):
+        if first_group_member_position <= i <= last_group_member_position:
             term = term.copy()
-            del term['@GroupTerm']
+            if term['@GroupTerm'] == group_id:
+                del term['@GroupTerm']
             group.append(term)
+
+
     return group
 
 

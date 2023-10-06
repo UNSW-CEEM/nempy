@@ -107,6 +107,7 @@ class SpotMarket:
         self._allowed_regulation_fcas_services = ['raise_reg', 'lower_reg']
         self._allowed_constraint_types = ['<=', '=', '>=']
         self.solver_name = 'CBC'
+        self.objective_value = None
 
         if 'dispatch_type' not in unit_info.columns:
             unit_info['dispatch_type'] = 'generator'
@@ -885,6 +886,15 @@ class SpotMarket:
             self._constraints_rhs_and_type['fast_start'] = rhs_and_type
             self._constraint_to_variable_map['unit_level']['fast_start'] = variable_map
             self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+    def remove_fast_start_constraints(self):
+        if 'fast_start' in self._constraints_rhs_and_type:
+            del self._constraints_rhs_and_type['fast_start']
+            del self._constraint_to_variable_map['unit_level']['fast_start']
+        if 'fast_start_deficit' in self._decision_variables:
+            del self._decision_variables['fast_start_deficit']
+            del self._objective_function_components['fast_start_deficit']
+            del self._lhs_coefficients['fast_start_deficit']
 
     def _validate_fast_start_profiles(self, fast_start_profiles):
         schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['unit'])
@@ -2867,6 +2877,8 @@ class SpotMarket:
                         prices = si.price_constraints(constraints_to_price)
                         self._market_constraints_rhs_and_type[constraint_group]['price'] = \
                             self._market_constraints_rhs_and_type[constraint_group]['constraint_id'].map(prices)
+
+        self.objective_value = si.mip_model.objective_value
 
     def _get_linear_model(self, si):
         self._remove_unused_interpolation_weights(si)
