@@ -127,13 +127,14 @@ class DBManager:
                                                       'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
                                                       'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
                                                       'LOWER60SECACTUALAVAILABILITY', 'LOWER5MINACTUALAVAILABILITY',
-                                                      'LOWERREGACTUALAVAILABILITY'],
+                                                      'LOWERREGACTUALAVAILABILITY', 'RAISE1SEC', 'LOWER1SEC',
+                                                      'RAISE1SECACTUALAVAILABILITY', 'LOWER1SECACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
             table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
                                                        'RAISE60SECROP', 'RAISE5MINROP', 'RAISEREGROP',
                                                        'LOWER6SECROP', 'LOWER60SECROP', 'LOWER5MINROP',
-                                                       'LOWERREGROP'],
+                                                       'LOWERREGROP', 'RAISE1SECROP', 'LOWER1SECROP'],
             table_primary_keys=['SETTLEMENTDATE', 'REGIONID'], con=self.con)
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
