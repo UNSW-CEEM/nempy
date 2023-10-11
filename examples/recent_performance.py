@@ -84,7 +84,7 @@ for interval in get_test_intervals(number=100):
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     # Set unit ramp rates.
-    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(fast_start_run=True)
     market.set_unit_ramp_up_constraints(
         ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
     market.set_unit_ramp_down_constraints(
@@ -103,10 +103,10 @@ for interval in get_test_intervals(number=100):
     regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
     market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
     market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units()
+    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(fast_start_run=True)
     market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
     market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units()
+    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(fast_start_run=True)
     market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
     market.make_constraints_elastic('joint_ramping_raise_reg', cost)
     contingency_trapeziums = unit_inputs.get_contingency_services()

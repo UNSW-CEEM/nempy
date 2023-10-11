@@ -56,12 +56,11 @@ market trade. The construction of the MIP as implemented by Nempy proceeds rough
 #. The MIP is solved to determined interconnector flows and dispatch targets, the MIP is then converted to a linear
    problem, and re-solved, such that market prices can be determined from constraint shadow prices.
 
-Other steps in the dispatch procedure that are not implemented by Nempy are:
+Differences between Nempy and the dispatch procedure:
 
-#. The preprocessing step to calculate of FCAS market and network constraint right hand side values (right hand side
-   values need to be provided as inputs to Nempy)
-#. Multiple re-runs of the optimisation to the operational settings for DC link between mainland synchronous region and
-   the Tasmainian synchronous region
+#. While updated functionality in Nempy 1.2.0 now provides the capability to calculate RHS values dynamically based on
+   SCADA and other data sources, in the detailed examples provided for recreating dispatch only RHS values relating to
+   the Basslink switch run are calculated by Nempy, and other RHS values are taken from the NEMDE solution file.
 
 
 Features
@@ -96,8 +95,8 @@ This is done for a given dispatch interval by downloading the relevant historica
 bids and generic constraints, processing these inputs so they are compatible with the Nempy SpotMarket class, and finally
 dispatching the spot market. The results can then be compared to historical results to gauge the model's accuracy.
 Figure 1 shows the results of this process for 1000 randomly selected dispatch intervals in 2019, comparing the modelled
-NSW energy price with historical prices. Here the model is configured to maximally reflect the NEM's dispatch procedure.
-The code to produce the results shown in this figure is available `here <https://nempy.readthedocs.io/en/latest/publications.html#source-code-for-figure-1>`_.
+NSW energy price with historical prices. Here the model is configured to maximally reflect the NEM's dispatch procedure
+(not including the Basslink switch run). The code to produce the results shown in this figure is available `here <https://nempy.readthedocs.io/en/latest/publications.html#source-code-for-figure-1>`_.
 Figure 2 shows a similar comparison, but without FCAS markets or generic constraints. The code to produce the results
 shown in Figure 2 is available `here <https://nempy.readthedocs.io/en/latest/publications.html#source-code-for-figure-2>`_.
 The simpler model produces a similar number of medianly priced intervals, however, outcomes for extreme ends of the price
@@ -154,14 +153,9 @@ Nempy is used sufficiently broadly we would look to continue support beyond this
 
 Ongoing work
 ------------
-Maintenance:
-
-1. Retest Nempy on 2020 and 2021 historical data, previous testing has been against 2019 data.
-
 Enhancements:
 
-* No enhancements are currently planned for Nempy. However, development is active on a market participant behavioural
-  modelling package that would strongly complement the functionality of Nempy, https://github.com/UNSW-CEEM/NEMPRO .
+* The 1 second raise and lower contingency FCAS markets are in process of being added to Nempy.
 
 Dependencies
 ------------

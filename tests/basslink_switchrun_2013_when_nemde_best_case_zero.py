@@ -13,10 +13,10 @@ from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, constraints, rhs_calculator
 from nempy.help_functions.helper_functions import update_rhs_values
 
-con = sqlite3.connect('D:/nempy_2021/historical_mms.db')
+con = sqlite3.connect('D:/nempy_2013/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2021/xml_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2013/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
@@ -24,12 +24,12 @@ download_inputs = False
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
-    mms_db_manager.populate(start_year=2021, start_month=1,
-                            end_year=2021, end_month=12)
+    mms_db_manager.populate(start_year=2013, start_month=1,
+                            end_year=2013, end_month=12)
 
     # This requires approximately 50 GB of storage.
-    xml_cache_manager.populate_by_day(start_year=2021, start_month=1, start_day=1,
-                                      end_year=2022, end_month=1, end_day=1)
+    xml_cache_manager.populate_by_day(start_year=2013, start_month=1, start_day=1,
+                                      end_year=2014, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
@@ -37,13 +37,13 @@ raw_inputs_loader = loaders.RawInputsLoader(
 
 
 # A list of intervals we want to recreate historical dispatch for.
-def get_test_intervals(number=100):
-    start_time = datetime(year=2021, month=12, day=1, hour=0, minute=0)
-    end_time = datetime(year=2021, month=12, day=31, hour=0, minute=0)
+def get_test_intervals():
+    start_time = datetime(year=2013, month=1, day=1, hour=0, minute=0)
+    end_time = datetime(year=2013, month=12, day=31, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
-    intervals = random.sample(range(1, difference_in_5_min_intervals), number)
+    intervals = range(1, difference_in_5_min_intervals)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
     return times_formatted
@@ -53,14 +53,35 @@ def get_test_intervals(number=100):
 outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.
-for interval in get_test_intervals(number=1000):
-    print(interval)
+for interval in get_test_intervals():
+    if len(outputs) >= 1000:
+        break
+
+    xml_cache_manager.interval = interval
+    xml_filepath = xml_cache_manager.get_file_path()
+
+    skip_interval = False
+    with open(xml_filepath) as f:
+        if next((l for l in f if "SwitchRunBestStatus=\"1\"" in l), None) is not None:
+            switch_run_best_one = True
+        else:
+            switch_run_best_one = False
+    with open(xml_filepath) as f:
+        if next((l for l in f if "SpdID=\"BL_FREQ_ONSTATUS\" Value=\"0\"" in l), None) is not None:
+            freq_controller_status_zero = True
+        else:
+            freq_controller_status_zero = False
+
+    if switch_run_best_one or freq_controller_status_zero:
+        continue
+
     raw_inputs_loader.set_interval(interval)
     unit_inputs = units.UnitData(raw_inputs_loader)
     interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
     constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
     demand_inputs = demand.DemandData(raw_inputs_loader)
     rhs_calculation_engine = rhs_calculator.RHSCalc(xml_cache_manager)
+    print(interval)
 
     unit_info = unit_inputs.get_unit_info()
     market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1',
@@ -161,7 +182,7 @@ for interval in get_test_intervals(number=1000):
     dispatch = market.get_unit_dispatch()
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market._constraints_rhs_and_type.keys():
+    if 'fast_start' in market.get_constraint_set_names():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
@@ -200,7 +221,7 @@ for interval in get_test_intervals(number=1000):
     dispatch = market.get_unit_dispatch()
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market._constraints_rhs_and_type.keys():
+    if 'fast_start' in market.get_constraint_set_names():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
@@ -213,24 +234,63 @@ for interval in get_test_intervals(number=1000):
                         fcas_market_ceiling_price=1000.0)
     prices_run_two = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
 
+    prices_run_one['time'] = interval
+    prices_run_one = prices_run_one.rename(columns={'price': 'run_one_price'})
+
+    prices_run_two['time'] = interval
+    prices_run_two['run_two_BL_FREQ_ONSTATUS'] = new_bl_freq_onstatus
+    prices_run_two['run_two_obj_value'] = objective_value_run_two
+    prices_run_two = prices_run_two.rename(columns={'price': 'run_two_price'})
+
     # Getting historical prices for comparison. Note, ROP price, which is
     # the regional reference node price before the application of any
     # price scaling by AEMO, is used for comparison.
     historical_prices = mms_db_manager.DISPATCHPRICE.get_data(interval)
 
-    # The prices from the run with lowest objective function value are used.
-    if objective_value_run_one < objective_value_run_two:
-        prices = prices_run_one
-    else:
-        prices = prices_run_two
+    prices_run_one = pd.merge(prices_run_one, historical_prices,
+                              left_on=['time', 'region'],
+                              right_on=['SETTLEMENTDATE', 'REGIONID'])
 
-    prices['time'] = interval
-    prices = pd.merge(prices, historical_prices,
-                      left_on=['time', 'region'],
-                      right_on=['SETTLEMENTDATE', 'REGIONID'])
+    prices_run_two = pd.merge(prices_run_two, historical_prices,
+                              left_on=['time', 'region'],
+                              right_on=['SETTLEMENTDATE', 'REGIONID'])
+
+    prices_run_one = prices_run_one.loc[:, ['time', 'region', 'ROP', 'run_one_price']]
+    prices_run_one = pd.merge(prices_run_one, regional_demand.loc[:, ['region', 'demand']], on='region')
+    prices_run_one['ROP'] = prices_run_one['ROP'] * prices_run_one['demand']
+    prices_run_one['run_one_price'] = prices_run_one['run_one_price'] * prices_run_one['demand']
+    prices_run_one = prices_run_one.groupby(['time'], as_index=False).agg(
+        {'ROP': 'sum', 'run_one_price': 'sum', 'demand': 'sum', })
+    prices_run_one['ROP'] = prices_run_one['ROP'] / prices_run_one['demand']
+    prices_run_one['run_one_price'] = prices_run_one['run_one_price'] / prices_run_one['demand']
+    prices_run_one['run_one_BL_FREQ_ONSTATUS'] = initial_bl_freq_onstatus
+    prices_run_one['run_one_obj_value'] = objective_value_run_one
+
+    prices_run_two = prices_run_two.loc[:, ['time', 'region', 'run_two_price', 'run_two_BL_FREQ_ONSTATUS',
+                                            'run_two_obj_value']]
+    prices_run_two = pd.merge(prices_run_two, regional_demand.loc[:, ['region', 'demand']], on='region')
+    prices_run_two['run_two_price'] = prices_run_two['run_two_price'] * prices_run_two['demand']
+    prices_run_two = prices_run_two.groupby(['time'], as_index=False).agg(
+        {'run_two_price': 'sum', 'demand': 'sum', })
+    prices_run_two['run_two_price'] = prices_run_two['run_two_price'] / prices_run_two['demand']
+    prices_run_two['run_two_BL_FREQ_ONSTATUS'] = new_bl_freq_onstatus
+    prices_run_two['run_two_obj_value'] = objective_value_run_two
+
+    prices = pd.merge(prices_run_one, prices_run_two, on=['time'])
+
+    if objective_value_run_one < objective_value_run_two:
+        nempy_switch_run_best_status = initial_bl_freq_onstatus
+    else:
+        nempy_switch_run_best_status = new_bl_freq_onstatus
+
+    prices['nempy_switch_run_best_status'] = nempy_switch_run_best_status
 
     outputs.append(prices)
 
 con.close()
 
 outputs = pd.concat(outputs)
+
+outputs.to_csv('nempy_check_blsr_pricing_2021_best_case_zero.csv')
+
+assert (outputs['nempy_switch_run_best_status'] == '0').all()

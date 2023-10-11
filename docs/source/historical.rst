@@ -59,3 +59,11 @@ constraints
     :members:
 
 
+RHSCalc
+------------------
+
+.. automodule:: nempy.historical_inputs.rhs_calculator
+    :autosummary:
+    :members:
+
+

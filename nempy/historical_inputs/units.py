@@ -178,7 +178,7 @@ class UnitData:
         uigf = an.map_aemo_column_names_to_nempy_names(self.uigf_values)
         return uigf
 
-    def get_ramp_rates_used_for_energy_dispatch(self):
+    def get_ramp_rates_used_for_energy_dispatch(self, fast_start_run=False):
         """Get ramp rates used for constraining energy dispatch.
 
         The minimum of bid in ramp rates and scada telemetered ramp rates are used. If a unit is ending the interval
@@ -227,7 +227,8 @@ class UnitData:
             ================  ========================================
         """
         ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
-        ramp_rates = self._remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates)
+        if fast_start_run:
+            ramp_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(ramp_rates)
         ramp_rates = self._adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(ramp_rates)
         ramp_rates = ramp_rates.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
         ramp_rates.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
@@ -243,10 +244,13 @@ class UnitData:
         ramp_rates['RAMPUPRATE'] = np.fmin(ramp_rates['RAMPUPRATE_x'], ramp_rates['RAMPUPRATE_y'])
         return ramp_rates
 
-    def _remove_fast_start_units_ending_dispatch_interval_in_mode_two(self, dataframe):
+    def _remove_fast_start_units_starting_in_mode_0_1_2(self, dataframe):
         fast_start_profiles = self._get_fast_start_profiles()
-        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
-        dataframe = dataframe[~dataframe['DUID'].isin(units_ending_in_mode_two)]
+        units_starting_in_mode_0_1_2 = list(fast_start_profiles[fast_start_profiles['current_mode'].isin([0, 1, 2])]['unit'].unique())
+        if 'unit' in dataframe:
+            dataframe = dataframe[~dataframe['unit'].isin(units_starting_in_mode_0_1_2)]
+        else:
+            dataframe = dataframe[~dataframe['DUID'].isin(units_starting_in_mode_0_1_2)]
         return dataframe
 
     def _adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(self, ramp_rates):
@@ -903,7 +907,7 @@ class UnitData:
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
-    def get_scada_ramp_down_rates_of_lower_reg_units(self):
+    def get_scada_ramp_down_rates_of_lower_reg_units(self, fast_start_run=False):
         """Get the scada ramp down rates for unit with a lower regulation bid.
 
         Only units with scada ramp rates and a lower regulation bid that passes enablement criteria are returned.
@@ -953,9 +957,11 @@ class UnitData:
         lower_reg_units = self._get_lower_reg_units_with_scada_ramp_rates()
         scada_ramp_down_rates = self._get_scada_ramp_down_rates()
         scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['unit'].isin(lower_reg_units['unit'])]
+        if fast_start_run:
+            scada_ramp_down_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(scada_ramp_down_rates)
         return scada_ramp_down_rates
 
-    def get_scada_ramp_up_rates_of_raise_reg_units(self):
+    def get_scada_ramp_up_rates_of_raise_reg_units(self, fast_start_run=False):
         """Get the scada ramp up rates for unit with a raise regulation bid.
 
         Only units with scada ramp rates and a raise regulation bid that passes enablement criteria are returned.
@@ -1005,6 +1011,8 @@ class UnitData:
         scada_ramp_up_rates = self._get_scada_ramp_up_rates()
         raise_reg_units = self._get_raise_reg_units_with_scada_ramp_rates()
         scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['unit'].isin(raise_reg_units['unit'])]
+        if fast_start_run:
+            scada_ramp_up_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(scada_ramp_up_rates)
         return scada_ramp_up_rates
 
     def get_contingency_services(self):

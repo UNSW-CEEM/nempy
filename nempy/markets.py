@@ -2907,7 +2907,7 @@ class SpotMarket:
         si.disable_variables(vars_to_remove.loc[:, ['variable_id']])
 
     def get_constraint_set_names(self):
-        return self._market_constraints_rhs_and_type.keys()
+        return list(self._market_constraints_rhs_and_type.keys()) + list(self._constraints_rhs_and_type.keys())
 
     def get_unit_dispatch(self):
         """Retrieves the energy dispatch for each unit.

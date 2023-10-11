@@ -213,24 +213,65 @@ for interval in get_test_intervals(number=1000):
                         fcas_market_ceiling_price=1000.0)
     prices_run_two = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
 
+    prices_run_one['time'] = interval
+    prices_run_one = prices_run_one.rename(columns={'price': 'run_one_price'})
+
+    prices_run_two['time'] = interval
+    prices_run_two['run_two_BL_FREQ_ONSTATUS'] = new_bl_freq_onstatus
+    prices_run_two['run_two_obj_value'] = objective_value_run_two
+    prices_run_two = prices_run_two.rename(columns={'price': 'run_two_price'})
+
     # Getting historical prices for comparison. Note, ROP price, which is
     # the regional reference node price before the application of any
     # price scaling by AEMO, is used for comparison.
     historical_prices = mms_db_manager.DISPATCHPRICE.get_data(interval)
 
-    # The prices from the run with lowest objective function value are used.
-    if objective_value_run_one < objective_value_run_two:
-        prices = prices_run_one
-    else:
-        prices = prices_run_two
-
-    prices['time'] = interval
-    prices = pd.merge(prices, historical_prices,
+    prices_run_one = pd.merge(prices_run_one, historical_prices,
                       left_on=['time', 'region'],
                       right_on=['SETTLEMENTDATE', 'REGIONID'])
+
+    prices_run_two = pd.merge(prices_run_two, historical_prices,
+                      left_on=['time', 'region'],
+                      right_on=['SETTLEMENTDATE', 'REGIONID'])
+
+    prices_run_one = prices_run_one.loc[:, ['time', 'region', 'ROP', 'run_one_price']]
+    prices_run_one = pd.merge(prices_run_one, regional_demand.loc[:, ['region', 'demand']], on='region')
+    prices_run_one['ROP'] = prices_run_one['ROP'] * prices_run_one['demand']
+    prices_run_one['run_one_price'] = prices_run_one['run_one_price'] * prices_run_one['demand']
+    prices_run_one = prices_run_one.groupby(['time'], as_index=False).agg(
+        {'ROP': 'sum', 'run_one_price': 'sum', 'demand': 'sum', })
+    prices_run_one['ROP'] = prices_run_one['ROP'] / prices_run_one['demand']
+    prices_run_one['run_one_price'] = prices_run_one['run_one_price'] / prices_run_one['demand']
+    prices_run_one['run_one_BL_FREQ_ONSTATUS'] = initial_bl_freq_onstatus
+    prices_run_one['run_one_obj_value'] = objective_value_run_one
+
+    prices_run_two = prices_run_two.loc[:, ['time', 'region', 'run_two_price', 'run_two_BL_FREQ_ONSTATUS',
+                                            'run_two_obj_value']]
+    prices_run_two = pd.merge(prices_run_two, regional_demand.loc[:, ['region', 'demand']], on='region')
+    prices_run_two['run_two_price'] = prices_run_two['run_two_price'] * prices_run_two['demand']
+    prices_run_two = prices_run_two.groupby(['time'], as_index=False).agg(
+        {'run_two_price': 'sum', 'demand': 'sum', })
+    prices_run_two['run_two_price'] = prices_run_two['run_two_price'] / prices_run_two['demand']
+    prices_run_two['run_two_BL_FREQ_ONSTATUS'] = new_bl_freq_onstatus
+    prices_run_two['run_two_obj_value'] = objective_value_run_two
+
+    prices = pd.merge(prices_run_one, prices_run_two, on=['time'])
+
+    if objective_value_run_one < objective_value_run_two:
+        nempy_switch_run_best_status = initial_bl_freq_onstatus
+        prices['nempy_price'] = prices['run_one_price']
+    else:
+        nempy_switch_run_best_status = new_bl_freq_onstatus
+        prices['nempy_price'] = prices['run_two_price']
+
+    prices['nempy_switch_run_best_status'] = nempy_switch_run_best_status
+    prices['nemde_switch_run_best_status'] = (
+        xml_cache_manager.xml)['NEMSPDCaseFile']['NemSpdOutputs']['PeriodSolution']['@SwitchRunBestStatus']
 
     outputs.append(prices)
 
 con.close()
 
 outputs = pd.concat(outputs)
+
+outputs.to_csv('nempy_check_blsr_pricing_2021_random_intervals.csv')

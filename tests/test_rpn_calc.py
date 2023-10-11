@@ -1,4 +1,4 @@
-from nempy.historical_inputs.rhs_calculator import rpn_calc, rpn_stack
+from nempy.historical_inputs.rhs_calculator import _rpn_calc, _rpn_stack
 
 
 def test_no_rpn_operators():
@@ -10,22 +10,22 @@ def test_no_rpn_operators():
         {'@TermID': '3', '@SpdID': 'BW01.NBAY1', '@SpdType': 'R', '@Multiplier': '1', '@Value': '10000'},
     ]
 
-    assert rpn_calc(equation) == 9000
+    assert _rpn_calc(equation) == 9000
 
 
 def test_groups():
     """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.3"""
 
     equation = [
-        {'@TermID': '1', '@GroupID': '5', '@SpdID': 'NRATSE_MNDT8', '@SpdType': 'E', '@Multiplier': '1', '@Value': '1000'},
-        {'@TermID': '2', '@GroupID': '5', '@SpdID': 'MW_MN_8', '@SpdType': 'A', '@Multiplier': '-1', '@Value': '400'},
-        {'@TermID': '3', '@GroupID': '5', '@SpdID': 'MW_MN_16', '@SpdType': 'A', '@Multiplier': '-0.498', '@Value': '500'},
-        {'@TermID': '4', '@GroupID': '5', '@SpdID': 'Operating_Margin', '@SpdType': 'C', '@Multiplier': '-25'},
+        {'@TermID': '1', '@GroupTerm': '5', '@SpdID': 'NRATSE_MNDT8', '@SpdType': 'E', '@Multiplier': '1', '@Value': '1000'},
+        {'@TermID': '2', '@GroupTerm': '5', '@SpdID': 'MW_MN_8', '@SpdType': 'A', '@Multiplier': '-1', '@Value': '400'},
+        {'@TermID': '3', '@GroupTerm': '5', '@SpdID': 'MW_MN_16', '@SpdType': 'A', '@Multiplier': '-0.498', '@Value': '500'},
+        {'@TermID': '4', '@GroupTerm': '5', '@SpdID': 'Operating_Margin', '@SpdType': 'C', '@Multiplier': '-25'},
         {'@TermID': '5', '@SpdID': 'HEADROOM', '@SpdType': 'G', '@Multiplier': '4.197'},
         {'@TermID': '6', '@SpdID': 'TALWA1.NDT13T', '@SpdType': 'T', '@Multiplier': '-1', '@Value': '250'},
     ]
 
-    assert rpn_calc(equation) == 1118.222
+    assert _rpn_calc(equation) == 1118.222
 
 
 def test_top_stack_element():
@@ -40,7 +40,7 @@ def test_top_stack_element():
         {'@TermID': '6', '@SpdID': 'TALWA1.NDT13T', '@SpdType': 'T', '@Multiplier': '-1', '@Value': '250'},
     ]
 
-    assert rpn_calc(equation) == 1118.222
+    assert _rpn_calc(equation) == 1118.222
 
 
 def test_step_one_of_two():
@@ -53,7 +53,7 @@ def test_step_one_of_two():
          '@Value': '0'}
     ]
 
-    assert rpn_calc(equation) == 1
+    assert _rpn_calc(equation) == 1
 
 
 def test_step_two_of_two():
@@ -67,7 +67,7 @@ def test_step_two_of_two():
         {'@TermID': '2', '@SpdID': '', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'ADD'}
     ]
 
-    assert rpn_calc(equation) == 502
+    assert _rpn_calc(equation) == 502
 
 
 def test_square():
@@ -78,7 +78,7 @@ def test_square():
          '@Value': '100'}
     ]
 
-    assert rpn_calc(equation) == 10000
+    assert _rpn_calc(equation) == 10000
 
 
 def test_cube():
@@ -89,7 +89,7 @@ def test_cube():
          '@Value': '100'}
     ]
 
-    assert rpn_calc(equation) == 1000000
+    assert _rpn_calc(equation) == 1000000
 
 
 def test_sqrt():
@@ -100,7 +100,7 @@ def test_sqrt():
          '@Value': '100'}
     ]
 
-    assert rpn_calc(equation) == 10
+    assert _rpn_calc(equation) == 10
 
 
 def test_absolute_value():
@@ -111,7 +111,7 @@ def test_absolute_value():
          '@Value': '-100'}
     ]
 
-    assert rpn_calc(equation) == 100
+    assert _rpn_calc(equation) == 100
 
 
 def test_negation():
@@ -122,7 +122,7 @@ def test_negation():
          '@Value': '100'}
     ]
 
-    assert rpn_calc(equation) == -100
+    assert _rpn_calc(equation) == -100
 
 
 def test_add():
@@ -134,7 +134,7 @@ def test_add():
          '@Value': '200'}
     ]
 
-    assert rpn_calc(equation) == 600
+    assert _rpn_calc(equation) == 600
 
 
 def test_sub():
@@ -146,7 +146,7 @@ def test_sub():
          '@Value': '200'}
     ]
 
-    assert rpn_calc(equation) == -200
+    assert _rpn_calc(equation) == -200
 
 
 def test_multiply():
@@ -158,7 +158,7 @@ def test_multiply():
          '@Value': '20'}
     ]
 
-    assert rpn_calc(equation) == 400
+    assert _rpn_calc(equation) == 400
 
 
 def test_divide():
@@ -170,7 +170,7 @@ def test_divide():
          '@Value': '20'}
     ]
 
-    assert rpn_calc(equation) == 1.0
+    assert _rpn_calc(equation) == 1.0
 
 
 def test_max():
@@ -186,7 +186,7 @@ def test_max():
         #  '@Value': '250'}
     ]
 
-    assert rpn_calc(equation) == 650
+    assert _rpn_calc(equation) == 650
 
 
 def test_min():
@@ -202,7 +202,7 @@ def test_min():
         #  '@Value': '250'}
     ]
 
-    assert rpn_calc(equation) == 500
+    assert _rpn_calc(equation) == 500
 
 
 def test_push():
@@ -214,9 +214,9 @@ def test_push():
          '@Value': '350'},
     ]
 
-    assert rpn_stack(equation) == [175.0, 100]
+    assert _rpn_stack(equation) == [175.0, 100]
 
-    assert rpn_calc(equation) == 175.0
+    assert _rpn_calc(equation) == 175.0
 
 
 def test_duplicate():
@@ -227,9 +227,9 @@ def test_duplicate():
         {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '0.5', '@Operation': 'DUP'},
     ]
 
-    assert rpn_stack(equation) == [100.0, 200]
+    assert _rpn_stack(equation) == [100.0, 200]
 
-    assert rpn_calc(equation) == 100
+    assert _rpn_calc(equation) == 100
 
 
 def test_exchange():
@@ -242,9 +242,9 @@ def test_exchange():
         {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'EXCH'},
     ]
 
-    assert rpn_stack(equation) == [1320.0, 500]
+    assert _rpn_stack(equation) == [1320.0, 500]
 
-    assert rpn_calc(equation) == 1320
+    assert _rpn_calc(equation) == 1320
 
 
 def test_roll_stack_down():
@@ -259,9 +259,9 @@ def test_roll_stack_down():
         {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'RSD'},
     ]
 
-    assert rpn_stack(equation) == [1320.0, 500, 550]
+    assert _rpn_stack(equation) == [1320.0, 500, 550]
 
-    assert rpn_calc(equation) == 1320
+    assert _rpn_calc(equation) == 1320
 
 
 def test_roll_stack_up():
@@ -276,9 +276,9 @@ def test_roll_stack_up():
         {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'RSU'},
     ]
 
-    assert rpn_stack(equation) == [1100.0, 660, 500]
+    assert _rpn_stack(equation) == [1100.0, 660, 500]
 
-    assert rpn_calc(equation) == 1100
+    assert _rpn_calc(equation) == 1100
 
 
 def test_pop():
@@ -291,7 +291,7 @@ def test_pop():
         {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '1', '@Operation': 'POP'},
     ]
 
-    assert rpn_calc(equation) == 100
+    assert _rpn_calc(equation) == 100
 
 
 def test_exchange_if_less_than_or_equal_to_zero():
@@ -305,18 +305,4 @@ def test_exchange_if_less_than_or_equal_to_zero():
         {'@TermID': '1', '@SpdType': 'U', '@Multiplier': '2', '@Operation': 'EXLEZ'},
     ]
 
-    assert rpn_calc(equation) == 200
-
-
-def test_branching():
-    """Test example from AEMO's Constraint Implementation Guidelines June 2015 Appendix A.9.3"""
-
-    equation = [
-        {'@TermID': '1', '@SpdID': 'YWPS1_220_ON', '@SpdType': 'S', '@Multiplier': '1', '@Value': '1'},
-        {'@TermID': '1', '@SpdID': 'YWPS1.VYP21', '@SpdType': 'T', '@Multiplier': '1', '@Value': '100'},
-        {'@TermID': '1', '@SpdID': 'YWPS2.VYP22', '@SpdType': 'T', '@Multiplier': '-1', '@Value': '350'},
-        {'@TermID': '1', '@SpdType': 'B', '@Multiplier': '1', '@ParameterTerm1': '1', '@ParameterTerm2': '2',
-         '@ParameterTerm3': '3'},
-    ]
-
-    assert rpn_calc(equation) == 100
+    assert _rpn_calc(equation) == 200

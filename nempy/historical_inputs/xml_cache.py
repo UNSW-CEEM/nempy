@@ -164,7 +164,7 @@ class XMLCacheManager:
             z = zipfile.ZipFile(io.BytesIO(r.content))
             z.extractall(self.cache_folder)
         except zipfile.BadZipFile:
-            sleep(100)
+            sleep(200)
             r = requests.get(url)
             z = zipfile.ZipFile(io.BytesIO(r.content))
             z.extractall(self.cache_folder)

@@ -90,10 +90,29 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
     :linenos:
     :language: python
 
-7. Detailed recreation of historical dispatch
-------------------------------------------
-This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a  energy market using all the
-features of the Nempy market model, all inputs sourced from historical data published by AEMO. Note each interval is
+
+7. Detailed recreation of historical dispatch with Basslink switch run
+----------------------------------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using
+all the features of the Nempy market model, with inputs sourced from historical data published by AEMO. This example has
+been updated to include the use of functionality developed to enable modelling the Basslink switch run, which is new in
+Nempy version 1.2.0. Previously, Nempy relied on using the generic constraint RHS values reported with the NEMDE
+solution from what historically was the least cost case of the switch run. However, the new functionality allows the RHS
+values for each has of the switch run to be calculated by Nempy, and so for each case of switch run to be tested.
+
+.. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
+             to false to stop the script re-downloading data for subsequent runs.
+
+.. literalinclude:: ../../examples/basslink_switchrun.py
+    :linenos:
+    :language: python
+
+
+7. Recreation of historical dispatch without Basslink switchrun
+------------------------------------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using
+all the features of the Nempy market model, except the Basslink switch run, with inputs sourced from historical data
+published by AEMO. The main reason not to include Basslink switch run is to speed up runtime. Note each interval is
 dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
 conditions of the next interval, rather the historical initial conditions are always used.
 
@@ -113,7 +132,7 @@ conditions of the next interval, rather the historical initial conditions are al
     :language: python
 
 8. Time sequential recreation of historical dispatch
--------------------------------------------------
+----------------------------------------------------
 This example demonstrates using Nempy to recreate historical dispatch in a dynamic or time sequential manner, this means the outputs
 of one interval become the initial conditions for the next dispatch interval. Note, currently there is not the infrastructure
 in place to include features such as generic constraints in the time sequential model as the rhs values of many constraints
@@ -131,10 +150,10 @@ of demonstrating how Nempy can be used to create time sequential models, histori
     :linenos:
     :language: python
 
-8. Nempy performance on recent data (Jan 2022)
-----------------------------------------------
-This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a energy market using all the
-features of the Nempy market model, all inputs sourced from historical data published by AEMO. A set of 100 random dispatch
+9. Nempy performance on recent data (Jan 2022, without Basslink switch run)
+---------------------------------------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using all the
+features of the Nempy market model, with inputs sourced from historical data published by AEMO. A set of 100 random dispatch
 intervals from a recent month are dispatched and compared to historical results to see if Nempy is keeping up with any
 recent changes to the NEM's dispatch procedure. Comparison is against ROP, the region price prior to any post dispatch
 adjustments, scaling, capping etc.
@@ -154,10 +173,10 @@ Summary of results:
     :language: python
 
 
-8. Nempy performance on older data (Jan 2015)
----------------------------------------------
-This example demonstrates using Nempy to recreate historical dispatch intervals by implementing a energy market using all the
-features of the Nempy market model, all inputs sourced from historical data published by AEMO. A set of 100 random dispatch
+10. Nempy performance on older data (Jan 2015, without Basslink switch run)
+---------------------------------------------------------------------------
+This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using all the
+features of the Nempy market model, with inputs sourced from historical data published by AEMO. A set of 100 random dispatch
 intervals from January 2015 are dispatched and compared to historical results to see how well Nempy performs for
 replicating older versions of the NEM's dispatch procedure. Comparison is against ROP, the region price prior to any post
 dispatch adjustments, scaling, capping etc.

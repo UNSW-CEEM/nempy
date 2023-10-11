@@ -2,48 +2,38 @@ import pytest
 from datetime import datetime, timedelta
 import random
 import pandas as pd
+import os
 
 from nempy.historical_inputs.rhs_calculator import RHSCalc
 from nempy.historical_inputs import xml_cache
 
 
-'''
-Test cases for sub groups: NRM_NSW1_QLD1
-
-'''
-
-
 def test_single_equation():
-    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2013')
+    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
     xml_cache_manager.load_interval('2013/01/01 00:00:00')
     rhs_calculator = RHSCalc(xml_cache_manager)
     print(xml_cache_manager.get_file_path())
-    assert (rhs_calculator.compute_constraint_rhs('V::N_NIL_V1') ==
-            pytest.approx(rhs_calculator.get_nemde_rhs('V::N_NIL_V1'), 0.001))
+    assert (rhs_calculator.compute_constraint_rhs('F_MAIN++NIL_BL_R6') ==
+            pytest.approx(rhs_calculator.get_nemde_rhs('F_MAIN++NIL_BL_R6'), 0.001))
 
 
 def test_rhs_equations_in_order_of_length():
-    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2013')
+    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
     xml_cache_manager.load_interval('2013/01/01 00:00:00')
     rhs_calculator = RHSCalc(xml_cache_manager)
     rhs_equations = rhs_calculator.rhs_constraint_equations
     equations_in_length_order = sorted(rhs_equations, key=lambda k: len(rhs_equations[k]))
-    equation_no_generic_reference = rhs_calculator.get_rhs_equations_that_dont_reference_generic_equations()
+    equation_no_generic_reference = rhs_calculator._get_rhs_equations_that_dont_reference_generic_equations()
     equations_in_length_order = [equ for equ in equations_in_length_order if equ in equation_no_generic_reference]
-    print(xml_cache_manager.get_file_path()) # NEMSPDOutputs_2012123124000.loaded
-    c = 1
     for equation_id in equations_in_length_order:
         if equation_id in ['Q^NIL_GC', 'V^S_HYCP', 'V::N_NIL_Q1', 'V::N_NIL_V1', 'V^SML_NIL_3', 'V^SML_NSWRB_2']:
             continue
-        print(equation_id)
-        print(c)
-        c += 1
         assert (rhs_calculator.get_nemde_rhs(equation_id) ==
                 pytest.approx(rhs_calculator.compute_constraint_rhs(equation_id), 0.0001))
 
 
 def test_rhs_equations_in_order_of_length_all():
-    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2013')
+    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
 
     def get_test_intervals(number=100):
         start_time = datetime(year=2012, month=1, day=1, hour=0, minute=0)
@@ -63,15 +53,13 @@ def test_rhs_equations_in_order_of_length_all():
     files = []
     basslink_dep_equations = set()
 
-    for interval in get_test_intervals(1000):
+    for interval in get_test_intervals(100):
         xml_cache_manager.load_interval('2013/01/01 00:00:00')
         rhs_calculator = RHSCalc(xml_cache_manager)
         rhs_equations = rhs_calculator.rhs_constraint_equations
         equations_in_length_order = sorted(rhs_equations, key=lambda k: len(rhs_equations[k]))
         xml_file = xml_cache_manager.get_file_path()
         for equation_id in equations_in_length_order:
-            # if equation_id in ['Q^NIL_GC', 'V^S_HYCP', 'V^SML_NIL_3', 'V^SML_NSWRB_2']:
-            #     continue
             basslink_dep_equations = basslink_dep_equations.union(set(
                 rhs_calculator.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W')))
             try:
@@ -99,6 +87,7 @@ def test_rhs_equations_in_order_of_length_all():
     })
 
     error_raises = errors[errors['nempy_rhs'] == 'error'].copy()
+    assert len(error_raises['rhs_id'].unique()) <= 3
     error_raises.to_csv('rhs_calculation_error_raises.csv')
 
     errors = errors[errors['nempy_rhs'] != 'error'].copy()
@@ -113,10 +102,47 @@ def test_rhs_equations_in_order_of_length_all():
     basslink_dep_equations = list(basslink_dep_equations)
 
     basslink_errors_summary = errors_summary[errors_summary['rhs_id'].isin(basslink_dep_equations)]
+    assert len(basslink_errors_summary) <= 5
     basslink_errors_summary.to_csv('rhs_calculation_basslink_errors_summary.csv')
 
     basslink_error_raises = error_raises[error_raises['rhs_id'].isin(basslink_dep_equations)]
+    assert len(basslink_error_raises) == 0
     basslink_error_raises.to_csv('basslink_error_raises.csv')
+
+
+def test_get_constraints_that_depend_on_500_GEN_INERTIA():
+    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
+    xml_cache_manager.load_interval('2013/01/01 00:00:00')
+    rhs_calculator = RHSCalc(xml_cache_manager)
+    cons_that_depend_on_value = (
+        rhs_calculator.get_rhs_constraint_equations_that_depend_value('500_GEN_INERTIA', 'A'))
+    expected_cons = ["V::N_NIL_Q1", "V::N_NIL_Q2", "V::N_NIL_Q3", "V::N_NIL_Q4", "V::N_NIL_S1", "V::N_NIL_S2",
+                     "V::N_NIL_S3", "V::N_NIL_S4", "V::N_NIL_V1", "V::N_NIL_V2", "V::N_NIL_V3", "V::N_NIL_V4"]
+    assert expected_cons == cons_that_depend_on_value
+
+
+def test_get_constraints_that_depend_on_BL_FREQ_ONSTATUS():
+    xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
+    xml_cache_manager.load_interval('2013/01/01 00:00:00')
+    rhs_calculator = RHSCalc(xml_cache_manager)
+    cons_that_depend_on_value = (
+        rhs_calculator.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W'))
+    # Intermediate generic equations
+    # ["X_BL_MAIN_MAXAVL_OFF", "X_BL_MAIN_MAXAVL_ON", "X_BL_MAIN_MINAVL_OFF", "X_BL_MAIN_MINAVL_ON",
+    #  "X_BL_TAS_MAXAVL_OFF", "X_BL_TAS_MAXAVL_ON", "X_BL_TAS_MINAVL_OFF", "X_BL_TAS_MINAVL_ON"]
+    expected_cons = ["F_MAIN+NIL_DYN_RREG", "F_MAIN+NIL_MG_R5", "F_MAIN+NIL_MG_R6", "F_MAIN+NIL_MG_R60",
+     "F_MAIN++NIL_DYN_RREG", "F_MAIN++NIL_MG_R5", "F_MAIN++NIL_MG_R6", "F_MAIN++NIL_MG_R60",
+     "F_MAIN+ML_L5_0400", "F_MAIN+ML_L60_0400", "F_MAIN+ML_L6_0400", "F_MAIN+NIL_DYN_LREG",
+     "F_MAIN++ML_L5_0400", "F_MAIN++ML_L60_0400", "F_MAIN++ML_L6_0400", "F_MAIN++NIL_DYN_LREG",
+     "F_T+LREG_0050", "F_T+NIL_ML_L5", "F_T+NIL_ML_L6", "F_T+NIL_ML_L60", "F_T+NIL_TL_L5", "F_T+NIL_TL_L6",
+     "F_T+NIL_TL_L60", "F_T++LREG_0050", "F_T++NIL_ML_L5", "F_T++NIL_ML_L6", "F_T++NIL_ML_L60", "F_T++NIL_TL_L5",
+     "F_T++NIL_TL_L6", "F_T++NIL_TL_L60", "F_T+NIL_BB_TG_R5", "F_T+NIL_BB_TG_R6", "F_T+NIL_BB_TG_R60",
+     "F_T+NIL_MG_R5", "F_T+NIL_MG_R6", "F_T+NIL_MG_R60", "F_T+NIL_WN_TG_R5", "F_T+NIL_WN_TG_R6", "F_T+NIL_WN_TG_R60",
+     "F_T+RREG_0050",
+     "F_T++NIL_BB_TG_R5", "F_T++NIL_BB_TG_R6", "F_T++NIL_BB_TG_R60", "F_T++NIL_MG_R5", "F_T++NIL_MG_R6",
+     "F_T++NIL_MG_R60", "F_T++NIL_WN_TG_R5", "F_T++NIL_WN_TG_R6", "F_T++NIL_WN_TG_R60", "F_T++RREG_0050",
+     "T_V_NIL_BL1", "V_T_NIL_BL1"]
+    assert sorted(expected_cons) == sorted(cons_that_depend_on_value)
 
 
 
