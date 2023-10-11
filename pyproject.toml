@@ -1,6 +1,38 @@
-[build-system]
-requires = [
-    "setuptools>=42",
-    "wheel"
+[tool.poetry]
+name="nempy"
+version="1.1.6"
+description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure."
+authors=["Nicholas Gorman <n.gorman@unsw.edu.au>",]
+license = "BSD-3-Clause"
+readme = "README.md"
+classifiers=[
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
 ]
-build-backend = "setuptools.build_meta"
+repository="https://github.com/UNSW-CEEM/nempy"
+
+[tool.poetry.dependencies]
+python = ">=3.8,<3.12"
+pandas = "<3.0.0"
+mip = ">=1.11.0,<2.0.0"
+xmltodict = "==0.12.0"
+requests = ">=2.0.0, <3.0.0"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=6.2.5"
+
+[tool.poetry.group.docs.dependencies]
+Sphinx = "^5"
+autodocsumm = "^0.2.11"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -3,134 +3,87 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - master
 jobs:
-  test-on-linux-python-three-seven-oldest-dependencies:
+  test:
+    # Matrix testing to test across OSs and Python versions
+    # Fail-fast: fail the entire job as soon as anything fails
+    strategy:
+      fail-fast: true
+      matrix:
+        os: ["ubuntu-latest", "macos-latest", "windows-latest"]
+        python-version: ["3.8", "3.9", "3.10", "3.11"]
+      # Necessary for poetry & Windows
+    defaults:
+      run:
+        shell: bash
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Get poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+      
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install poetry env with dev group
+        run: poetry install --with=dev
+
+      - name: Run tests with pytest
+        run: |
+          source $VENV
+          python -m pytest
+          
+  publish:
+    if: github.event_name == 'release' && github.event.action == 'created'
+    needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.7.15
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pandas==1.0.0
-          pip install mip==1.11.0
-          pip install requests==2.0.0
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
+      # Checkout the repo so the workflow can access it
+      - name: Checkout
+        uses: actions/checkout@v3
 
-  test-on-linux-python-three-seven:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
+      # Set up Python
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: 3.7
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
+          python-version: '3.9'
 
-  test-on-linux-python-three-eight:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
+      # Install the specified version of poetry
+      - name: Get poetry
+        uses: snok/install-poetry@v1
         with:
-          python-version: 3.8.15
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
+          version: 1.4.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
 
-  test-on-linux-python-three-nine:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
+      # Load cached poetry env if it exists
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v2
         with:
-          python-version: 3.9.16
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
 
-  test-on-linux-python-three-ten:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.10.9
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
-
-  test-dev-install-on-linux-python-three-ten:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.10.9
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install e .[dev]
-      - name: Run tests with pytest
-        run: python -m pytest
-
-  test-on-windows-python-three-eight:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.8
-      - name: Install dependencies
-        run: |
-          choco install python --version 3.8.0
-          python -m pip install --upgrade pip
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
-
-  test-on-mac-python-three-eight:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Install Python 3
-        uses: actions/setup-python@v1
-        with:
-          python-version: 3.8
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install e .
-          pip install pytest
-      - name: Run tests with pytest
-        run: python -m pytest
+      # Build and publish to PyPI
+      - name: Build and publish # publish tsgen to PyPI
+        env:
+          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: poetry publish -u $PYPI_USERNAME -p $PYPI_PASSWORD --build
