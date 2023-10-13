@@ -499,10 +499,11 @@ class RHSCalc:
 
         Examples
         --------
-        >>> xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_2014_12')
-        >>> xml_cache_manager.load_interval('2014/12/05 00:00:00')
-        >>> rhs_calculator = RHSCalc(xml_cache_manager.xml)
+        >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
+        >>> xml_cache_manager.load_interval('2019/01/01 00:00:00')
+        >>> rhs_calculator = RHSCalc(xml_cache_manager)
         >>> rhs_calculator._compute_generic_equation('X_BASSLINK_OFF')
+        0.0001
 
         Parameters
         ----------

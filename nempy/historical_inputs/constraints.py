@@ -394,7 +394,7 @@ class ConstraintData:
         >>> unit_data = ConstraintData(inputs_loader)
 
         >>> unit_data.get_constraint_violation_prices()
-        {'regional_demand': 2175000.0, 'interocnnector': 16675000.0, 'generic_constraint': 435000.0, 'ramp_rate': 16747500.0, 'unit_capacity': 5365000.0, 'energy_offer': 16457500.0, 'fcas_profile': 2247500.0, 'fcas_max_avail': 2247500.0, 'fcas_enablement_min': 1015000.0, 'fcas_enablement_max': 1015000.0, 'fast_start': 16385000.0, 'mnsp_ramp_rate': 16747500.0, 'msnp_offer': 16457500.0, 'mnsp_capacity': 5292500.0, 'uigf': 5582500.0, 'voll': 14500.0}
+        {'regional_demand': 2175000.0, 'interocnnector': 16675000.0, 'generic_constraint': 435000.0, 'ramp_rate': 16747500.0, 'unit_capacity': 5365000.0, 'energy_offer': 16457500.0, 'fcas_profile': 2247500.0, 'fcas_max_avail': 2247500.0, 'fcas_enablement_min': 1015000.0, 'fcas_enablement_max': 1015000.0, 'fast_start': 16385000.0, 'mnsp_ramp_rate': 16747500.0, 'msnp_offer': 16457500.0, 'mnsp_capacity': 5292500.0, 'uigf': 5582500.0, 'voll': 14500.0, 'tiebreak': 1e-06}
 
         Returns
         -------

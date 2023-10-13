@@ -13,8 +13,8 @@ def test_single_equation():
     xml_cache_manager.load_interval('2013/01/01 00:00:00')
     rhs_calculator = RHSCalc(xml_cache_manager)
     print(xml_cache_manager.get_file_path())
-    assert (rhs_calculator.compute_constraint_rhs('F_MAIN++NIL_BL_R6') ==
-            pytest.approx(rhs_calculator.get_nemde_rhs('F_MAIN++NIL_BL_R6'), 0.001))
+    assert (rhs_calculator.compute_constraint_rhs('F_T++NIL_BLSPS_L5') ==
+            pytest.approx(rhs_calculator.get_nemde_rhs('F_T++NIL_BLSPS_L5'), 0.001))
 
 
 def test_rhs_equations_in_order_of_length_all():

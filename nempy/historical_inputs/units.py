@@ -443,29 +443,6 @@ class UnitData:
 
         For more info on fast start dispatch inflexibility profiles :download:`see AEMO docs <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`.
 
-        Examples
-        --------
-
-        >>> inputs_loader = _test_setup()
-
-        >>> unit_data = UnitData(inputs_loader)
-
-        >>> unit_data.get_fast_start_profiles_for_dispatch()
-                unit  end_mode  time_in_end_mode  mode_two_length  mode_four_length  min_loading
-        0     AGLHAL         0               5.0              3.0               2.0          2.0
-        1     AGLSOM         0               5.0              2.0               2.0         16.0
-        2   BARCALDN         0               5.0              4.0               4.0         12.0
-        3   BARRON-1         0               5.0              3.0               1.0          5.0
-        4   BARRON-2         5               5.0              3.0               1.0          5.0
-        ..       ...       ...               ...              ...               ...          ...
-        69     VPGS5         0               5.0              3.0               0.0         49.0
-        70     VPGS6         0               5.0              3.0               0.0         49.0
-        71   W/HOE#1         0               5.0              0.0               0.0        160.0
-        72   W/HOE#2         0               5.0              0.0               0.0        160.0
-        73    YABULU         0               5.0              6.0               6.0         83.0
-        <BLANKLINE>
-        [74 rows x 6 columns]
-
         Returns
         -------
         pd.DataFrame
@@ -1093,7 +1070,7 @@ class UnitData:
             raise ValueError("run_type provided not recognised.")
         return an.map_aemo_column_names_to_nempy_names(scada_ramp_down_rates)
 
-    def get_scada_ramp_up_rates_of_raise_reg_units(self, run_type):
+    def get_scada_ramp_up_rates_of_raise_reg_units(self, run_type='no_fast_start_units'):
         """Get the scada ramp up rates for unit with a raise regulation bid.
 
         Only units with scada ramp rates and a raise regulation bid that passes enablement criteria are returned.
