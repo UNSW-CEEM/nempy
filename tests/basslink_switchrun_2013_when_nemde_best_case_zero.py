@@ -54,7 +54,7 @@ outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.
 for interval in get_test_intervals():
-    if len(outputs) >= 1000:
+    if len(outputs) >= 100:
         break
 
     xml_cache_manager.interval = interval
@@ -81,7 +81,6 @@ for interval in get_test_intervals():
     constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
     demand_inputs = demand.DemandData(raw_inputs_loader)
     rhs_calculation_engine = rhs_calculator.RHSCalc(xml_cache_manager)
-    print(interval)
 
     unit_info = unit_inputs.get_unit_info()
     market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1',
@@ -108,14 +107,18 @@ for interval in get_test_intervals():
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     # Set unit ramp rates.
-    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(fast_start_run=True)
-    market.set_unit_ramp_up_constraints(
-        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-    market.set_unit_ramp_down_constraints(
-        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
-    cost = constraint_inputs.get_constraint_violation_prices()['ramp_rate']
-    market.make_constraints_elastic('ramp_up', violation_cost=cost)
-    market.make_constraints_elastic('ramp_down', violation_cost=cost)
+    def set_ramp_rates(run_type):
+        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type='fast_start_first_run')
+        market.set_unit_ramp_up_constraints(
+            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+        market.set_unit_ramp_down_constraints(
+            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+        cost = constraint_inputs.get_constraint_violation_prices()['ramp_rate']
+        market.make_constraints_elastic('ramp_up', violation_cost=cost)
+        market.make_constraints_elastic('ramp_down', violation_cost=cost)
+
+
+    set_ramp_rates(run_type='fast_start_first_run')
 
     # Set unit FCAS trapezium constraints.
     unit_inputs.add_fcas_trapezium_constraints()
@@ -127,15 +130,23 @@ for interval in get_test_intervals():
     regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
     market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
     market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(fast_start_run=True)
-    market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
-    market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(fast_start_run=True)
-    market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
-    market.make_constraints_elastic('joint_ramping_raise_reg', cost)
     contingency_trapeziums = unit_inputs.get_contingency_services()
     market.set_joint_capacity_constraints(contingency_trapeziums)
     market.make_constraints_elastic('joint_capacity', cost)
+
+
+    def set_joint_ramping_constraints(run_type):
+        scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
+            run_type=run_type)
+        market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
+        market.make_constraints_elastic('joint_ramping_lower_reg', cost)
+        scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(
+            run_type=run_type)
+        market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
+        market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+
+
+    set_joint_ramping_constraints(run_type="fast_start_first_run")
 
     # Set interconnector definitions, limits and loss models.
     interconnectors_definitions = \
@@ -181,8 +192,10 @@ for interval in get_test_intervals():
     market.dispatch()
     dispatch = market.get_unit_dispatch()
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
+    set_ramp_rates(run_type='fast_start_second_run')
+    set_joint_ramping_constraints(run_type='fast_start_second_run')
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market.get_constraint_set_names():
+    if 'fast_start' in market._constraints_rhs_and_type.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
@@ -214,14 +227,20 @@ for interval in get_test_intervals():
     market.set_generic_constraints(generic_rhs)
     market.make_constraints_elastic('generic', violation_cost=violation_costs)
 
+    # Reset ramp rate constraints for first run of second Basslink switchrun
+    set_ramp_rates(run_type='fast_start_first_run')
+    set_joint_ramping_constraints(run_type='fast_start_first_run')
+
     # Get unit dispatch without fast start constraints and use it to
     # make fast start unit commitment decisions.
     market.remove_fast_start_constraints()
     market.dispatch()
     dispatch = market.get_unit_dispatch()
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
+    set_ramp_rates(run_type='fast_start_second_run')
+    set_joint_ramping_constraints(run_type='fast_start_second_run')
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market.get_constraint_set_names():
+    if 'fast_start' in market._constraints_rhs_and_type.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 

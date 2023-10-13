@@ -1,6 +1,6 @@
 [tool.poetry]
 name="nempy"
-version="1.1.6"
+version="2.0.0"
 description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure."
 authors=["Nicholas Gorman <n.gorman@unsw.edu.au>",]
 license = "BSD-3-Clause"

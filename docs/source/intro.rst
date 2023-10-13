@@ -6,9 +6,7 @@ NEM evolves, constraints and ancillary service markets are becoming increasingly
 As part of the ongoing reform process significant changes to the dispatch process have also been proposed, for example,
 the introduction of an operating reserve market is being considered, as is the adoption of a dynamic intra-regional loss
 model. Nempy allows users to easily configure a dispatch model to fit the relevant research question. Furthermore, if
-extra functionality is needed, the python implementation, open-source licencings. Version 1 will be a stable release 
-and ongoing minor updates or patches will remain backwards compatible. Currently, the latest minor release is v1.1.0. 
-However, we are interested in receiving feedback to inform the ongoing maintenance, development and any future major updates.
+extra functionality is needed, the python implementation, open-source licencings.
 
 Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, and has detailed
 documentation.

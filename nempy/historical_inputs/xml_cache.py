@@ -667,7 +667,8 @@ class XMLCacheManager:
                         msnp_offer='@MNSPOfferPrice',
                         mnsp_capacity='@MNSPCapacityPrice',
                         uigf='@UIGFSurplusPrice',
-                        voll='@VoLL')
+                        voll='@VoLL',
+                        tiebreak='@TieBreakPrice')
         violations = {}
         for name, aemo_name in name_map.items():
             violations[name] = float(inputs['Case'][aemo_name])

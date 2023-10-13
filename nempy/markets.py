@@ -673,8 +673,7 @@ class SpotMarket:
         schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
         schema.add_column(dv.SeriesSchema(name='initial_output', data_type=np.float64, must_be_real_number=True))
-        schema.add_column(dv.SeriesSchema(name='ramp_up_rate', data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='ramp_up_rate', data_type=np.float64, must_be_real_number=True))
         schema.validate(ramp_details)
 
     def set_unit_ramp_down_constraints(self, ramp_details):

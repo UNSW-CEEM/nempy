@@ -96,11 +96,11 @@ unit maximum capacity constraints and interconnector models, all sourced from hi
 This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using
 all the features of the Nempy market model, with inputs sourced from historical data published by AEMO. This example has
 been updated to include the use of functionality developed to enable modelling the Basslink switch run, which is new in
-Nempy version 1.2.0. Previously, Nempy relied on using the generic constraint RHS values reported with the NEMDE
+Nempy version 2.0.0. Previously, Nempy relied on using the generic constraint RHS values reported with the NEMDE
 solution from what historically was the least cost case of the switch run. However, the new functionality allows the RHS
 values for each has of the switch run to be calculated by Nempy, and so for each case of switch run to be tested.
 
-.. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
+.. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
 
 .. literalinclude:: ../../examples/basslink_switchrun.py
@@ -116,16 +116,8 @@ published by AEMO. The main reason not to include Basslink switch run is to spee
 dispatched as a standalone simulation and the results from one dispatch interval are not carried over to be the initial
 conditions of the next interval, rather the historical initial conditions are always used.
 
-.. image:: ../../examples/charts/full_featured_market_qld_prices.png
-  :width: 600
-
-*Results from example: for the QLD region a very close fit between modelled prices and historical prices is obtained.*
-
-.. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
+.. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
-
-.. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
-          install kaleido==0.2.1
 
 .. literalinclude:: ../../examples/all_features_example.py
     :linenos:
@@ -143,37 +135,12 @@ of demonstrating how Nempy can be used to create time sequential models, histori
 .. warning:: Warning this script downloads approximately 8.5 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
 
-.. note:: This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1. Run pip install plotly==5.3.1 and pip
-          install kaleido==0.2.1
-
 .. literalinclude:: ../../examples/time_sequential.py
     :linenos:
     :language: python
 
-9. Nempy performance on recent data (Jan 2022, without Basslink switch run)
----------------------------------------------------------------------------
-This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using all the
-features of the Nempy market model, with inputs sourced from historical data published by AEMO. A set of 100 random dispatch
-intervals from a recent month are dispatched and compared to historical results to see if Nempy is keeping up with any
-recent changes to the NEM's dispatch procedure. Comparison is against ROP, the region price prior to any post dispatch
-adjustments, scaling, capping etc.
 
-Summary of results:
-
-| Mean price error: -0.255
-| Median price error: 0.00
-| 5% percentile price error: -0.050
-| 95% percentile price error: 1.084
-
-.. warning:: Warning this script downloads approximately 84 GB of data from AEMO. The download_inputs flag can be set
-             to false to stop the script re-downloading data for subsequent runs.
-
-.. literalinclude:: ../../examples/recent_performance.py
-    :linenos:
-    :language: python
-
-
-10. Nempy performance on older data (Jan 2015, without Basslink switch run)
+10. Nempy performance on older data (Jan 2013, without Basslink switch run)
 ---------------------------------------------------------------------------
 This example demonstrates using Nempy to recreate historical dispatch intervals by implementing an energy market using all the
 features of the Nempy market model, with inputs sourced from historical data published by AEMO. A set of 100 random dispatch
@@ -183,10 +150,10 @@ dispatch adjustments, scaling, capping etc.
 
 Summary of results:
 
-| Mean price error: -0.240
+| Mean price error: 0.003
 | Median price error: 0.000
 | 5% percentile price error: 0.000
-| 95% percentile price error: 0.051
+| 95% percentile price error: 0.001
 
 .. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.

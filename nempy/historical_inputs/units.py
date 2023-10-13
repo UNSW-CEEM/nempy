@@ -82,6 +82,7 @@ class UnitData:
 
         self.BIDPEROFFER_D = None
         self.fcas_trapeziums = None
+        self.updated_fast_start_profiles = None
 
     def get_unit_bid_availability(self):
         """Get the bid in maximum availability for scheduled units.
@@ -178,14 +179,17 @@ class UnitData:
         uigf = an.map_aemo_column_names_to_nempy_names(self.uigf_values)
         return uigf
 
-    def get_ramp_rates_used_for_energy_dispatch(self, fast_start_run=False):
+    def get_ramp_rates_used_for_energy_dispatch(self, run_type='no_fast_start_units'):
         """Get ramp rates used for constraining energy dispatch.
 
-        The minimum of bid in ramp rates and scada telemetered ramp rates are used. If a unit is ending the interval
-        in fast start dispatch mode two then ramp rates are not returned for that unit as its ramp is strictly set by
-        the dispatch inflexibility profile. If a unit starts in mode two, but ends the interval past mode two, then
-        its ramp up rate is adjusted to reflect the fact it was constrained by the inflexibility profile for part of the
-        interval.
+        The minimum of bid in ramp rates and scada telemetered ramp rates are used. If 'no_fast_start_units' is given as
+        the run_type then no extra process is applied to the ramp rates based on the fast start inflexibility profiles.
+        If 'fast_start_first_run' is given then the ramp rates of units starting in fast start modes 0, 1, and 2 are
+        excluded. If 'fast_start_second_run' is given then the ramp rates of units ending the interval in fast start
+        modes 0, 1, and 2 are excluded, and the ramp rates of units that started interval in mode 2 or smaller, but
+        end in mode 3 or greater, have there ramp rates adjusted to account for speeding a portion of the interval
+        constrained from ramping up by their dispatch inflexibility profile.
+
 
         Examples
         --------
@@ -210,6 +214,11 @@ class UnitData:
         <BLANKLINE>
         [280 rows x 4 columns]
 
+        Parameters
+        ----------
+        run_type: str specifying the run type should be one of 'no_fast_start_units', 'fast_start_first_run', or
+            'fast_start_second_run'.
+
         Returns
         -------
         pd.DataFrame
@@ -227,9 +236,19 @@ class UnitData:
             ================  ========================================
         """
         ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
-        if fast_start_run:
+        # ramp_rates = self._remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates)
+        if run_type == 'fast_start_first_run':
             ramp_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(ramp_rates)
-        ramp_rates = self._adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(ramp_rates)
+        elif run_type == 'fast_start_second_run':
+            if self.updated_fast_start_profiles is None:
+                raise ValueError("Can't use run type fast_start_second_run before calling "
+                                 "get_fast_start_profiles_for_dispatch.")
+            ramp_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(ramp_rates)
+            ramp_rates = self._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates,
+                                                                                        self.dispatch_interval)
+        elif run_type != 'no_fast_start_units':
+            raise ValueError("run_type provided not recognised.")
+
         ramp_rates = ramp_rates.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
         ramp_rates.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
         return ramp_rates
@@ -246,12 +265,49 @@ class UnitData:
 
     def _remove_fast_start_units_starting_in_mode_0_1_2(self, dataframe):
         fast_start_profiles = self._get_fast_start_profiles()
-        units_starting_in_mode_0_1_2 = list(fast_start_profiles[fast_start_profiles['current_mode'].isin([0, 1, 2])]['unit'].unique())
-        if 'unit' in dataframe:
-            dataframe = dataframe[~dataframe['unit'].isin(units_starting_in_mode_0_1_2)]
-        else:
-            dataframe = dataframe[~dataframe['DUID'].isin(units_starting_in_mode_0_1_2)]
+        units_starting_in_mode_0_1_2 = list(
+            fast_start_profiles[fast_start_profiles['current_mode'].isin([0, 1, 2])]['unit'].unique())
+        dataframe = dataframe[~dataframe['DUID'].isin(units_starting_in_mode_0_1_2)]
         return dataframe
+
+    def _remove_fast_start_units_ending_in_mode_0_1_2(self, dataframe):
+        fast_start_profiles = self.updated_fast_start_profiles.copy()
+        units_starting_in_mode_0_1_2 = list(
+            fast_start_profiles[fast_start_profiles['end_mode'].isin([0, 1, 2])]['unit'].unique())
+        dataframe = dataframe[~dataframe['DUID'].isin(units_starting_in_mode_0_1_2)]
+        return dataframe
+
+    def _remove_fast_start_units_ending_dispatch_interval_in_mode_two(self, dataframe):
+        fast_start_profiles = self._get_fast_start_profiles()
+        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
+        dataframe = dataframe[~dataframe['DUID'].isin(units_ending_in_mode_two)]
+        return dataframe
+
+    def _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(self, ramp_rates, dispatch_interval):
+        """
+        If a unit is ending in mode three of four but it has been less than 5 minutes since leaving mode 2 or 1 then
+        adjust their ramp rate to account for the limited time operating without a dispatch inflexibility profile
+        upper bound
+        """
+        fast_start_profiles = self.updated_fast_start_profiles.copy()
+        if not fast_start_profiles.empty:
+            profiles_to_adjust = fast_start_profiles[~fast_start_profiles['time_since_end_of_mode_two'].isna()]
+            profiles_to_adjust = profiles_to_adjust.loc[:, ['unit', 'min_loading', 'time_since_end_of_mode_two']]
+            profiles_to_adjust = pd.merge(ramp_rates, profiles_to_adjust, 'inner', left_on='DUID',
+                                          right_on='unit')
+            profiles_to_adjust['ramp_mw_per_min'] = profiles_to_adjust['RAMPUPRATE'] / 60
+            profiles_to_adjust['ramp_max'] = profiles_to_adjust['time_since_end_of_mode_two'] * \
+                                                   profiles_to_adjust['ramp_mw_per_min'] + \
+                                                   profiles_to_adjust['min_loading']
+            profiles_to_adjust['RAMPUPRATE'] = (profiles_to_adjust['ramp_max'] -
+                                                profiles_to_adjust['INITIALMW']) * \
+                                                (60 / dispatch_interval)
+            profiles_to_adjust = profiles_to_adjust.drop(
+                columns=["unit", "min_loading", "time_since_end_of_mode_two", "unit", "ramp_mw_per_min",
+                         "ramp_max"])
+            ramp_rates_not_adjusted = ramp_rates[~ramp_rates['DUID'].isin(profiles_to_adjust['DUID'])]
+            ramp_rates = pd.concat([profiles_to_adjust, ramp_rates_not_adjusted])
+        return ramp_rates
 
     def _adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(self, ramp_rates):
         fast_start_profiles = self._get_fast_start_profiles()
@@ -285,7 +341,8 @@ class UnitData:
         fast_start_end_condition = pd.merge(ramp_rates, fast_start_end_condition, left_on='DUID', right_on='unit')
         fast_start_end_condition['ramp_mw_per_min'] = fast_start_end_condition['RAMPUPRATE'] / 60
         fast_start_end_condition['ramp_max'] = fast_start_end_condition['time_after_mode_two'] * \
-            fast_start_end_condition['ramp_mw_per_min'] + fast_start_end_condition['min_loading']
+                                               fast_start_end_condition['ramp_mw_per_min'] + fast_start_end_condition[
+                                                   'min_loading']
         fast_start_end_condition['new_ramp_up_rate'] = (fast_start_end_condition['ramp_max'] -
                                                         fast_start_end_condition['fast_start_initial_mw']) * \
                                                        (60 / dispatch_interval)
@@ -430,16 +487,83 @@ class UnitData:
             ================  ========================================
         """
         profiles = self._get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
+        self.updated_fast_start_profiles = profiles
+        profiles['mode_two_length'] = np.float64(profiles['mode_two_length'])
+        profiles['mode_four_length'] = np.float64(profiles['mode_four_length'])
+        profiles['min_loading'] = np.float64(profiles['min_loading'])
         return profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
                                 'mode_four_length', 'min_loading']]
 
     def _get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.fast_start_profiles
         fast_start_profiles = an.map_aemo_column_names_to_nempy_names(fast_start_profiles)
-        fast_start_profiles = self._commit_fast_start_units_in_mode_zero_if_they_have_non_zero_unconstrained_dispatch(
-            fast_start_profiles, unconstrained_dispatch)
-        fast_start_profiles = self._fast_start_calc_end_interval_state(fast_start_profiles, self.dispatch_interval)
+        if unconstrained_dispatch is not None:
+            fast_start_profiles = self.update_modes(fast_start_profiles, unconstrained_dispatch)
         return fast_start_profiles
+
+    @staticmethod
+    def update_modes(fast_start_profiles, unconstrained_dispatch):
+        unconstrained_dispatch = unconstrained_dispatch[unconstrained_dispatch['service'] == 'energy']
+        fast_start_profiles = pd.merge(fast_start_profiles, unconstrained_dispatch, on='unit')
+        fsp = fast_start_profiles
+
+        fsp['time_left_in_interval'] = 5.0
+        fsp['temp_time_in_current_mode'] = fsp['time_in_current_mode']
+        fsp['temp_current_mode'] = fsp['current_mode']
+
+        # Commit uncommited units with nonzero unconstrained dispatch
+        fsp['temp_current_mode'] = np.where((fsp['current_mode'] == 0) &
+                                   (fsp['dispatch'] > 0.0), 1,
+                                   fsp['current_mode'])
+
+        # Move units from mode one to mode two
+        # If the time left in the mode is less than 5 minutes than progress to next mode
+        mask = (fsp['temp_current_mode'] == 1) & (fsp['mode_one_length'] - fsp['temp_time_in_current_mode'] <=
+                                             fsp['time_left_in_interval'])
+        df1 = fsp[mask].copy()
+        df2 = fsp[~mask].copy()
+        df1['temp_current_mode'] = 2
+        df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_one_length'] - df1['temp_time_in_current_mode'])
+        df1['temp_time_in_current_mode'] = 0.0
+        fsp = pd.concat([df1, df2])
+
+        # Move units from mode two to mode three
+        mask = (fsp['temp_current_mode'] == 2) & (fsp['mode_two_length'] - fsp['temp_time_in_current_mode'] <=
+                                             fsp['time_left_in_interval'])
+        df1 = fsp[mask].copy()
+        df2 = fsp[~mask].copy()
+        df1['temp_current_mode'] = 3
+        df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_two_length'] - df1['temp_time_in_current_mode'])
+        df1['temp_time_in_current_mode'] = 0.0
+        df1['time_since_end_of_mode_two'] = df1['time_left_in_interval']
+        fsp = pd.concat([df1, df2])
+
+        # Move units from mode three to mode four
+        mask = (fsp['temp_current_mode'] == 3) & (fsp['mode_three_length'] - fsp['temp_time_in_current_mode'] <=
+                                             fsp['time_left_in_interval'])
+        df1 = fsp[mask].copy()
+        df2 = fsp[~mask].copy()
+        df1['temp_current_mode'] = 4
+        df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_three_length'] - df1['temp_time_in_current_mode'])
+        df1['temp_time_in_current_mode'] = 0.0
+        fsp = pd.concat([df1, df2])
+
+        # Move units from mode four to mode five
+        mask = (fsp['temp_current_mode'] == 4) & (fsp['mode_four_length'] - fsp['temp_time_in_current_mode'] <=
+                                             fsp['time_left_in_interval'])
+        df1 = fsp[mask].copy()
+        df2 = fsp[~mask].copy()
+        df1['temp_current_mode'] = 5
+        df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_four_length'] - df1['temp_time_in_current_mode'])
+        df1['temp_time_in_current_mode'] = 0.0
+        fsp = pd.concat([df1, df2])
+
+        fsp['end_mode'] = fsp['temp_current_mode']
+        fsp['time_in_end_mode'] = fsp['temp_time_in_current_mode'] + fsp['time_left_in_interval']
+
+        return fsp.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
+                           'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
+                           'mode_four_length', 'time_since_end_of_mode_two']]
 
     @staticmethod
     def _commit_fast_start_units_in_mode_zero_if_they_have_non_zero_unconstrained_dispatch(fast_start_profiles,
@@ -879,35 +1003,35 @@ class UnitData:
 
     def _get_scada_ramp_up_rates(self):
         initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
-        initial_cons.columns = ['unit', 'initial_output', 'ramp_up_rate']
         units_with_scada_ramp_rates = list(
-            initial_cons[(~initial_cons['ramp_up_rate'].isna()) & initial_cons['ramp_up_rate'] != 0]['unit'])
-        initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
+            initial_cons[(~initial_cons['RAMPUPRATE'].isna()) & initial_cons['RAMPUPRATE'] != 0]['DUID'])
+        initial_cons = initial_cons[initial_cons['DUID'].isin(units_with_scada_ramp_rates)]
         return initial_cons
 
     def _get_scada_ramp_down_rates(self):
         initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
-        initial_cons.columns = ['unit', 'initial_output', 'ramp_down_rate']
         units_with_scada_ramp_rates = list(
-            initial_cons[(~initial_cons['ramp_down_rate'].isna()) & initial_cons['ramp_down_rate'] != 0]['unit'])
-        initial_cons = initial_cons[initial_cons['unit'].isin(units_with_scada_ramp_rates)]
+            initial_cons[(~initial_cons['RAMPDOWNRATE'].isna()) & initial_cons['RAMPDOWNRATE'] != 0]['DUID'])
+        initial_cons = initial_cons[initial_cons['DUID'].isin(units_with_scada_ramp_rates)]
         return initial_cons
 
     def _get_raise_reg_units_with_scada_ramp_rates(self):
         reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
-        reg_units = pd.merge(self._get_scada_ramp_up_rates(), reg_units, 'inner', on='unit')
+        scada_ramp_up_rates =  an.map_aemo_column_names_to_nempy_names(self._get_scada_ramp_up_rates())
+        reg_units = pd.merge(scada_ramp_up_rates, reg_units, 'inner', on='unit')
         reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_up_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
     def _get_lower_reg_units_with_scada_ramp_rates(self):
         reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
-        reg_units = pd.merge(self._get_scada_ramp_down_rates(), reg_units, 'inner', on='unit')
+        scada_ramp_down_rates =  an.map_aemo_column_names_to_nempy_names(self._get_scada_ramp_down_rates())
+        reg_units = pd.merge(scada_ramp_down_rates, reg_units, 'inner', on='unit')
         reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_down_rate'].isna())]
         reg_units = reg_units.loc[:, ['unit', 'service']]
         return reg_units
 
-    def get_scada_ramp_down_rates_of_lower_reg_units(self, fast_start_run=False):
+    def get_scada_ramp_down_rates_of_lower_reg_units(self, run_type='no_fast_start_units'):
         """Get the scada ramp down rates for unit with a lower regulation bid.
 
         Only units with scada ramp rates and a lower regulation bid that passes enablement criteria are returned.
@@ -953,15 +1077,23 @@ class UnitData:
             if the method is called before add_fcas_trapezium_constraints.
         """
         if self.fcas_trapeziums is None:
-            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_scada_ramp_down_rates_of_lower_reg_units.')
+            raise MethodCallOrderError(
+                'Call add_fcas_trapezium_constraints before get_scada_ramp_down_rates_of_lower_reg_units.')
         lower_reg_units = self._get_lower_reg_units_with_scada_ramp_rates()
         scada_ramp_down_rates = self._get_scada_ramp_down_rates()
-        scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['unit'].isin(lower_reg_units['unit'])]
-        if fast_start_run:
+        scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['DUID'].isin(lower_reg_units['unit'])]
+        if run_type == 'fast_start_first_run':
             scada_ramp_down_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(scada_ramp_down_rates)
-        return scada_ramp_down_rates
+        elif run_type == 'fast_start_second_run':
+            if self.updated_fast_start_profiles is None:
+                raise ValueError("Can't use run type fast_start_second_run before calling "
+                                 "get_fast_start_profiles_for_dispatch.")
+            scada_ramp_down_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(scada_ramp_down_rates)
+        elif run_type != 'no_fast_start_units':
+            raise ValueError("run_type provided not recognised.")
+        return an.map_aemo_column_names_to_nempy_names(scada_ramp_down_rates)
 
-    def get_scada_ramp_up_rates_of_raise_reg_units(self, fast_start_run=False):
+    def get_scada_ramp_up_rates_of_raise_reg_units(self, run_type):
         """Get the scada ramp up rates for unit with a raise regulation bid.
 
         Only units with scada ramp rates and a raise regulation bid that passes enablement criteria are returned.
@@ -1007,13 +1139,24 @@ class UnitData:
             if the method is called before add_fcas_trapezium_constraints.
         """
         if self.fcas_trapeziums is None:
-            raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_scada_ramp_up_rates_of_raise_reg_units.')
+            raise MethodCallOrderError(
+                'Call add_fcas_trapezium_constraints before get_scada_ramp_up_rates_of_raise_reg_units.')
         scada_ramp_up_rates = self._get_scada_ramp_up_rates()
         raise_reg_units = self._get_raise_reg_units_with_scada_ramp_rates()
-        scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['unit'].isin(raise_reg_units['unit'])]
-        if fast_start_run:
+        scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['DUID'].isin(raise_reg_units['unit'])]
+        if run_type == 'fast_start_first_run':
             scada_ramp_up_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(scada_ramp_up_rates)
-        return scada_ramp_up_rates
+        elif run_type == 'fast_start_second_run':
+            if self.updated_fast_start_profiles is None:
+                raise ValueError("Can't use run type fast_start_second_run before calling "
+                                 "get_fast_start_profiles_for_dispatch.")
+            scada_ramp_up_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(scada_ramp_up_rates)
+            scada_ramp_up_rates = (
+                self._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(scada_ramp_up_rates,
+                                                                               self.dispatch_interval))
+        elif run_type != 'no_fast_start_units':
+            raise ValueError("run_type provided not recognised.")
+        return an.map_aemo_column_names_to_nempy_names(scada_ramp_up_rates)
 
     def get_contingency_services(self):
         """Get the unit bid FCAS trapeziums for contingency services.
@@ -1306,7 +1449,7 @@ def _format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
 
     # Combine loss factors.
     DUDETAILSUMMARY['LOSSFACTOR'] = DUDETAILSUMMARY['TRANSMISSIONLOSSFACTOR'] * \
-        DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
+                                    DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
     unit_info = DUDETAILSUMMARY.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
     unit_info.columns = ['unit', 'dispatch_type', 'connection_point', 'region', 'loss_factor']
     unit_info['dispatch_type'] = unit_info['dispatch_type'].apply(lambda x: dispatch_type_name_map[x])
@@ -1409,7 +1552,7 @@ def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
                          'inner', on='DUID')
 
     # Scale lower reg lower trapezium slope.
-    lower_reg['LOWBREAKPOINT'] = np.where((lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN']) & 
+    lower_reg['LOWBREAKPOINT'] = np.where((lower_reg['LOWERREGENABLEMENTMIN'] > lower_reg['ENABLEMENTMIN']) &
                                           (lower_reg['LOWERREGENABLEMENTMIN'] > 0.0),
                                           lower_reg['LOWBREAKPOINT'] +
                                           (lower_reg['LOWERREGENABLEMENTMIN'] - lower_reg['ENABLEMENTMIN']),
@@ -1419,7 +1562,7 @@ def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
                                           lower_reg['LOWERREGENABLEMENTMIN'], lower_reg['ENABLEMENTMIN'])
     # Scale lower reg upper trapezium slope.
     lower_reg['HIGHBREAKPOINT'] = np.where((lower_reg['LOWERREGENABLEMENTMAX'] < lower_reg['ENABLEMENTMAX']) &
-                                          (lower_reg['LOWERREGENABLEMENTMAX'] > 0.0),
+                                           (lower_reg['LOWERREGENABLEMENTMAX'] > 0.0),
                                            lower_reg['HIGHBREAKPOINT'] -
                                            (lower_reg['ENABLEMENTMAX'] - lower_reg['LOWERREGENABLEMENTMAX']),
                                            lower_reg['HIGHBREAKPOINT'])
@@ -1438,7 +1581,7 @@ def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
                                           raise_reg['RAISEREGENABLEMENTMIN'], raise_reg['ENABLEMENTMIN'])
     # Scale raise reg upper trapezium slope.
     raise_reg['HIGHBREAKPOINT'] = np.where((raise_reg['RAISEREGENABLEMENTMAX'] < raise_reg['ENABLEMENTMAX']) &
-                                          (raise_reg['RAISEREGENABLEMENTMAX'] > 0.0),
+                                           (raise_reg['RAISEREGENABLEMENTMAX'] > 0.0),
                                            raise_reg['HIGHBREAKPOINT'] -
                                            (raise_reg['ENABLEMENTMAX'] - raise_reg['RAISEREGENABLEMENTMAX']),
                                            raise_reg['HIGHBREAKPOINT'])
@@ -2184,4 +2327,3 @@ def _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
     ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
     ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
     return ic
-

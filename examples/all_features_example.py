@@ -1,54 +1,60 @@
 # Notice:
-# - This script downloads large volumes of historical market data from AEMO's nemweb
-#   portal. The boolean on line 20 can be changed to prevent this happening repeatedly
-#   once the data has been downloaded.
-# - This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1
-#   pip install plotly==5.3.1 and pip install kaleido==0.2.1
+# - This script downloads large volumes of historical market data (~54 GB) from AEMO's nemweb
+#   portal. You can also reduce the data usage by restricting the time window given to the
+#   xml_cache_manager and in the get_test_intervals function. The boolean on line 22 can
+#   also be changed to prevent this happening repeatedly once the data has been downloaded.
 
 import sqlite3
+from datetime import datetime, timedelta
+import random
 import pandas as pd
-import plotly.graph_objects as go
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
-    xml_cache, units, demand, interconnectors, \
-    constraints
+    xml_cache, units, demand, interconnectors, constraints
 
-con = sqlite3.connect('historical_mms.db')
+con = sqlite3.connect('D:/nempy_2021/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2021/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = True
+download_inputs = False
 
 if download_inputs:
-    # This requires approximately 5 GB of storage.
-    mms_db_manager.populate(start_year=2019, start_month=1,
-                            end_year=2019, end_month=1)
+    # This requires approximately 4 GB of storage.
+    mms_db_manager.populate(start_year=2021, start_month=1,
+                            end_year=2021, end_month=1)
 
-    # This requires approximately 3.5 GB of storage.
-    xml_cache_manager.populate_by_day(start_year=2019, start_month=1, start_day=1,
-                                      end_year=2019, end_month=1, end_day=1)
+    # This requires approximately 50 GB of storage.
+    xml_cache_manager.populate_by_day(start_year=2021, start_month=1, start_day=1,
+                                      end_year=2021, end_month=2, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
     market_management_system_database=mms_db_manager)
 
+
 # A list of intervals we want to recreate historical dispatch for.
-dispatch_intervals = ['2019/01/01 12:00:00',
-                      '2019/01/01 12:05:00',
-                      '2019/01/01 12:10:00',
-                      '2019/01/01 12:15:00',
-                      '2019/01/01 12:20:00',
-                      '2019/01/01 12:25:00',
-                      '2019/01/01 12:30:00']
+def get_test_intervals(number=100):
+    start_time = datetime(year=2021, month=12, day=1, hour=0, minute=0)
+    end_time = datetime(year=2021, month=12, day=31, hour=0, minute=0)
+    difference = end_time - start_time
+    difference_in_5_min_intervals = difference.days * 12 * 24
+    random.seed(1)
+    intervals = random.sample(range(1, difference_in_5_min_intervals), number)
+    times = [start_time + timedelta(minutes=5 * i) for i in intervals]
+    times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
+    return times_formatted
+
 
 # List for saving outputs to.
 outputs = []
-
+c = 0
 # Create and dispatch the spot market for each dispatch interval.
-for interval in dispatch_intervals:
+for interval in get_test_intervals(number=100):
+    c += 1
+    print(str(c) + ' ' + str(interval))
     raw_inputs_loader.set_interval(interval)
     unit_inputs = units.UnitData(raw_inputs_loader)
     interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -80,7 +86,7 @@ for interval in dispatch_intervals:
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     # Set unit ramp rates.
-    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(fast_start_run=False)
+    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type="fast_start_first_run")
     market.set_unit_ramp_up_constraints(
         ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
     market.set_unit_ramp_down_constraints(
@@ -99,10 +105,10 @@ for interval in dispatch_intervals:
     regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
     market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
     market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(fast_start_run=False)
+    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(run_type="fast_start_first_run")
     market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
     market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(fast_start_run=False)
+    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(run_type="fast_start_first_run")
     market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
     market.make_constraints_elastic('joint_ramping_raise_reg', cost)
     contingency_trapeziums = unit_inputs.get_contingency_services()
@@ -135,25 +141,48 @@ for interval in dispatch_intervals:
     # Set the operational demand to be met by dispatch.
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
-    
+
+    # Set tiebreak constraint to equalise dispatch of equally priced bids.
+    cost = constraint_inputs.get_constraint_violation_prices()['tiebreak']
+    market.set_tie_break_constraints(cost)
+
     # Get unit dispatch without fast start constraints and use it to
     # make fast start unit commitment decisions.
     market.dispatch()
     dispatch = market.get_unit_dispatch()
+
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market.get_constraint_set_names():
+
+    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type="fast_start_second_run")
+    market.set_unit_ramp_up_constraints(
+        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+    market.set_unit_ramp_down_constraints(
+        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+    cost = constraint_inputs.get_constraint_violation_prices()['ramp_rate']
+    market.make_constraints_elastic('ramp_up', violation_cost=cost)
+    market.make_constraints_elastic('ramp_down', violation_cost=cost)
+
+    cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
+    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(run_type="fast_start_second_run")
+    market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
+    market.make_constraints_elastic('joint_ramping_lower_reg', cost)
+    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(run_type="fast_start_second_run")
+    market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
+    market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+
+    if 'fast_start' in market._constraints_rhs_and_type.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
-    # If AEMO historical used the over constrained dispatch rerun
+    # If AEMO historically used the over constrained dispatch rerun
     # process then allow it to be used in dispatch. This is needed
     # because sometimes the conditions for over constrained dispatch
     # are present but the rerun process isn't used.
     if constraint_inputs.is_over_constrained_dispatch_rerun():
         market.dispatch(allow_over_constrained_dispatch_re_run=True,
                         energy_market_floor_price=-1000.0,
-                        energy_market_ceiling_price=14500.0,
+                        energy_market_ceiling_price=15000.0,
                         fcas_market_ceiling_price=1000.0)
     else:
         # The market price ceiling and floor are not needed here
@@ -177,57 +206,24 @@ for interval in dispatch_intervals:
     outputs.append(
         prices.loc[:, ['time', 'region', 'price', 'ROP']])
 
+con.close()
+
 outputs = pd.concat(outputs)
 
-# Plot results for QLD market region.
-qld_prices = outputs[outputs['region'] == 'QLD1']
+outputs['error'] = outputs['price'] - outputs['ROP']
 
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['price'], name='Nempy price', mode='markers',
-                         marker_size=12, marker_symbol='circle'))
-fig.add_trace(go.Scatter(x=qld_prices['time'], y=qld_prices['ROP'], name='Historical price', mode='markers',
-                         marker_size=8))
-fig.update_xaxes(title="Time")
-fig.update_yaxes(title="Price ($/MWh)")
-fig.update_layout(yaxis_range=[0.0, 100.0], title="QLD Region Price")
-fig.write_image('full_featured_market_qld_prices.png')
-fig.show()
+print('\n Summary of error in energy price volume weighted average price. \n'
+      'Comparison is against ROP, the price prior to \n'
+      'any post dispatch adjustments, scaling, capping etc.')
+print('Mean price error: {}'.format(outputs['error'].mean()))
+print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
+print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
+print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
 
-con.close()
-print(outputs)
-#                   time region      price       ROP
-# 0  2019/01/01 12:00:00   NSW1  91.870167  91.87000
-# 1  2019/01/01 12:00:00   QLD1  76.190796  76.19066
-# 2  2019/01/01 12:00:00    SA1  86.899534  86.89938
-# 3  2019/01/01 12:00:00   TAS1  89.805037  89.70523
-# 4  2019/01/01 12:00:00   VIC1  84.984255  84.98410
-# 0  2019/01/01 12:05:00   NSW1  91.870496  91.87000
-# 1  2019/01/01 12:05:00   QLD1  64.991736  64.99000
-# 2  2019/01/01 12:05:00    SA1  87.462599  87.46213
-# 3  2019/01/01 12:05:00   TAS1  90.178036  90.08096
-# 4  2019/01/01 12:05:00   VIC1  85.556009  85.55555
-# 0  2019/01/01 12:10:00   NSW1  91.870496  91.87000
-# 1  2019/01/01 12:10:00   QLD1  64.991736  64.99000
-# 2  2019/01/01 12:10:00    SA1  86.868556  86.86809
-# 3  2019/01/01 12:10:00   TAS1  89.983716  89.87995
-# 4  2019/01/01 12:10:00   VIC1  84.936150  84.93569
-# 0  2019/01/01 12:15:00   NSW1  91.870496  91.87000
-# 1  2019/01/01 12:15:00   QLD1  64.776456  64.78003
-# 2  2019/01/01 12:15:00    SA1  86.844540  86.84407
-# 3  2019/01/01 12:15:00   TAS1  89.582288  89.48585
-# 4  2019/01/01 12:15:00   VIC1  84.990796  84.99034
-# 0  2019/01/01 12:20:00   NSW1  91.870496  91.87000
-# 1  2019/01/01 12:20:00   QLD1  64.776456  64.78003
-# 2  2019/01/01 12:20:00    SA1  87.496112  87.49564
-# 3  2019/01/01 12:20:00   TAS1  90.291144  90.28958
-# 4  2019/01/01 12:20:00   VIC1  85.594840  85.59438
-# 0  2019/01/01 12:25:00   NSW1  91.870167  91.87000
-# 1  2019/01/01 12:25:00   QLD1  64.991736  64.99000
-# 2  2019/01/01 12:25:00    SA1  87.519993  87.51983
-# 3  2019/01/01 12:25:00   TAS1  90.488064  90.38750
-# 4  2019/01/01 12:25:00   VIC1  85.630617  85.63046
-# 0  2019/01/01 12:30:00   NSW1  91.870496  91.87000
-# 1  2019/01/01 12:30:00   QLD1  64.991736  64.99000
-# 2  2019/01/01 12:30:00    SA1  87.462000  87.46153
-# 3  2019/01/01 12:30:00   TAS1  90.196284  90.09919
-# 4  2019/01/01 12:30:00   VIC1  85.573321  85.57286
+#  Summary of error in energy price volume weighted average price.
+# Comparison is against ROP, the price prior to
+# any post dispatch adjustments, scaling, capping etc.
+# Mean price error: -0.32820448520327244
+# Median price error: 0.0
+# 5% percentile price error: -0.5389930178124978
+# 95% percentile price error: 0.13746097842649457

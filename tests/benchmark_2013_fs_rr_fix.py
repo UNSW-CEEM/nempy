@@ -2,18 +2,14 @@
 # - This script downloads large volumes of historical market data from AEMO's nemweb
 #   portal. The boolean on line 20 can be changed to prevent this happening repeatedly
 #   once the data has been downloaded.
-# - This example also requires plotly >= 5.3.1, < 6.0.0 and kaleido == 0.2.1
-#   pip install plotly==5.3.1 and pip install kaleido==0.2.1
 
 import sqlite3
 from datetime import datetime, timedelta
 import random
 import pandas as pd
-import numpy as np
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
-    xml_cache, units, demand, interconnectors, constraints, rhs_calculator
-from nempy.help_functions.helper_functions import update_rhs_values
+    xml_cache, units, demand, interconnectors, constraints
 
 
 con = sqlite3.connect('D:/nempy_2013/historical_mms.db')
@@ -45,7 +41,7 @@ def get_test_intervals(number=100):
     end_time = datetime(year=2013, month=12, day=31, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
-    random.seed(1)
+    random.seed(2)
     intervals = random.sample(range(1, difference_in_5_min_intervals), number)
     times = [start_time + timedelta(minutes=5 * i) for i in intervals]
     times_formatted = [t.isoformat().replace('T', ' ').replace('-', '/') for t in times]
@@ -54,10 +50,11 @@ def get_test_intervals(number=100):
 
 # List for saving outputs to.
 outputs = []
-
+c = 0
 # Create and dispatch the spot market for each dispatch interval.
-for interval in get_test_intervals(number=1000):
-    print(interval)
+for interval in get_test_intervals(number=1000):  # ['2013/03/06 11:35:00']
+    c += 1
+    print(str(c) + ' ' + str(interval))
     raw_inputs_loader.set_interval(interval)
     unit_inputs = units.UnitData(raw_inputs_loader)
     interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -89,7 +86,7 @@ for interval in get_test_intervals(number=1000):
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     # Set unit ramp rates.
-    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(fast_start_run=True)
+    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type="fast_start_first_run")
     market.set_unit_ramp_up_constraints(
         ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
     market.set_unit_ramp_down_constraints(
@@ -108,10 +105,10 @@ for interval in get_test_intervals(number=1000):
     regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
     market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
     market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(fast_start_run=True)
+    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(run_type="fast_start_first_run")
     market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
     market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(fast_start_run=True)
+    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(run_type="fast_start_first_run")
     market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
     market.make_constraints_elastic('joint_ramping_raise_reg', cost)
     contingency_trapeziums = unit_inputs.get_contingency_services()
@@ -145,12 +142,35 @@ for interval in get_test_intervals(number=1000):
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
 
+    # Set tiebreak constraint to equalise dispatch of equally priced bids.
+    cost = constraint_inputs.get_constraint_violation_prices()['tiebreak']
+    market.set_tie_break_constraints(cost)
+
     # Get unit dispatch without fast start constraints and use it to
     # make fast start unit commitment decisions.
     market.dispatch()
     dispatch = market.get_unit_dispatch()
+
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
     market.set_fast_start_constraints(fast_start_profiles)
+
+    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type="fast_start_second_run")
+    market.set_unit_ramp_up_constraints(
+        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
+    market.set_unit_ramp_down_constraints(
+        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+    cost = constraint_inputs.get_constraint_violation_prices()['ramp_rate']
+    market.make_constraints_elastic('ramp_up', violation_cost=cost)
+    market.make_constraints_elastic('ramp_down', violation_cost=cost)
+
+    cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
+    scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(run_type="fast_start_second_run")
+    market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
+    market.make_constraints_elastic('joint_ramping_lower_reg', cost)
+    scada_ramp_up_rates = unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(run_type="fast_start_second_run")
+    market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
+    market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+
     if 'fast_start' in market._constraints_rhs_and_type.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
@@ -192,6 +212,8 @@ for interval in get_test_intervals(number=1000):
     prices['ROP'] = prices['ROP'] / prices['demand']
     prices['price'] = prices['price'] / prices['demand']
 
+    market.get_unit_dispatch().to_csv('unit_dispatch.csv')
+
     outputs.append(prices.loc[:, ['time', 'price', 'ROP']])
 
 con.close()
@@ -200,20 +222,13 @@ outputs = pd.concat(outputs)
 
 outputs['error'] = outputs['price'] - outputs['ROP']
 
-outputs.to_csv('benchmark_2013_fs_rr_fix.csv')
+outputs.to_csv('prices.csv')
 
-print('\n Summary of error in energy price across all regions. \n'
-      'Comparison is against ROP, the region price prior to \n'
+print('\n Summary of error in energy price volume weighted average price. \n'
+      'Comparison is against ROP, the price prior to \n'
       'any post dispatch adjustments, scaling, capping etc.')
 print('Mean price error: {}'.format(outputs['error'].mean()))
 print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
 print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
 print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
 
-# Summary of error in energy price across all regions.
-# Comparison is against ROP, the region price prior to
-# any post dispatch adjustments, scaling, capping etc.
-# Mean price error: -0.2551808835554955
-# Median price error: 0.0
-# 5% percentile price error: -0.05010103219386006
-# 95% percentile price error: 1.0842529204604627
