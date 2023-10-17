@@ -58,7 +58,6 @@ constraints
     :autosummary:
     :members:
 
-
 RHSCalc
 ------------------
 
