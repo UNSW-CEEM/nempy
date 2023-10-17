@@ -66,4 +66,3 @@ RHSCalc
     :autosummary:
     :members:
 
-

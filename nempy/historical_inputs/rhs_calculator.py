@@ -5,35 +5,35 @@ from nempy.historical_inputs import xml_cache
 
 
 class RHSCalc:
+    """
+    Engine for calculating generic constraint right hand side (RHS) values from scratch based on the equations
+    provided in the NEMDE xml input files.
+
+    AEMO publishes the RHS values used in dispatch, however, those values are dynamically calculated by NEMDE and
+    depend on inputs such as transmission line flows, generator on statuses, and generator output levels. This class
+    allows the user to update the input values which the RHS equations depend on and then recalulate RHS values. The
+    primary reason for implementing this functionality is to allow the Bass link switch run to be implemented using
+    Nempy, which requires that the RHS values of a number of constraints to be recalculated for the case where the
+    bass link frequency controller is not active.
+
+    The methodology for the calculation is based on the description in the Constraint Implementation Guidelines
+    published by AEMO, :download:`see AEMO doc <../../docs/pdfs/Constraint Implementation Guidelines v3 FINAL Clean.pdf>`.
+    The main limitation of the method implemented is that it does not allow for the calculation of constraints that
+    use BRANCH operation. In 2013 there were three constraints using the branching operation (V^SML_NIL_3,
+    V^SML_NSWRB_2, V^S_HYCP, Q^NIL_GC), and in 2023 it appears the branch operation is no longer in active use.
+    While there are some difference between the RHS values produced, generally they are small,
+
+    Examples
+    --------
+    >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
+    >>> xml_cache_manager.load_interval('2019/01/01 00:00:00')
+    >>> rhs_calculator = RHSCalc(xml_cache_manager)
+
+    Parameters
+    ----------
+    xml_cache_manager: instance of nempy class XMLCacheManager
+    """
     def __init__(self, xml_cache_manager):
-        """
-        Engine for calculating generic constraint right hand side (RHS) values from scratch based on the equations
-        provided in the NEMDE xml input files.
-
-        AEMO publishes the RHS values used in dispatch, however, those values are dynamically calculated by NEMDE and
-        depend on inputs such as transmission line flows, generator on statuses, and generator output levels. This class
-        allows the user to update the input values which the RHS equations depend on and then recalulate RHS values. The
-        primary reason for implementing this functionality is to allow the Bass link switch run to be implemented using
-        Nempy, which requires that the RHS values of a number of constraints to be recalculated for the case where the
-        bass link frequency controller is not active.
-
-        The methodology for the calculation is based on the description in the Constraint Implementation Guidelines
-        published by AEMO, :download:`see AEMO doc <../../docs/pdfs/Constraint Implementation Guidelines v3 FINAL Clean.pdf>`.
-        The main limitation of the method implemented is that it does not allow for the calculation of constraints that
-        use BRANCH operation. In 2013 there were three constraints using the branching operation (V^SML_NIL_3,
-        V^SML_NSWRB_2, V^S_HYCP, Q^NIL_GC), and in 2023 it appears the branch operation is no longer in active use.
-        While there are some difference between the RHS values produced, generally they are small,
-
-        Examples
-        --------
-        >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
-        >>> xml_cache_manager.load_interval('2019/01/01 00:00:00')
-        >>> rhs_calculator = RHSCalc(xml_cache_manager)
-
-        Parameters
-        ----------
-        xml_cache_manager: instance of nempy class XMLCacheManager
-        """
         self.inputs = xml_cache_manager.xml['NEMSPDCaseFile']['NemSpdInputs']
         self.xml_cache_manager = xml_cache_manager
         self.scada_data = self._reformat_scada_data(self.inputs['ConstraintScadaDataCollection']['ConstraintScadaData'])
