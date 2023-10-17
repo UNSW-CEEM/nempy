@@ -19,7 +19,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2021/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
@@ -171,7 +171,7 @@ for interval in get_test_intervals(number=100):
     market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
     market.make_constraints_elastic('joint_ramping_raise_reg', cost)
 
-    if 'fast_start' in market._constraints_rhs_and_type.keys():
+    if 'fast_start' in market.get_constraint_set_names.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 

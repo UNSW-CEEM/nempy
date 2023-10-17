@@ -4,9 +4,9 @@ from nempy.historical_inputs import loaders, mms_db, \
     constraints
 import sqlite3
 
-interval = '2021/12/30 22:45:00'
+interval = '2013/03/06 11:35:00'
 
-con = sqlite3.connect('D:/nempy_2021/historical_mms.db')
+con = sqlite3.connect('D:/nempy_2013/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
 # prices = pd.read_csv('prices.csv')

@@ -10,11 +10,13 @@ from nempy.historical_inputs import xml_cache
 
 def test_single_equation():
     xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
-    xml_cache_manager.load_interval('2013/01/01 00:00:00')
+    xml_cache_manager.load_interval('2013/01/04 12:40:00')
     rhs_calculator = RHSCalc(xml_cache_manager)
     print(xml_cache_manager.get_file_path())
-    assert (rhs_calculator.compute_constraint_rhs('F_T++NIL_BLSPS_L5') ==
-            pytest.approx(rhs_calculator.get_nemde_rhs('F_T++NIL_BLSPS_L5'), 0.001))
+    con = 'F_MAIN++NIL_MG_R6'
+    print(rhs_calculator.compute_constraint_rhs(con) - rhs_calculator.get_nemde_rhs(con))
+    assert (rhs_calculator.compute_constraint_rhs(con) ==
+            pytest.approx(rhs_calculator.get_nemde_rhs(con), 0.001))
 
 
 def test_rhs_equations_in_order_of_length_all():
@@ -87,6 +89,9 @@ def test_rhs_equations_in_order_of_length_all():
     errors['error'] = (errors['nemde_rhs'] - errors['nempy_rhs']).abs()
 
     errors.to_csv('rhs_calculation_errors.csv')
+
+    basslink_errors = errors[errors['rhs_id'].isin(basslink_dep_equations)]
+    basslink_errors.to_csv('basslink_rhs_calculation_errors.csv')
 
     errors_summary = errors.groupby('rhs_id', as_index=False).agg({'error': 'max'})
     errors_summary.to_csv('rhs_calculation_errors_summary.csv')

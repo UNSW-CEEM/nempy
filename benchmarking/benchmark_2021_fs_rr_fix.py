@@ -57,7 +57,7 @@ outputs = []
 
 # Create and dispatch the spot market for each dispatch interval.
 c = 0
-for interval in ['2021/12/30 22:45:00']:  # get_test_intervals(number=1000):
+for interval in ['2021/12/05 11:15:00']:  # get_test_intervals(number=1000):
     c += 1
     print(str(c) + ' ' + str(interval))
     raw_inputs_loader.set_interval(interval)

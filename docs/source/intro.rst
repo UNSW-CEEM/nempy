@@ -1,15 +1,10 @@
 Introduction
 ============
 Nempy is an open-source python package that can be used to model the dispatch procedure of the Australian National
-Electricity Market (NEM). The dispatch process is at the core of many market modelling projects. As the
-NEM evolves, constraints and ancillary service markets are becoming increasingly important in shaping dispatch outcomes.
-As part of the ongoing reform process significant changes to the dispatch process have also been proposed, for example,
-the introduction of an operating reserve market is being considered, as is the adoption of a dynamic intra-regional loss
-model. Nempy allows users to easily configure a dispatch model to fit the relevant research question. Furthermore, if
-extra functionality is needed, the python implementation, open-source licencings.
-
-Nempy is feature rich, flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, and has detailed
-documentation.
+Electricity Market (NEM). The dispatch process is at the core of many market modelling studies. Nempy allows users to
+easily configure a dispatch model to fit the relevant research question. Furthermore, if extra functionality is needed,
+the python implementation and open-source licencings allow the user to make modifications. Nempy is feature rich,
+flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, and has detailed documentation.
 
 The Nempy source code is on GitHub: https://github.com/UNSW-CEEM/nempy.
 
@@ -35,9 +30,9 @@ Example use cases
 Nempy is intended for analysts and modellers studying the NEM either in industry or academic. It can be
 used either as is, or as building block in a large modelling tool. Some potential use case are:
 
-#. As a tool for studying the dispatch process itself. The example shown in the:ref:`section on model accuracy <Accuracy>`
+#. As a tool for studying the dispatch process itself. The example shown in the :ref:`section on model accuracy <Accuracy>`
    below demonstrates how model simplifications effects accuracy, this is potentially useful information for other
-   NEM modeller either using Nempy or other modelling tools.
+   NEM modellers either using Nempy or other modelling tools.
 #. As a building block in agent based market models, as part of the environment for agents to interact with.
 #. To answer counter factual questions about historical dispatch outcomes. For example, how removing a network
    constraint would have effected dispatch and pricing outcomes?
@@ -70,9 +65,9 @@ market trade. The construction of the MIP as implemented by Nempy proceeds rough
 
 Differences between Nempy and the dispatch procedure:
 
-#. While updated functionality in Nempy 1.2.0 now provides the capability to calculate RHS values dynamically based on
-   SCADA and other data sources, in the detailed examples provided for recreating dispatch only RHS values relating to
-   the Basslink switch run are calculated by Nempy, and other RHS values are taken from the NEMDE solution file.
+#. While updated functionality in Nempy 2.0.0 now provides the capability to calculate RHS values dynamically based on
+   SCADA and other data sources, the detailed examples provided for recreating dispatch only calculate RHS values
+   relating to the Basslink switch, and other RHS values are taken from the NEMDE solution file.
 
 
 Features

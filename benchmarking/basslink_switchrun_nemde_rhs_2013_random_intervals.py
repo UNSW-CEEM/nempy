@@ -1,35 +1,35 @@
 # Notice:
 # - This script downloads large volumes of historical market data (~54 GB) from AEMO's nemweb
-#   portal. You can also reduce the data usage by restricting the time window given to the
-#   xml_cache_manager and in the get_test_intervals function. The boolean on line 23 can
-#   also be changed to prevent this happening repeatedly once the data has been downloaded.
+#   portal. The boolean on line 21 can be changed to prevent this happening repeatedly
+#   once the data has been downloaded.
 
 import sqlite3
 from datetime import datetime, timedelta
 import random
 import pandas as pd
+import numpy as np
 from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, constraints, rhs_calculator
 from nempy.help_functions.helper_functions import update_rhs_values
 
-con = sqlite3.connect('D:/nempy_2021/historical_mms.db')
+con = sqlite3.connect('D:/nempy_2013/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2021/xml_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2013/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = True
+download_inputs = False
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
-    mms_db_manager.populate(start_year=2021, start_month=1,
-                            end_year=2021, end_month=1)
+    mms_db_manager.populate(start_year=2013, start_month=1,
+                            end_year=2013, end_month=12)
 
     # This requires approximately 50 GB of storage.
-    xml_cache_manager.populate_by_day(start_year=2021, start_month=1, start_day=1,
-                                      end_year=2021, end_month=2, end_day=1)
+    xml_cache_manager.populate_by_day(start_year=2013, start_month=1, start_day=1,
+                                      end_year=2014, end_month=1, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
@@ -38,8 +38,8 @@ raw_inputs_loader = loaders.RawInputsLoader(
 
 # A list of intervals we want to recreate historical dispatch for.
 def get_test_intervals(number=100):
-    start_time = datetime(year=2021, month=12, day=1, hour=0, minute=0)
-    end_time = datetime(year=2021, month=12, day=31, hour=0, minute=0)
+    start_time = datetime(year=2013, month=1, day=1, hour=0, minute=0)
+    end_time = datetime(year=2013, month=12, day=31, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
@@ -53,7 +53,7 @@ def get_test_intervals(number=100):
 outputs = []
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
-for interval in get_test_intervals(number=100):
+for interval in get_test_intervals(number=1000):
     c += 1
     print(str(c) + ' ' + str(interval))
     raw_inputs_loader.set_interval(interval)
@@ -115,7 +115,6 @@ for interval in get_test_intervals(number=100):
     market.set_joint_capacity_constraints(contingency_trapeziums)
     market.make_constraints_elastic('joint_capacity', cost)
 
-
     def set_joint_ramping_constraints(run_type):
         cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
         scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
@@ -136,26 +135,31 @@ for interval in get_test_intervals(number=100):
     loss_functions, interpolation_break_points = \
         interconnector_inputs.get_interconnector_loss_model()
     market.set_interconnectors(interconnectors_definitions)
-    market.set_interconnector_losses(loss_functions,
-                                     interpolation_break_points)
+    market.set_interconnector_losses(loss_functions, interpolation_break_points)
 
-    # Calculate rhs constraint values that depend on the basslink frequency controller from scratch so there is
-    # consistency between the basslink switch runs.
-    # Find the constraints that need to be calculated because they depend on the frequency controller status.
-    constraints_to_update = (
-        rhs_calculation_engine.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W'))
-    initial_bl_freq_onstatus = rhs_calculation_engine.scada_data['W']['BL_FREQ_ONSTATUS'][0]['@Value']
-    # Calculate new rhs values for the constraints that need updating.
-    new_rhs_values = rhs_calculation_engine.compute_constraint_rhs(constraints_to_update)
+    fcas_requirements = constraint_inputs.get_fcas_requirements()
+    generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
+
+    initial_bl_freq_on_status = rhs_calculation_engine.scada_data['W']['BL_FREQ_ONSTATUS'][0]['@Value']
+    freq_on_status_best_run = (
+        xml_cache_manager.xml)['NEMSPDCaseFile']['NemSpdOutputs']['PeriodSolution']['@SwitchRunBestStatus']
+
+    # Calculate constraint RHS values that depend on Basslink frequency controller status if the best run status
+    # wasn't the initial status.
+    if initial_bl_freq_on_status != freq_on_status_best_run:
+        # Calculate rhs constraint values that depend on the basslink frequency controller
+        # Find the constraints that need to be calculated because they depend on the frequency controller status.
+        constraints_to_update = (
+            rhs_calculation_engine.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W'))
+        # Calculate new rhs values for the constraints that need updating.
+        new_rhs_values = rhs_calculation_engine.compute_constraint_rhs(constraints_to_update)
+        fcas_requirements = update_rhs_values(fcas_requirements, new_rhs_values)
+        generic_rhs = update_rhs_values(generic_rhs, new_rhs_values)
 
     # Add generic constraints and FCAS market constraints.
-    fcas_requirements = constraint_inputs.get_fcas_requirements()
-    fcas_requirements = update_rhs_values(fcas_requirements, new_rhs_values)
     market.set_fcas_requirements_constraints(fcas_requirements)
     violation_costs = constraint_inputs.get_violation_costs()
     market.make_constraints_elastic('fcas', violation_cost=violation_costs)
-    generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
-    generic_rhs = update_rhs_values(generic_rhs, new_rhs_values)
     market.set_generic_constraints(generic_rhs)
     market.make_constraints_elastic('generic', violation_cost=violation_costs)
 
@@ -177,10 +181,13 @@ for interval in get_test_intervals(number=100):
     # make fast start unit commitment decisions.
     market.dispatch()
     dispatch = market.get_unit_dispatch()
+
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-    set_ramp_rates(run_type='fast_start_second_run')
-    set_joint_ramping_constraints(run_type='fast_start_second_run')
     market.set_fast_start_constraints(fast_start_profiles)
+
+    set_ramp_rates(run_type="fast_start_second_run")
+    set_joint_ramping_constraints(run_type="fast_start_second_run")
+
     if 'fast_start' in market._constraints_rhs_and_type.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
@@ -191,25 +198,34 @@ for interval in get_test_intervals(number=100):
     if constraint_inputs.is_over_constrained_dispatch_rerun():
         market.dispatch(allow_over_constrained_dispatch_re_run=True,
                         energy_market_floor_price=-1000.0,
-                        energy_market_ceiling_price=15000.0,
+                        energy_market_ceiling_price=14500.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_one = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
+    dispatch_run_one = market.get_unit_dispatch()
 
     # Re-run dispatch with Basslink Frequency controller off.
-    # Set frequency controller to off in rhs calculations
-    rhs_calculation_engine.update_spd_id_value('BL_FREQ_ONSTATUS', 'W', '0')
-    new_bl_freq_onstatus = rhs_calculation_engine.scada_data['W']['BL_FREQ_ONSTATUS'][0]['@Value']
-    # Find the constraints that need to be updated because they depend on the frequency controller status.
-    constraints_to_update = (
-        rhs_calculation_engine.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W'))
-    # Calculate new rhs values for the constraints that need updating.
-    new_rhs_values = rhs_calculation_engine.compute_constraint_rhs(constraints_to_update)
+    fcas_requirements = constraint_inputs.get_fcas_requirements()
+    generic_rhs = constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
+
+    # Calculate constraint RHS values that depend on Basslink frequency controller status if the best run status
+    # was the initial status.
+    if initial_bl_freq_on_status == freq_on_status_best_run:
+        # Set frequency controller to off in rhs calculations
+        rhs_calculation_engine.update_spd_id_value('BL_FREQ_ONSTATUS', 'W', '0')
+        new_bl_freq_onstatus = rhs_calculation_engine.scada_data['W']['BL_FREQ_ONSTATUS'][0]['@Value']
+        # Find the constraints that need to be updated because they depend on the frequency controller status.
+        constraints_to_update = (
+            rhs_calculation_engine.get_rhs_constraint_equations_that_depend_value('BL_FREQ_ONSTATUS', 'W'))
+        # Calculate new rhs values for the constraints that need updating.
+        new_rhs_values = rhs_calculation_engine.compute_constraint_rhs(constraints_to_update)
+
+        fcas_requirements = update_rhs_values(fcas_requirements, new_rhs_values)
+        generic_rhs = update_rhs_values(generic_rhs, new_rhs_values)
+
     # Update the constraints in the market.
-    fcas_requirements = update_rhs_values(fcas_requirements, new_rhs_values)
     violation_costs = constraint_inputs.get_violation_costs()
     market.set_fcas_requirements_constraints(fcas_requirements)
     market.make_constraints_elastic('fcas', violation_cost=violation_costs)
-    generic_rhs = update_rhs_values(generic_rhs, new_rhs_values)
     market.set_generic_constraints(generic_rhs)
     market.make_constraints_elastic('generic', violation_cost=violation_costs)
 
@@ -226,7 +242,7 @@ for interval in get_test_intervals(number=100):
     set_ramp_rates(run_type='fast_start_second_run')
     set_joint_ramping_constraints(run_type='fast_start_second_run')
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market.get_constraint_set_names():
+    if 'fast_start' in market._constraints_rhs_and_type.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
@@ -235,28 +251,67 @@ for interval in get_test_intervals(number=100):
     if constraint_inputs.is_over_constrained_dispatch_rerun():
         market.dispatch(allow_over_constrained_dispatch_re_run=True,
                         energy_market_floor_price=-1000.0,
-                        energy_market_ceiling_price=15000.0,
+                        energy_market_ceiling_price=14500.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_two = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
+    dispatch_run_two = market.get_unit_dispatch()
 
     prices_run_one['time'] = interval
+    prices_run_one = prices_run_one.rename(columns={'price': 'run_one_price'})
+
     prices_run_two['time'] = interval
+    prices_run_two['run_two_BL_FREQ_ONSTATUS'] = new_bl_freq_onstatus
+    prices_run_two['run_two_obj_value'] = objective_value_run_two
+    prices_run_two = prices_run_two.rename(columns={'price': 'run_two_price'})
 
     # Getting historical prices for comparison. Note, ROP price, which is
     # the regional reference node price before the application of any
     # price scaling by AEMO, is used for comparison.
     historical_prices = mms_db_manager.DISPATCHPRICE.get_data(interval)
 
-    # The prices from the run with the lowest objective function value are used.
-    if objective_value_run_one < objective_value_run_two:
-        prices = prices_run_one
-    else:
-        prices = prices_run_two
+    prices_run_one = pd.merge(prices_run_one, historical_prices,
+                              left_on=['time', 'region'],
+                              right_on=['SETTLEMENTDATE', 'REGIONID'])
 
-    prices['time'] = interval
-    prices = pd.merge(prices, historical_prices,
-                      left_on=['time', 'region'],
-                      right_on=['SETTLEMENTDATE', 'REGIONID'])
+    prices_run_two = pd.merge(prices_run_two, historical_prices,
+                              left_on=['time', 'region'],
+                              right_on=['SETTLEMENTDATE', 'REGIONID'])
+
+    prices_run_one = prices_run_one.loc[:, ['time', 'region', 'ROP', 'run_one_price']]
+    prices_run_one = pd.merge(prices_run_one, regional_demand.loc[:, ['region', 'demand']], on='region')
+    prices_run_one['ROP'] = prices_run_one['ROP'] * prices_run_one['demand']
+    prices_run_one['run_one_price'] = prices_run_one['run_one_price'] * prices_run_one['demand']
+    prices_run_one = prices_run_one.groupby(['time'], as_index=False).agg(
+        {'ROP': 'sum', 'run_one_price': 'sum', 'demand': 'sum', })
+    prices_run_one['ROP'] = prices_run_one['ROP'] / prices_run_one['demand']
+    prices_run_one['run_one_price'] = prices_run_one['run_one_price'] / prices_run_one['demand']
+    prices_run_one['run_one_BL_FREQ_ONSTATUS'] = initial_bl_freq_on_status
+    prices_run_one['run_one_obj_value'] = objective_value_run_one
+
+    prices_run_two = prices_run_two.loc[:, ['time', 'region', 'run_two_price', 'run_two_BL_FREQ_ONSTATUS',
+                                            'run_two_obj_value']]
+    prices_run_two = pd.merge(prices_run_two, regional_demand.loc[:, ['region', 'demand']], on='region')
+    prices_run_two['run_two_price'] = prices_run_two['run_two_price'] * prices_run_two['demand']
+    prices_run_two = prices_run_two.groupby(['time'], as_index=False).agg(
+        {'run_two_price': 'sum', 'demand': 'sum', })
+    prices_run_two['run_two_price'] = prices_run_two['run_two_price'] / prices_run_two['demand']
+    prices_run_two['run_two_BL_FREQ_ONSTATUS'] = new_bl_freq_onstatus
+    prices_run_two['run_two_obj_value'] = objective_value_run_two
+
+    prices = pd.merge(prices_run_one, prices_run_two, on=['time'])
+
+    if objective_value_run_one <= objective_value_run_two:
+        nempy_switch_run_best_status = initial_bl_freq_on_status
+        prices['nempy_price'] = prices['run_one_price']
+        dispatch_run_one.to_csv('dispatch.csv')
+    else:
+        nempy_switch_run_best_status = new_bl_freq_onstatus
+        prices['nempy_price'] = prices['run_two_price']
+        dispatch_run_two.to_csv('dispatch.csv')
+
+    prices['nempy_switch_run_best_status'] = nempy_switch_run_best_status
+    prices['nemde_switch_run_best_status'] = (
+        xml_cache_manager.xml)['NEMSPDCaseFile']['NemSpdOutputs']['PeriodSolution']['@SwitchRunBestStatus']
 
     outputs.append(prices)
 
@@ -264,20 +319,4 @@ con.close()
 
 outputs = pd.concat(outputs)
 
-outputs['error'] = outputs['price'] - outputs['ROP']
-
-print('\n Summary of error in energy price volume weighted average price. \n'
-      'Comparison is against ROP, the price prior to \n'
-      'any post dispatch adjustments, scaling, capping etc.')
-print('Mean price error: {}'.format(outputs['error'].mean()))
-print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
-print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
-print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
-
-#  Summary of error in energy price volume weighted average price.
-# Comparison is against ROP, the price prior to
-# any post dispatch adjustments, scaling, capping etc.
-# Mean price error: -0.3284696359015098
-# Median price error: 0.0
-# 5% percentile price error: -0.5389930178124978
-# 95% percentile price error: 0.13746097842649457
+outputs.to_csv('nempy_check_blsr_pricing_nemde_rhs_2013_random_intervals.csv')

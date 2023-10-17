@@ -478,7 +478,11 @@ class RHSCalc:
                 for scada in scadas:
                     # if scada['@Can_Use_Value'] == 'False':
                     #     raise ValueError("Bad SCADA value")
-                    value += float(scada['@Value'])
+                    if '@EMS_ID' in scada.keys() and scada['@EMS_ID'] in []:
+                        # value -= float(scada['@Value'])
+                        pass
+                    else:
+                        value += float(scada['@Value'])
         elif term['@SpdID'] in self.unit_initial_mw and term['@SpdType'] == 'T':
             value = self.unit_initial_mw[term['@SpdID']]
         elif term['@SpdID'] in self.entered_values and term['@SpdType'] == 'E':
@@ -710,7 +714,10 @@ def _square(stack, term):
         stack[0] = stack[0] ** 2 * float(term['@Multiplier'])
     else:
         # If not type U the apply the POW2 operation to the term value.
-        stack[0] += float(term['@Value']) ** 2 * float(term['@Multiplier'])
+        if term['@SpdType'] == 'C':
+            stack[0] += float(term['@Multiplier']) ** 2
+        else:
+            stack[0] += float(term['@Value']) ** 2 * float(term['@Multiplier'])
     return stack
 
 
@@ -721,8 +728,11 @@ def _cube(stack, term):
         # If type U then apply the POW2 operation to the element on top of the stack.
         stack[0] = stack[0] ** 3 * float(term['@Multiplier'])
     else:
-        # If not type U the apply the POW3 operation to the term value.
-        stack[0] += float(term['@Value']) ** 3 * float(term['@Multiplier'])
+        # If not type U the apply the POW3 operation to the term value
+        if term['@SpdType'] == 'C':
+            stack[0] += float(term['@Multiplier']) ** 3
+        else:
+            stack[0] += float(term['@Value']) ** 3 * float(term['@Multiplier'])
     return stack
 
 
@@ -734,7 +744,10 @@ def _sqrt(stack, term):
         stack[0] = stack[0] ** 0.5 * float(term['@Multiplier'])
     else:
         # If not type U the apply the SQRT operation to the term value.
-        stack[0] += float(term['@Value']) ** 0.5 * float(term['@Multiplier'])
+        if term['@SpdType'] == 'C':
+            stack[0] += float(term['@Multiplier']) ** 0.5
+        else:
+            stack[0] += float(term['@Value']) ** 0.5 * float(term['@Multiplier'])
     return stack
 
 
@@ -746,7 +759,10 @@ def _absolute_value(stack, term):
         stack[0] = abs(stack[0]) * float(term['@Multiplier'])
     else:
         # If not type U the apply the ABS operation to the term value.
-        stack[0] += abs(float(term['@Value'])) * float(term['@Multiplier'])
+        if term['@SpdType'] == 'C':
+            stack[0] += abs(float(term['@Multiplier']))
+        else:
+            stack[0] += abs(float(term['@Value'])) * float(term['@Multiplier'])
     return stack
 
 
@@ -758,7 +774,10 @@ def _negation(stack, term):
         stack[0] = -1.0 * stack[0] * float(term['@Multiplier'])
     else:
         # If not type U the apply the NEG operation to the term value.
-        stack[0] += -1.0 * float(term['@Value']) * float(term['@Multiplier'])
+        if term['@SpdType'] == 'C':
+            stack[0] += -1.0 * float(term['@Multiplier'])
+        else:
+            stack[0] += -1.0 * float(term['@Value']) * float(term['@Multiplier'])
     return stack
 
 
@@ -782,7 +801,10 @@ def _add(stack, term):
     # and the term value.
     # See AEMO Constraint Implementation Guidelines section A.7.1 Add.
     value_one = _get_default_if_needed(term)
-    next_top_element = (float(value_one) + stack[0]) * float(term['@Multiplier'])
+    if term['@SpdType'] == 'C':
+        next_top_element = float(term['@Multiplier']) + stack[0]
+    else:
+        next_top_element = (float(value_one) + stack[0]) * float(term['@Multiplier'])
     stack.pop(0)
     stack.insert(0, next_top_element)
     return stack
@@ -804,7 +826,10 @@ def _subtract(stack, term):
     # stack and the term value.
     # See AEMO Constraint Implementation Guidelines section A.7.1 Subtract.
     value_one = _get_default_if_needed(term)
-    next_top_element = (stack[0] - float(value_one)) * float(term['@Multiplier'])
+    if term['@SpdType'] == 'C':
+        next_top_element = stack[0] - float(term['@Multiplier'])
+    else:
+        next_top_element = (stack[0] - float(value_one)) * float(term['@Multiplier'])
     stack.pop(0)
     stack.insert(0, next_top_element)
     return stack
@@ -827,7 +852,10 @@ def _multiply(stack, term):
     # element of the stack and the term value.
     # See AEMO Constraint Implementation Guidelines section A.7.3 Multiply.
     value_one = _get_default_if_needed(term)
-    next_top_element = (float(value_one) * stack[0]) * float(term['@Multiplier'])
+    if term['@SpdType'] == 'C':
+        next_top_element = (stack[0]) * float(term['@Multiplier'])
+    else:
+        next_top_element = (float(value_one) * stack[0]) * float(term['@Multiplier'])
     stack.pop(0)
     stack.insert(0, next_top_element)
     return stack
@@ -850,7 +878,10 @@ def _divide(stack, term):
     # element of the stack and the term value.
     # See AEMO Constraint Implementation Guidelines section A.7.4 Divide.
     value_one = _get_default_if_needed(term)
-    next_top_element = (stack[0] / float(value_one)) * float(term['@Multiplier'])
+    if term['@SpdType'] == 'C':
+        next_top_element = stack[0] / float(term['@Multiplier'])
+    else:
+        next_top_element = (stack[0] / float(value_one)) * float(term['@Multiplier'])
     stack.pop(0)
     stack.insert(0, next_top_element)
     return stack
@@ -872,7 +903,10 @@ def _maximum(stack, term):
     # and the term value.
     # See AEMO Constraint Implementation Guidelines section A.7.4 Maximum.
     value_one = _get_default_if_needed(term)
-    next_top_element = max(float(value_one), stack[0]) * float(term['@Multiplier'])
+    if term['@SpdType'] == 'C':
+        next_top_element = max(float(term['@Multiplier']), stack[0])
+    else:
+        next_top_element = max(float(value_one), stack[0]) * float(term['@Multiplier'])
     stack.pop(0)
     stack.insert(0, next_top_element)
     return stack
@@ -895,7 +929,10 @@ def _minimum(stack, term):
     # and the term value.
     # See AEMO Constraint Implementation Guidelines section A.7.6 Minimum.
     value_one = _get_default_if_needed(term)
-    next_top_element = min(float(value_one), stack[0]) * float(term['@Multiplier'])
+    if term['@SpdType'] == 'C':
+        next_top_element = min(float(term['@Multiplier']), stack[0])
+    else:
+        next_top_element = min(float(value_one), stack[0]) * float(term['@Multiplier'])
     stack.pop(0)
     stack.insert(0, next_top_element)
     return stack

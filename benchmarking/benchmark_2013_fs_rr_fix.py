@@ -52,7 +52,7 @@ def get_test_intervals(number=100):
 outputs = []
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
-for interval in get_test_intervals(number=1000):  # ['2013/03/06 11:35:00']
+for interval in get_test_intervals(number=1000):
     c += 1
     print(str(c) + ' ' + str(interval))
     raw_inputs_loader.set_interval(interval)
@@ -216,13 +216,16 @@ for interval in get_test_intervals(number=1000):  # ['2013/03/06 11:35:00']
 
     outputs.append(prices.loc[:, ['time', 'price', 'ROP']])
 
+    dispatch = market.get_unit_dispatch()
+    dispatch.to_csv('dispatch.csv')
+
 con.close()
 
 outputs = pd.concat(outputs)
 
 outputs['error'] = outputs['price'] - outputs['ROP']
 
-outputs.to_csv('prices.csv')
+# outputs.to_csv('prices.csv')
 
 print('\n Summary of error in energy price volume weighted average price. \n'
       'Comparison is against ROP, the price prior to \n'

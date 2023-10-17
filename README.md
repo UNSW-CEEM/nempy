@@ -86,7 +86,7 @@ If you use Nempy, please cite the package via the [JOSS paper](https://doi.org/1
 
 ## License
 
-Nempy was created by Nicholas Gormans. It is licensed under the terms of [the BSD 3-Clause Licence](./LICENSE).
+Nempy was created by Nicholas Gorman. It is licensed under the terms of [the BSD 3-Clause Licence](./LICENSE).
 
 ## Examples
 <details>

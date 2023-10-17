@@ -98,7 +98,7 @@ all the features of the Nempy market model, with inputs sourced from historical 
 been updated to include the use of functionality developed to enable modelling the Basslink switch run, which is new in
 Nempy version 2.0.0. Previously, Nempy relied on using the generic constraint RHS values reported with the NEMDE
 solution from what historically was the least cost case of the switch run. However, the new functionality allows the RHS
-values for each has of the switch run to be calculated by Nempy, and so for each case of switch run to be tested.
+values for each case of the switch run to be calculated by Nempy, and so for each case of switch run to be tested.
 
 .. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
@@ -119,7 +119,7 @@ conditions of the next interval, rather the historical initial conditions are al
 .. warning:: Warning this script downloads approximately 54 GB of data from AEMO. The download_inputs flag can be set
              to false to stop the script re-downloading data for subsequent runs.
 
-.. literalinclude:: ../../examples/all_features_example.py
+.. literalinclude:: ../../examples/all_features_example_except_basslink.py
     :linenos:
     :language: python
 

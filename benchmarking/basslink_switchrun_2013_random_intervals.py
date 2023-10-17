@@ -87,10 +87,9 @@ for interval in get_test_intervals(number=1000):
     cost = constraint_inputs.get_constraint_violation_prices()['uigf']
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
-
     # Set unit ramp rates.
     def set_ramp_rates(run_type):
-        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type='fast_start_first_run')
+        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type=run_type)
         market.set_unit_ramp_up_constraints(
             ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
         market.set_unit_ramp_down_constraints(
@@ -118,6 +117,7 @@ for interval in get_test_intervals(number=1000):
 
 
     def set_joint_ramping_constraints(run_type):
+        cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
         scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
             run_type=run_type)
         market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
@@ -169,6 +169,10 @@ for interval in get_test_intervals(number=1000):
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
 
+    # Set tiebreak constraint to equalise dispatch of equally priced bids.
+    cost = constraint_inputs.get_constraint_violation_prices()['tiebreak']
+    market.set_tie_break_constraints(cost)
+
     # Get unit dispatch without fast start constraints and use it to
     # make fast start unit commitment decisions.
     market.dispatch()
@@ -190,6 +194,7 @@ for interval in get_test_intervals(number=1000):
                         energy_market_ceiling_price=14500.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_one = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
+    dispatch_run_one = market.get_unit_dispatch()
 
     # Re-run dispatch with Basslink Frequency controller off.
     # Set frequency controller to off in rhs calculations
@@ -234,6 +239,7 @@ for interval in get_test_intervals(number=1000):
                         energy_market_ceiling_price=14500.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_two = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
+    dispatch_run_two = market.get_unit_dispatch()
 
     prices_run_one['time'] = interval
     prices_run_one = prices_run_one.rename(columns={'price': 'run_one_price'})
@@ -282,9 +288,11 @@ for interval in get_test_intervals(number=1000):
     if objective_value_run_one < objective_value_run_two:
         nempy_switch_run_best_status = initial_bl_freq_onstatus
         prices['nempy_price'] = prices['run_one_price']
+        dispatch_run_one.to_csv('dispatch.csv')
     else:
         nempy_switch_run_best_status = new_bl_freq_onstatus
         prices['nempy_price'] = prices['run_two_price']
+        dispatch_run_two.to_csv('dispatch.csv')
 
     prices['nempy_switch_run_best_status'] = nempy_switch_run_best_status
     prices['nemde_switch_run_best_status'] = (

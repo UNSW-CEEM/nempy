@@ -90,7 +90,7 @@ for interval in get_test_intervals(number=1000):
 
     # Set unit ramp rates.
     def set_ramp_rates(run_type):
-        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type='fast_start_first_run')
+        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type=run_type)
         market.set_unit_ramp_up_constraints(
             ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
         market.set_unit_ramp_down_constraints(
@@ -118,6 +118,7 @@ for interval in get_test_intervals(number=1000):
 
 
     def set_joint_ramping_constraints(run_type):
+        cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
         scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
             run_type=run_type)
         market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
@@ -168,6 +169,10 @@ for interval in get_test_intervals(number=1000):
     # Set the operational demand to be met by dispatch.
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
+
+    # Set tiebreak constraint to equalise dispatch of equally priced bids.
+    cost = constraint_inputs.get_constraint_violation_prices()['tiebreak']
+    market.set_tie_break_constraints(cost)
 
     # Get unit dispatch without fast start constraints and use it to
     # make fast start unit commitment decisions.
