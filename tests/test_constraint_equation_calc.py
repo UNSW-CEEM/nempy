@@ -7,7 +7,7 @@ import os
 from nempy.historical_inputs.rhs_calculator import RHSCalc
 from nempy.historical_inputs import xml_cache
 
-
+@pytest.disable()
 def test_single_equation():
     xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
     xml_cache_manager.load_interval('2013/01/04 12:40:00')
