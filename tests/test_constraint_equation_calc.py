@@ -7,13 +7,13 @@ import os
 from nempy.historical_inputs.rhs_calculator import RHSCalc
 from nempy.historical_inputs import xml_cache
 
-@pytest.disable()
+
 def test_single_equation():
     xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache_rhs_calc_testing')
     xml_cache_manager.load_interval('2013/01/04 12:40:00')
     rhs_calculator = RHSCalc(xml_cache_manager)
     print(xml_cache_manager.get_file_path())
-    con = 'F_MAIN++NIL_MG_R6'
+    con = 'DATASNAP'
     print(rhs_calculator.compute_constraint_rhs(con) - rhs_calculator.get_nemde_rhs(con))
     assert (rhs_calculator.compute_constraint_rhs(con) ==
             pytest.approx(rhs_calculator.get_nemde_rhs(con), 0.001))
