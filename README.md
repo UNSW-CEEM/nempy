@@ -162,9 +162,9 @@ modelling tools for accessing historical market data published by AEMO and prepr
 ```python
 # Notice:
 # - This script downloads large volumes of historical market data (~54 GB) from AEMO's nemweb
-#   portal. You can also reduce the data usage by restricting the time window given to the 
-#   xml_cache_manager and in the get_test_intervals function. The boolean on line 23 can 
-#   also be changed to prevent this happening repeatedly once the data has been downloaded. 
+#   portal. You can also reduce the data usage by restricting the time window given to the
+#   xml_cache_manager and in the get_test_intervals function. The boolean on line 23 can
+#   also be changed to prevent this happening repeatedly once the data has been downloaded.
 
 import sqlite3
 from datetime import datetime, timedelta
@@ -182,7 +182,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2021/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
@@ -249,10 +249,9 @@ for interval in get_test_intervals(number=100):
     cost = constraint_inputs.get_constraint_violation_prices()['uigf']
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
-
     # Set unit ramp rates.
     def set_ramp_rates(run_type):
-        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type='fast_start_first_run')
+        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type=run_type)
         market.set_unit_ramp_up_constraints(
             ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
         market.set_unit_ramp_down_constraints(
@@ -280,6 +279,7 @@ for interval in get_test_intervals(number=100):
 
 
     def set_joint_ramping_constraints(run_type):
+        cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
         scada_ramp_down_rates = unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
             run_type=run_type)
         market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
@@ -353,7 +353,7 @@ for interval in get_test_intervals(number=100):
     if constraint_inputs.is_over_constrained_dispatch_rerun():
         market.dispatch(allow_over_constrained_dispatch_re_run=True,
                         energy_market_floor_price=-1000.0,
-                        energy_market_ceiling_price=14500.0,
+                        energy_market_ceiling_price=15000.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_one = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
 
@@ -388,7 +388,7 @@ for interval in get_test_intervals(number=100):
     set_ramp_rates(run_type='fast_start_second_run')
     set_joint_ramping_constraints(run_type='fast_start_second_run')
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market._constraints_rhs_and_type.keys():
+    if 'fast_start' in market.get_constraint_set_names():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
@@ -397,7 +397,7 @@ for interval in get_test_intervals(number=100):
     if constraint_inputs.is_over_constrained_dispatch_rerun():
         market.dispatch(allow_over_constrained_dispatch_re_run=True,
                         energy_market_floor_price=-1000.0,
-                        energy_market_ceiling_price=14500.0,
+                        energy_market_ceiling_price=15000.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_two = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
 
@@ -436,13 +436,13 @@ print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
 print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
 print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
 
-#  Summary of error in energy price volume weighted average price. 
-# Comparison is against ROP, the price prior to 
+#  Summary of error in energy price volume weighted average price.
+# Comparison is against ROP, the price prior to
 # any post dispatch adjustments, scaling, capping etc.
-# Mean price error: -0.187389732115115
+# Mean price error: -0.3284696359015098
 # Median price error: 0.0
-# 5% percentile price error: -5.407795875785957
-# 95% percentile price error: 0.8614836155591679
+# 5% percentile price error: -0.5389930178124978
+# 95% percentile price error: 0.13746097842649457
 ```
 </details>
     
