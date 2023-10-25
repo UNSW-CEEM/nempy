@@ -80,6 +80,7 @@ class SpotMarket:
     def __init__(self, market_regions, unit_info, dispatch_interval=5):
         self.dispatch_interval = dispatch_interval
         self._unit_info = None
+        self._fcas_requirements = None
         self._decision_variables = {}
         self._variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
         self._constraint_to_variable_map = {'regional': {}, 'unit_level': {}}
@@ -1081,6 +1082,7 @@ class SpotMarket:
         """
         if self.validate_inputs:
             self._validate_fcas_requirements(fcas_requirements)
+        self._fcas_requirements = fcas_requirements
         rhs_and_type, variable_map = market_constraints.fcas(fcas_requirements, self._next_constraint_id)
         self._market_constraints_rhs_and_type['fcas'] = rhs_and_type
         self._constraint_to_variable_map['regional']['fcas'] = variable_map
