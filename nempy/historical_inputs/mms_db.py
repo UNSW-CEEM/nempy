@@ -128,10 +128,7 @@ class DBManager:
                                                       'RAISE1SECACTUALAVAILABILITY',
                                                       'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
                                                       'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
-                                                      'LOWER1SECACTUALAVAILABILITY',
-                                                      'LOWER60SECACTUALAVAILABILITY', 'LOWER5MINACTUALAVAILABILITY',
-                                                      'LOWERREGACTUALAVAILABILITY', 'RAISE1SEC', 'LOWER1SEC',
-                                                      'RAISE1SECACTUALAVAILABILITY', 'LOWER1SECACTUALAVAILABILITY'],
+                                                      'LOWER1SECACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
             table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
