@@ -1283,7 +1283,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         # Inner join the most recent data with the interconnectors used in the actual interval of interest.
         query = """SELECT {cols} 
                      FROM temp4 
-                          INNER JOIN (SELECT * 
+                          INNER JOIN (SELECT INTERCONNECTORID
                                         FROM DISPATCHINTERCONNECTORRES 
                                        WHERE SETTLEMENTDATE == '{datetime}') 
                           USING (INTERCONNECTORID);"""
