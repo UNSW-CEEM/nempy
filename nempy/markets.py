@@ -3363,14 +3363,12 @@ class SpotMarket:
 
         return restrictive_limits
 
-    def get_interconnector_limits(self):
+    def get_interconnector_energy_constraint_limits(self):
         """Retrieves the import and export limits for each interconnector constraint.
 
-        Parameters
-        ----------
-        gencon : pd.DataFrame
-            Return value from `self._summarise_generic_constraint().
-
+        Requires:
+         - "interconnectors" in self._decision_variables; and
+         - Generic constraints to be set in "self._generic_constraint_lhs".
         """
         if 'interconnectors' not in self._decision_variables:
             raise NotImplementedError("No interconnectors have been set in this instance.")
@@ -3455,9 +3453,10 @@ class SpotMarket:
         )
         return filtered_matrix
 
-    def get_interconnector_limit_setter(self):
+    def get_interconnector_energy_constraint_setter(self):
         """
-        Retrieves the most restrictive import and export limits and their associated constraint for each interconnector.
+        Retrieves the most restrictive import and export energy limits and their associated constraint for each
+        interconnector.
 
         Methodology for calculation is described in the old NEMMCO document:
         https://aemo.com.au/-/media/files/electricity/nem/security_and_reliability/dispatch/policy_and_process/
@@ -3471,7 +3470,7 @@ class SpotMarket:
         """
         gencon = self._summarise_generic_constraint()
         limits = (
-            self.get_interconnector_limits()
+            self.get_interconnector_energy_constraint_limits()
             .pipe(self._get_restrictive_limits)
             .pipe(self._apply_default_limits)
         )
