@@ -306,8 +306,10 @@ def _format_interconnector_definitions(INTERCONNECTOR, INTERCONNECTORCONSTRAINT)
     """
     interconnector_directions = INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO']]
     interconnector_directions.columns = ['interconnector', 'from_region', 'to_region']
-    interconnector_paramaters = INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'IMPORTLIMIT', 'EXPORTLIMIT']]
-    interconnector_paramaters.columns = ['interconnector', 'min', 'max']
+    interconnector_paramaters = (
+        INTERCONNECTORCONSTRAINT.loc[:, ['INTERCONNECTORID', 'IMPORTLIMIT', 'EXPORTLIMIT', 'FCASSUPPORTUNAVAILABLE']]
+    )
+    interconnector_paramaters.columns = ['interconnector', 'min', 'max', 'fcas_support_unavailable']
     interconnector_paramaters['min'] = -1 * interconnector_paramaters['min']
     interconnectors = pd.merge(interconnector_directions, interconnector_paramaters, 'inner', on='interconnector')
     return interconnectors
@@ -349,13 +351,15 @@ def _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR, INTERCONNECTORCO
     """
     INTERCONNECTORCONSTRAINT = INTERCONNECTORCONSTRAINT[INTERCONNECTORCONSTRAINT['ICTYPE'] == 'MNSP']
     MNSP_INTERCONNECTOR = pd.merge(MNSP_INTERCONNECTOR, INTERCONNECTORCONSTRAINT, on=['INTERCONNECTORID'])
-    MNSP_INTERCONNECTOR = MNSP_INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'LINKID', 'FROM_REGION_TLF', 'TO_REGION_TLF',
-                                                      'FROMREGION', 'TOREGION', 'LHSFACTOR', 'MAXCAPACITY']]
+    MNSP_INTERCONNECTOR = (
+        MNSP_INTERCONNECTOR.loc[:, ['INTERCONNECTORID', 'LINKID', 'FROM_REGION_TLF', 'TO_REGION_TLF',
+        'FROMREGION', 'TOREGION', 'LHSFACTOR', 'MAXCAPACITY', 'FCASSUPPORTUNAVAILABLE']]
+    )
 
     mnsp_transmission_loss_factors = MNSP_INTERCONNECTOR.rename(columns={
         'INTERCONNECTORID': 'interconnector', 'LINKID': 'link', 'FROM_REGION_TLF': 'from_region_loss_factor',
         'TO_REGION_TLF': 'to_region_loss_factor', 'FROMREGION': 'from_region', 'TOREGION': 'to_region',
-        'LHSFACTOR': 'generic_constraint_factor', 'MAXCAPACITY': 'max'
+        'LHSFACTOR': 'generic_constraint_factor', 'MAXCAPACITY': 'max', 'FCASSUPPORTUNAVAILABLE': 'fcas_support_unavailable',
     })
     mnsp_transmission_loss_factors['min'] = 0.0
     return mnsp_transmission_loss_factors

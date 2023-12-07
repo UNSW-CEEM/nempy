@@ -1758,6 +1758,8 @@ class SpotMarket:
                                           must_be_real_number=True, not_negative=True))
         schema.add_column(dv.SeriesSchema(name='to_region_loss_factor', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='fcas_support_unavailable', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
         schema.validate(interconnector_directions_and_limits)
 
     def set_interconnector_losses(self, loss_functions, interpolation_break_points):
@@ -3487,6 +3489,44 @@ class SpotMarket:
 
         return published_setter
 
+    
+    def get_interconnector_fcas_constraint_setter(self):
+        """
+        Retrieves the most restrictive import and export FCAS limits for each interconnector.
+
+        Methodology for calculation is described in the old NEMMCO document:
+        https://aemo.com.au/-/media/files/electricity/nem/security_and_reliability/dispatch/policy_and_process/
+        interconnector-limit-setter-reporting-changes.pdf
+
+        Each limit and associated constraint should match with the following fields from MMS table:
+        `DISPATCHINTERCONNECTORRES` in the fully constrained `nempy` scenario.
+        - `FCASEXPORTLIMIT` and `FCASIMPORTLIMIT`
+
+        """
+        interconnector_energy_constraint_setter = self.get_interconnector_energy_constraint_setter()
+        fcas_support = (
+            self._interconnector_directions.get(['interconnector', 'fcas_support_unavailable']).drop_duplicates()
+        )
+        interconnector_fcas_constraint_setter = (
+            interconnector_energy_constraint_setter
+            .merge(fcas_support, on=['interconnector'], how='inner')
+        )
+        export_fcas_constraint_setter = (
+            interconnector_fcas_constraint_setter.query('limit_type == "export"')
+            .assign(limit=lambda x: np.where(x['fcas_support_unavailable'] == 0.0, x['max'], x['limit']))
+        )
+        import_fcas_constraint_setter = (
+            interconnector_fcas_constraint_setter.query('limit_type == "import"')
+            .assign(limit=lambda x: np.where(x['fcas_support_unavailable'] == 0.0, x['min'] * -1, x['limit']))
+        )
+
+        published_setter = (
+            pd.concat([export_fcas_constraint_setter, import_fcas_constraint_setter])
+            .drop(['fcas_support_unavailable'], axis=1)
+            .sort_values(by=['interconnector'])
+        )
+
+        return published_setter
 
 
     def get_region_dispatch_summary(self):
