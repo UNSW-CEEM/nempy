@@ -168,9 +168,10 @@ class DBManager:
             table_name='INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'REGIONFROM', 'REGIONTO'],
             table_primary_keys=['INTERCONNECTORID'], con=self.con)
         self.INTERCONNECTORCONSTRAINT = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
-            table_name='INTERCONNECTORCONSTRAINT', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO',
-                                                                  'FROMREGIONLOSSSHARE', 'LOSSCONSTANT', 'ICTYPE',
-                                                                  'LOSSFLOWCOEFFICIENT', 'IMPORTLIMIT', 'EXPORTLIMIT'],
+            table_name='INTERCONNECTORCONSTRAINT', table_columns=[
+                'INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'FROMREGIONLOSSSHARE', 'LOSSCONSTANT', 'ICTYPE',
+                'LOSSFLOWCOEFFICIENT', 'IMPORTLIMIT', 'EXPORTLIMIT', 'FCASSUPPORTUNAVAILABLE',
+            ],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.LOSSMODEL = InputsByEffectiveDateVersionNoAndDispatchInterconnector(
             table_name='LOSSMODEL', table_columns=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO', 'LOSSSEGMENT',
@@ -181,8 +182,10 @@ class DBManager:
                                                          'DEMANDCOEFFICIENT'],
             table_primary_keys=['INTERCONNECTORID', 'EFFECTIVEDATE', 'VERSIONNO'], con=self.con)
         self.DISPATCHINTERCONNECTORRES = InputsBySettlementDate(
-            table_name='DISPATCHINTERCONNECTORRES', table_columns=['INTERCONNECTORID', 'SETTLEMENTDATE', 'MWFLOW',
-                                                                   'MWLOSSES'],
+            table_name='DISPATCHINTERCONNECTORRES', table_columns=[
+                'INTERCONNECTORID', 'SETTLEMENTDATE', 'MWFLOW', 'MWLOSSES', 'EXPORTLIMIT', 'IMPORTLIMIT',
+                'EXPORTGENCONID', 'IMPORTGENCONID', 'FCASEXPORTLIMIT', 'FCASIMPORTLIMIT',
+            ],
             table_primary_keys=['INTERCONNECTORID', 'SETTLEMENTDATE'], con=self.con)
         self.MNSP_INTERCONNECTOR = InputsByEffectiveDateVersionNo(
             table_name='MNSP_INTERCONNECTOR', table_columns=['INTERCONNECTORID', 'LINKID', 'EFFECTIVEDATE', 'VERSIONNO',
@@ -455,7 +458,8 @@ class _MMSTable:
             'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER6SECROP': 'REAL',
             'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL', 'FROM_REGION_TLF': 'REAL',
             'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT', 'FROMREGION': 'TEXT', 'TOREGION': 'TEXT',
-            'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
+            'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL', 'FCASSUPPORTUNAVAILABLE': 'REAL',
+            'FCASEXPORTLIMIT': 'REAL', 'FCASIMPORTLIMIT': 'REAL', 'EXPORTGENCONID': 'TEXT', 'IMPORTGENCONID': 'TEXT',
         }
 
     def create_table_in_sqlite_db(self):
@@ -1279,7 +1283,7 @@ class InputsByEffectiveDateVersionNoAndDispatchInterconnector(_SingleDataSource)
         # Inner join the most recent data with the interconnectors used in the actual interval of interest.
         query = """SELECT {cols} 
                      FROM temp4 
-                          INNER JOIN (SELECT * 
+                          INNER JOIN (SELECT INTERCONNECTORID
                                         FROM DISPATCHINTERCONNECTORRES 
                                        WHERE SETTLEMENTDATE == '{datetime}') 
                           USING (INTERCONNECTORID);"""

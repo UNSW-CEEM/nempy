@@ -80,6 +80,7 @@ class SpotMarket:
     def __init__(self, market_regions, unit_info, dispatch_interval=5):
         self.dispatch_interval = dispatch_interval
         self._unit_info = None
+        self._fcas_requirements = None
         self._decision_variables = {}
         self._variable_to_constraint_map = {'regional': {}, 'unit_level': {}}
         self._constraint_to_variable_map = {'regional': {}, 'unit_level': {}}
@@ -1081,6 +1082,7 @@ class SpotMarket:
         """
         if self.validate_inputs:
             self._validate_fcas_requirements(fcas_requirements)
+        self._fcas_requirements = fcas_requirements
         rhs_and_type, variable_map = market_constraints.fcas(fcas_requirements, self._next_constraint_id)
         self._market_constraints_rhs_and_type['fcas'] = rhs_and_type
         self._constraint_to_variable_map['regional']['fcas'] = variable_map
@@ -1755,6 +1757,8 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='from_region_loss_factor', data_type=np.float64,
                                           must_be_real_number=True, not_negative=True))
         schema.add_column(dv.SeriesSchema(name='to_region_loss_factor', data_type=np.float64, must_be_real_number=True,
+                                          not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='fcas_support_unavailable', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
         schema.validate(interconnector_directions_and_limits)
 
@@ -3158,6 +3162,372 @@ class SpotMarket:
             flow = pd.merge(flow, losses, 'left', on=['interconnector', 'link'])
 
         return flow.reset_index(drop=True)
+
+    def _summarise_generic_constraint_lhs(self):
+        """
+        """
+        columns = ['set', 'term', 'definition', 'coefficient']
+
+        if 'unit' in self._generic_constraint_lhs:
+            units = (
+                self._generic_constraint_lhs['unit']
+                .assign(definition=lambda x: np.where(x['service'] != 'energy', 'unit_fcas', 'unit_energy'))
+                .rename(columns={'unit': 'term'})
+                .get(columns)
+            )
+        else:
+            units = pd.DataFrame(columns=columns)
+
+        if 'interconnectors' in self._generic_constraint_lhs:
+            interconnectors = (
+                self._generic_constraint_lhs['interconnectors']
+                .assign(definition=lambda x: x['interconnector'])
+                .rename(columns={'interconnector': 'term'})
+                .get(columns)
+            )
+        else:
+            interconnectors = pd.DataFrame(columns=columns)
+
+        if self._fcas_requirements is not None:
+            fcas = (
+                self._fcas_requirements
+                .assign(
+                    coefficient=1.0,
+                    definition='region_fcas',
+                )
+                .rename(columns={'region': 'term'})
+                .get(columns)
+            )
+        else:
+            fcas = pd.DataFrame(columns=columns)
+
+        lhs = pd.concat([units, interconnectors, fcas])
+
+        return lhs
+
+
+    def _summarise_generic_constraint_rhs(self):
+        """
+
+        """
+        columns = ['set', 'constraint_id', 'type', 'rhs', 'slack']
+        if 'fcas' in self._market_constraints_rhs_and_type:
+            fcas_constraints = self._market_constraints_rhs_and_type['fcas'].get(columns)
+        else:
+            fcas_constraints = pd.DataFrame(columns=columns)
+
+        if 'generic' in self._constraints_rhs_and_type:
+            generic_constraints = self._constraints_rhs_and_type['generic'].get(columns)
+        else:
+            generic_constraints = pd.DataFrame(columns=columns)
+
+        rhs = pd.concat([fcas_constraints, generic_constraints])
+        return rhs
+
+    def _summarise_generic_constraint(self):
+        lhs = self._summarise_generic_constraint_lhs()
+        rhs = self._summarise_generic_constraint_rhs()
+
+        gencon = (
+            lhs.merge(rhs, on=['set'], how='inner')
+            # For all constraint equations with ConstraintType of “≥”, convert to an “≤” inequality by
+            # multiplying both the LHS & RHS of equation in Step 4 by -1 (from AEMO's logic).
+            .assign(
+                coefficient=lambda x: np.where(x['type'] == '>=', x['coefficient'] * -1, x['coefficient']),
+                rhs=lambda x: np.where(x['type'] == '>=', x['rhs'] * -1, x['rhs']),
+                # If sign is reversed on both LHS and RHS, we can switch ">=" to "<=".
+                type=lambda x: np.where(x['type'] == '>=', '<=', x['type']),
+                lhs=lambda x: x['rhs'] - x['slack'],
+            )
+        )
+        return gencon
+
+    def _priority_logic(self, x):
+        """Implements NEMMCO's priority logic in determining a single constraint responsible for setting an
+        interconnector import or export limit.
+
+        Parameters
+        ----------
+        x : pd.DataFrame
+            group by [`subject_interconnector`, `limit_type`] from `self._construct_frequency_matrix`.
+
+        """
+        interconnectors = list(self._decision_variables['interconnectors'].get('interconnector'))
+        subject = x.get('subject_interconnector').iloc[0]
+
+        # Remove subject from interconnector list
+        interconnectors.remove(subject)
+
+        priority_levels = {
+            # "If there are any constraint equations defined with only the Subject Interconnector as an LHS term".
+            'priority_one': np.logical_and.reduce(
+                    [
+                        x.get(subject) == 1.0,
+                        x.get(interconnectors).sum(axis=1) == 0.0,
+                        x.get(['unit_energy', 'unit_fcas', 'region_fcas']).sum(axis=1) == 0.0,
+                    ]
+            ),
+            # "If there are any constraint equations defined with either:"
+            'priority_two': np.logical_or(
+                    # 1) Joint interconnector constraints
+                    np.logical_and.reduce(
+                            [
+                                x.get(subject) == 1.0,
+                                x.get(interconnectors).sum(axis=1) >= 1.0,
+                            ]
+                    ),
+                    # 2) Option 4 constraints
+                    np.logical_and.reduce(
+                            [
+                                x.get(subject) == 1.0,
+                                x['unit_energy'] >= 1.0,
+                            ]
+                    ),
+            ),
+            # "If there are any constraint equations defined with either:"
+            'priority_three': np.logical_or(
+                    # 1)  Islanding Risk FCAS requirement constraints
+                    np.logical_and.reduce(
+                            [
+                                x.get(subject) == 1.0,
+                                x['region_fcas'] >= 1.0,
+                            ]
+                    ),
+                    # 2) Other...
+                    np.logical_and.reduce(
+                            [
+                                x.get(subject) == 1.0,
+                                x['unit_fcas'] >= 1.0,
+                            ]
+                    ),
+            ),
+        }
+        priority_none = ~np.logical_or.reduce(
+            np.vstack(
+                (priority_levels['priority_one'], priority_levels['priority_two'], priority_levels['priority_three'])
+            )
+        )
+
+        # AEMO requires sorting as per ANSI SQL collation standard but pandas.sort_values() has been implemented for
+        # simplicity. This could be a source of error. Concatenate in order of priority.
+        priority_data = (
+            pd.concat([
+                x[priority_levels['priority_one']].assign(priority='1st').sort_values('set'),
+                x[priority_levels['priority_two']].assign(priority='2nd').sort_values('set'),
+                x[priority_levels['priority_three']].assign(priority='3rd').sort_values('set'),
+                x[priority_none].assign(priority='None').sort_values('set'),
+            ])
+        )
+
+        return priority_data
+
+    def _apply_default_limits(self, limits):
+        """Bound restrictive limits to the hard default limits to eliminate infeasible limit values.
+
+        Parameters
+        ----------
+        limits : pd.DataFrame
+            Return value from `SpotMarket._get_restrictive_limits()`
+
+        """
+        export_limits = limits.query('limit_type == "export"')
+        import_limits = limits.query('limit_type == "import"')
+
+        feasible_export_limits = export_limits.assign(limit=lambda x: np.minimum(x['max'], x['limit']))
+
+        # Error in NEMMCO document; should be minimum, not maximum, as sign of limit has already been reversed.
+        feasible_import_limits = import_limits.assign(limit=lambda x: np.minimum(x['min'], x['limit']))
+
+        feasible_limits = pd.concat([feasible_export_limits, feasible_import_limits])
+
+        return feasible_limits
+
+    def _get_restrictive_limits(self, limits):
+        """Retrieve the most restrictive limits (NEMMCO's upper and lower bounds).
+        There is a many-to-one relationship between constraint sets and interconnector terms. For example,
+        NSW1-QLD1 could have  multiple constraints setting the most restrictive limit value in either direction.
+
+        Parameters
+        ----------
+        limits : pd.DataFrame
+            Return value from `self.get_interconnector_constraint_limits()`
+
+        """
+        export_limits = limits.query('limit_type == "export"')
+        import_limits = limits.query('limit_type == "import"')
+
+        min_mask = export_limits['limit'] == export_limits.groupby('interconnector')['limit'].transform('min')
+        max_mask = import_limits['limit'] == import_limits.groupby('interconnector')['limit'].transform('max')
+        upper_bound = export_limits[min_mask]
+        lower_bound = import_limits[max_mask]
+
+        restrictive_limits = pd.concat([upper_bound, lower_bound])
+
+        return restrictive_limits
+
+    def get_interconnector_energy_constraint_limits(self):
+        """Retrieves the import and export limits for each interconnector constraint.
+
+        Requires:
+         - "interconnectors" in self._decision_variables; and
+         - Generic constraints to be set in "self._generic_constraint_lhs".
+        """
+        if 'interconnectors' not in self._decision_variables:
+            raise NotImplementedError("No interconnectors have been set in this instance.")
+
+        hard_limits = (
+            self._decision_variables['interconnectors']
+            .get(['interconnector', 'lower_bound', 'upper_bound', 'value'])
+        )
+        hard_limits.columns = ['term', 'min', 'max', 'flow']
+        hard_limits = hard_limits.assign(min=lambda x: x['min'] * -1)
+
+        if self._generic_constraint_lhs is not None:
+            gencon = self._summarise_generic_constraint()
+
+            constrained_limits = (
+                gencon.merge(hard_limits, on=['term'], how='inner')
+                .rename(columns={'term': 'interconnector'})
+                .assign(
+                    interconnector_slack=lambda x: x['slack'] / x['coefficient'],
+                    limit=lambda x: np.round(x['flow'] + x['interconnector_slack'], 4),
+                )
+            )
+            # For all constraints with a positive coefficient the effective RHS bound value (which may be negative)
+            # represents an upper bound (that is, contributes to setting the Export Limit) on that interconnector.
+            # Therefore, constraints where negative coefficients apply, the effective RHS bound value represents a lower
+            # bound (ie. `import_limit`).
+
+            export_limits = constrained_limits.query('coefficient > 0.0').assign(limit_type='export')
+            import_limits = constrained_limits.query('coefficient < 0.0').assign(limit_type='import')
+
+            limits = (
+                pd.concat([export_limits, import_limits])
+                .get(['interconnector', 'set', 'flow', 'min', 'max', 'limit', 'limit_type'])
+            )
+        else:
+            raise NotImplementedError('No generic constraints have been set in this instance.')
+
+        return limits
+
+    def _construct_frequency_matrix(self, limits, gencon):
+        """Construct's NEMMCO's 'master list' in the form of a frequency matrix according to the methodology.
+        """
+        unique_ic = list(limits.get('interconnector').unique())
+        column_index = unique_ic + ['unit_energy', 'unit_fcas', 'region_fcas']
+        master_list = (
+            limits
+            .rename(columns={'interconnector': 'subject_interconnector'})
+            .get(['subject_interconnector', 'set', 'limit_type'])
+            .merge(gencon, on=['set'], how='inner')
+        )
+
+        # Construct frequency matrix
+        matrix = (
+            master_list
+            .groupby(['subject_interconnector', 'set', 'definition', 'limit_type'])
+            .agg({'coefficient': 'count'})
+            .squeeze()
+            .unstack('definition')
+        )
+        # Extend for fcas and fill nulls with 0.
+        matrix_extended = (
+            matrix
+            .reindex(column_index, axis=1)
+            .fillna(0)
+            .reset_index()
+            .rename_axis(None, axis=1)
+        )
+
+        return matrix_extended
+
+    def _apply_setter_logic(self, matrix):
+        reordered_matrix = (
+            matrix.groupby(['subject_interconnector', 'limit_type'], as_index=False)
+            .apply(self._priority_logic)
+            .reset_index(drop=True)
+        )
+        filtered_matrix = (
+            reordered_matrix
+            .groupby(['subject_interconnector', 'limit_type'], as_index=False)
+            .first()
+            .rename(columns={'subject_interconnector': 'interconnector'})
+        )
+        return filtered_matrix
+
+    def get_interconnector_energy_constraint_setter(self):
+        """
+        Retrieves the most restrictive import and export energy limits and their associated constraint for each
+        interconnector.
+
+        Methodology for calculation is described in the old NEMMCO document:
+        https://aemo.com.au/-/media/files/electricity/nem/security_and_reliability/dispatch/policy_and_process/
+        interconnector-limit-setter-reporting-changes.pdf
+
+        Each limit and associated constraint should match with the following fields from MMS table:
+        `DISPATCHINTERCONNECTORRES` in the fully constrained `nempy` scenario.
+        - `EXPORTLIMIT` and `IMPORTLIMIT`; and
+        - `IMPORTGENCONID` and `EXPORTGENCONID`.
+
+        """
+        gencon = self._summarise_generic_constraint()
+        limits = (
+            self.get_interconnector_energy_constraint_limits()
+            .pipe(self._get_restrictive_limits)
+            .pipe(self._apply_default_limits)
+        )
+        matrix = (
+            self._construct_frequency_matrix(limits, gencon)
+            .pipe(self._apply_setter_logic)
+        )
+        published_setter = (
+            matrix
+            .get(['interconnector', 'limit_type', 'set'])
+            .merge(limits, on=['interconnector', 'limit_type', 'set'], how='inner')
+            .get(['interconnector', 'set', 'flow', 'min', 'max', 'limit', 'limit_type'])
+        )
+
+        return published_setter
+
+    
+    def get_interconnector_fcas_constraint_setter(self):
+        """
+        Retrieves the most restrictive import and export FCAS limits for each interconnector.
+
+        Methodology for calculation is described in the old NEMMCO document:
+        https://aemo.com.au/-/media/files/electricity/nem/security_and_reliability/dispatch/policy_and_process/
+        interconnector-limit-setter-reporting-changes.pdf
+
+        Each limit and associated constraint should match with the following fields from MMS table:
+        `DISPATCHINTERCONNECTORRES` in the fully constrained `nempy` scenario.
+        - `FCASEXPORTLIMIT` and `FCASIMPORTLIMIT`
+
+        """
+        interconnector_energy_constraint_setter = self.get_interconnector_energy_constraint_setter()
+        fcas_support = (
+            self._interconnector_directions.get(['interconnector', 'fcas_support_unavailable']).drop_duplicates()
+        )
+        interconnector_fcas_constraint_setter = (
+            interconnector_energy_constraint_setter
+            .merge(fcas_support, on=['interconnector'], how='inner')
+        )
+        export_fcas_constraint_setter = (
+            interconnector_fcas_constraint_setter.query('limit_type == "export"')
+            .assign(limit=lambda x: np.where(x['fcas_support_unavailable'] == 0.0, x['max'], x['limit']))
+        )
+        import_fcas_constraint_setter = (
+            interconnector_fcas_constraint_setter.query('limit_type == "import"')
+            .assign(limit=lambda x: np.where(x['fcas_support_unavailable'] == 0.0, x['min'] * -1, x['limit']))
+        )
+
+        published_setter = (
+            pd.concat([export_fcas_constraint_setter, import_fcas_constraint_setter])
+            .drop(['fcas_support_unavailable'], axis=1)
+            .sort_values(by=['interconnector'])
+        )
+
+        return published_setter
+
 
     def get_region_dispatch_summary(self):
         """Calculates a dispatch summary at the regional level.
