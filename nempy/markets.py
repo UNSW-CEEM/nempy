@@ -3314,7 +3314,9 @@ class SpotMarket:
         import_limits = limits.query('limit_type == "import"')
 
         feasible_export_limits = export_limits.assign(limit=lambda x: np.minimum(x['max'], x['limit']))
-        feasible_import_limits = import_limits.assign(limit=lambda x: np.maximum(x['min'], x['limit']))
+
+        # Error in NEMMCO document; should be minimum, not maximum, as sign of limit has already been reversed.
+        feasible_import_limits = import_limits.assign(limit=lambda x: np.minimum(x['min'], x['limit']))
 
         feasible_limits = pd.concat([feasible_export_limits, feasible_import_limits])
 
