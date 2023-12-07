@@ -3166,27 +3166,39 @@ class SpotMarket:
         """
         columns = ['set', 'term', 'definition', 'coefficient']
 
-        units = (
-            self._generic_constraint_lhs['unit']
-            .assign(definition=lambda x: np.where(x['service'] != 'energy', 'unit_fcas', 'unit_energy'))
-            .rename(columns={'unit': 'term'})
-            .get(columns)
-        )
-        interconnectors = (
-            self._generic_constraint_lhs['interconnectors']
-            .assign(definition=lambda x: x['interconnector'])
-            .rename(columns={'interconnector': 'term'})
-            .get(columns)
-        )
-        fcas = (
-            self._fcas_requirements
-            .assign(
-                coefficient=1.0,
-                definition='region_fcas',
+        if 'unit' in self._generic_constraint_lhs:
+            units = (
+                self._generic_constraint_lhs['unit']
+                .assign(definition=lambda x: np.where(x['service'] != 'energy', 'unit_fcas', 'unit_energy'))
+                .rename(columns={'unit': 'term'})
+                .get(columns)
             )
-            .rename(columns={'region': 'term'})
-            .get(columns)
-        )
+        else:
+            units = pd.DataFrame(columns=columns)
+
+        if 'interconnectors' in self._generic_constraint_lhs:
+            interconnectors = (
+                self._generic_constraint_lhs['interconnectors']
+                .assign(definition=lambda x: x['interconnector'])
+                .rename(columns={'interconnector': 'term'})
+                .get(columns)
+            )
+        else:
+            interconnectors = pd.DataFrame(columns=columns)
+
+        if self._fcas_requirements is not None:
+            fcas = (
+                self._fcas_requirements
+                .assign(
+                    coefficient=1.0,
+                    definition='region_fcas',
+                )
+                .rename(columns={'region': 'term'})
+                .get(columns)
+            )
+        else:
+            fcas = pd.DataFrame(columns=columns)
+
         lhs = pd.concat([units, interconnectors, fcas])
 
         return lhs
@@ -3197,9 +3209,15 @@ class SpotMarket:
 
         """
         columns = ['set', 'constraint_id', 'type', 'rhs', 'slack']
+        if 'fcas' in self._market_constraints_rhs_and_type:
+            fcas_constraints = self._market_constraints_rhs_and_type['fcas'].get(columns)
+        else:
+            fcas_constraints = pd.DataFrame(columns=columns)
 
-        fcas_constraints = self._market_constraints_rhs_and_type['fcas'].get(columns)
-        generic_constraints = self._constraints_rhs_and_type['generic'].get(columns)
+        if 'generic' in self._constraints_rhs_and_type:
+            generic_constraints = self._constraints_rhs_and_type['generic'].get(columns)
+        else:
+            generic_constraints = pd.DataFrame(columns=columns)
 
         rhs = pd.concat([fcas_constraints, generic_constraints])
         return rhs
@@ -3354,7 +3372,9 @@ class SpotMarket:
             Return value from `self._summarise_generic_constraint().
 
         """
-        gencon = self._summarise_generic_constraint()
+        if 'interconnectors' not in self._decision_variables:
+            raise NotImplementedError("No interconnectors have been set in this instance.")
+
         hard_limits = (
             self._decision_variables['interconnectors']
             .get(['interconnector', 'lower_bound', 'upper_bound', 'value'])
@@ -3362,26 +3382,31 @@ class SpotMarket:
         hard_limits.columns = ['term', 'min', 'max', 'flow']
         hard_limits = hard_limits.assign(min=lambda x: x['min'] * -1)
 
-        constrained_limits = (
-            gencon.merge(hard_limits, on=['term'], how='inner')
-            .rename(columns={'term': 'interconnector'})
-            .assign(
-                interconnector_slack=lambda x: x['slack'] / x['coefficient'],
-                limit=lambda x: np.round(x['flow'] + x['interconnector_slack'], 4),
+        if self._generic_constraint_lhs is not None:
+            gencon = self._summarise_generic_constraint()
+
+            constrained_limits = (
+                gencon.merge(hard_limits, on=['term'], how='inner')
+                .rename(columns={'term': 'interconnector'})
+                .assign(
+                    interconnector_slack=lambda x: x['slack'] / x['coefficient'],
+                    limit=lambda x: np.round(x['flow'] + x['interconnector_slack'], 4),
+                )
             )
-        )
-        # For all constraints with a positive coefficient the effective RHS bound value (which may be negative)
-        # represents an upper bound (that is, contributes to setting the Export Limit) on that interconnector.
-        # Therefore, constraints where negative coefficients apply, the effective RHS bound value represents a lower
-        # bound (ie. `import_limit`).
+            # For all constraints with a positive coefficient the effective RHS bound value (which may be negative)
+            # represents an upper bound (that is, contributes to setting the Export Limit) on that interconnector.
+            # Therefore, constraints where negative coefficients apply, the effective RHS bound value represents a lower
+            # bound (ie. `import_limit`).
 
-        export_limits = constrained_limits.query('coefficient > 0.0').assign(limit_type='export')
-        import_limits = constrained_limits.query('coefficient < 0.0').assign(limit_type='import')
+            export_limits = constrained_limits.query('coefficient > 0.0').assign(limit_type='export')
+            import_limits = constrained_limits.query('coefficient < 0.0').assign(limit_type='import')
 
-        limits = (
-            pd.concat([export_limits, import_limits])
-            .get(['interconnector', 'set', 'flow', 'min', 'max', 'limit', 'limit_type'])
-        )
+            limits = (
+                pd.concat([export_limits, import_limits])
+                .get(['interconnector', 'set', 'flow', 'min', 'max', 'limit', 'limit_type'])
+            )
+        else:
+            raise NotImplementedError('No generic constraints have been set in this instance.')
 
         return limits
 
