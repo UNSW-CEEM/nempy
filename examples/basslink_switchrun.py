@@ -181,7 +181,7 @@ for interval in get_test_intervals(number=100):
     set_ramp_rates(run_type='fast_start_second_run')
     set_joint_ramping_constraints(run_type='fast_start_second_run')
     market.set_fast_start_constraints(fast_start_profiles)
-    if 'fast_start' in market._constraints_rhs_and_type.keys():
+    if 'fast_start' in market.get_constraint_set_names.keys():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
