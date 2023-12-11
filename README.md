@@ -186,12 +186,12 @@ download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
-    mms_db_manager.populate(start_year=2021, start_month=1,
-                            end_year=2021, end_month=1)
+    mms_db_manager.populate(start_year=2021, start_month=12,
+                            end_year=2022, end_month=1)
 
     # This requires approximately 50 GB of storage.
-    xml_cache_manager.populate_by_day(start_year=2021, start_month=1, start_day=1,
-                                      end_year=2021, end_month=2, end_day=1)
+    xml_cache_manager.populate_by_day(start_year=2021, start_month=12, start_day=1,
+                                      end_year=2021, end_month=12, end_day=31)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
