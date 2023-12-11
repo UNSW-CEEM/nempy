@@ -750,7 +750,6 @@ class UnitData:
             ================  ========================================
 
         """
-        uigf_values = self.raw_input_loader.get_UIGF_values()
         BIDPEROFFER_D = self.volume_bids.drop(['RAMPDOWNRATE', 'RAMPUPRATE'], axis=1)
         initial_conditions = self.initial_conditions
 
@@ -761,7 +760,7 @@ class UnitData:
         agc_enablement_limits = self.raw_input_loader.get_agc_enablement_limits()
         BIDPEROFFER_D = _scaling_for_agc_enablement_limits(BIDPEROFFER_D, agc_enablement_limits)
         BIDPEROFFER_D = _scaling_for_agc_ramp_rates(BIDPEROFFER_D, initial_conditions)
-        BIDPEROFFER_D = _scaling_for_uigf(BIDPEROFFER_D, uigf_values)
+        BIDPEROFFER_D = _scaling_for_uigf(BIDPEROFFER_D, self.uigf_values)
         self.BIDPEROFFER_D, BIDDAYOFFER_D = _enforce_preconditions_for_enabling_fcas(
             BIDPEROFFER_D, BIDDAYOFFER_D, initial_conditions, unit_availability)
 
