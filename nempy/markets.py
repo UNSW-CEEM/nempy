@@ -98,7 +98,7 @@ class SpotMarket:
         self._market_regions = market_regions
         self._allowed_dispatch_types = ['generator', 'load']
         self._allowed_services = ['energy', 'raise_reg', 'lower_reg', 'raise_5min', 'lower_5min', 'raise_60s',
-                                  'lower_60s', 'raise_6s', 'lower_6s']
+                                  'lower_60s', 'raise_6s', 'lower_6s', 'raise_1s', 'lower_1s']
         self._allowed_fcas_services = self._allowed_services[:]
         self._allowed_fcas_services.remove('energy')
         self._allowed_contingency_fcas_services = self._allowed_fcas_services[:]

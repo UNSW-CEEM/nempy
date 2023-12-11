@@ -154,3 +154,4 @@ venv_docs_build/*
 !/market_management_system.db
 !/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded
 !/tests/nemde_cache_rhs_calc_testing/NEMSPDOutputs_2012123124000.loaded
+tests/scratch.py

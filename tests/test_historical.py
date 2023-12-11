@@ -8,8 +8,8 @@ from nempy.historical_inputs import loaders, xml_cache, mms_db, units, \
     interconnectors, constraints, demand
 from tests import historical_market_builder
 
-test_db = 'F:/nempy_test_files/historical_mms.db'
-test_xml_cache = 'F:/nempy_test_files/nemde_cache'
+test_db = 'D:/nempy_test_files/historical_mms.db'
+test_xml_cache = 'D:/nempy_data/nemde_cache'
 
 
 # These tests require some additional clean up and will probably not run on your machine. ##############################
@@ -594,7 +594,7 @@ def test_against_10_interval_benchmark():
         market_builder.set_region_demand_constraints()
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
-        market_builder.set_solver('GUROBI')
+        market_builder.set_solver('CBC')
         market_builder.dispatch(calc_prices=True)
         market = market_builder.get_market_object()
 
@@ -607,7 +607,7 @@ def test_against_10_interval_benchmark():
     outputs = pd.concat(outputs)
     outputs.to_csv('latest_10_interval_run.csv', index=False)
     benchmark = pd.read_csv('10_interval_benchmark.csv')
-    assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_exact=False, atol=1e-2)
+    assert_frame_equal(outputs.reset_index(drop=True), benchmark, check_exact=False, atol=5e-2)
 
 
 def test_against_100_interval_benchmark():
@@ -636,7 +636,7 @@ def test_against_100_interval_benchmark():
         market_builder.set_region_demand_constraints()
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
-        market_builder.set_solver('GUROBI')
+        market_builder.set_solver('CBC')
         market_builder.dispatch(calc_prices=True)
         market = market_builder.get_market_object()
 
@@ -679,7 +679,7 @@ def test_against_1000_interval_benchmark():
         market_builder.set_region_demand_constraints()
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
-        market_builder.set_solver('GUROBI')
+        market_builder.set_solver('CBC')
         market_builder.dispatch(calc_prices=True)
         market = market_builder.get_market_object()
 

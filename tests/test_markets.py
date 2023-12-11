@@ -409,6 +409,204 @@ def test_raise_6s_and_raise_reg():
     assert_frame_equal(market.get_fcas_prices(), expected_fcas_prices)
 
 
+def test_raise_1s_and_raise_reg():
+    # Volume of each bid.
+    volume_bids = pd.DataFrame({
+        'unit': ['A', 'A', 'B', 'B', 'B'],
+        'service': ['energy', 'raise_1s', 'energy', 'raise_1s', 'raise_reg'],
+        '1': [100.0, 10.0, 110.0, 15.0, 15.0],  # MW
+    })
+
+    # Price of each bid.
+    price_bids = pd.DataFrame({
+        'unit': ['A', 'A', 'B', 'B', 'B'],
+        'service': ['energy', 'raise_1s', 'energy', 'raise_1s', 'raise_reg'],
+        '1': [50.0, 35.0, 60.0, 20.0, 30.0],  # $/MW
+    })
+
+    # Participant defined operational constraints on FCAS enablement.
+    fcas_trapeziums = pd.DataFrame({
+        'unit': ['B', 'B', 'A'],
+        'service': ['raise_reg', 'raise_1s', 'raise_1s'],
+        'max_availability': [15.0, 15.0, 10.0],
+        'enablement_min': [50.0, 50.0, 70.0],
+        'low_break_point': [65.0, 65.0, 80.0],
+        'high_break_point': [95.0, 95.0, 100.0],
+        'enablement_max': [110.0, 110.0, 110.0]
+    })
+
+    # Unit locations.
+    unit_info = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'region': ['NSW', 'NSW']
+    })
+
+    # The demand in the region\s being dispatched.
+    demand = pd.DataFrame({
+        'region': ['NSW'],
+        'demand': [195.0]  # MW
+    })
+
+    # FCAS requirement in the region\s being dispatched.
+    fcas_requirements = pd.DataFrame({
+        'set': ['nsw_regulation_requirement', 'nsw_raise_1s_requirement'],
+        'region': ['NSW', 'NSW'],
+        'service': ['raise_reg', 'raise_1s'],
+        'volume': [10.0, 10.0]  # MW
+    })
+
+    # Create the market model with unit service bids.
+    market = markets.SpotMarket(unit_info=unit_info, market_regions=['NSW'])
+    market.set_unit_volume_bids(volume_bids)
+    market.set_unit_price_bids(price_bids)
+
+    # Create constraints that enforce the top of the FCAS trapezium.
+    fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
+    market.set_fcas_max_availability(fcas_availability)
+
+    # Create constraints the enforce the lower and upper slope of the FCAS regulation
+    # service trapeziums.
+    regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_reg']
+    market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+
+    # Create constraints that enforce the lower and upper slope of the FCAS contingency
+    # trapezium. These constrains also scale slopes of the trapezium to ensure the
+    # co-dispatch of contingency and regulation services is technically feasible.
+    contingency_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'raise_1s']
+    market.set_joint_capacity_constraints(contingency_trapeziums)
+
+    # Set the demand for energy.
+    market.set_demand_constraints(demand)
+
+    # Set the required volume of FCAS services.
+    market.set_fcas_requirements_constraints(fcas_requirements)
+
+    # Calculate dispatch and pricing
+    market.dispatch()
+
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'A', 'B', 'B', 'B'],
+        'service': ['energy', 'raise_1s', 'energy', 'raise_1s', 'raise_reg'],
+        'dispatch': [100.0, 5.0, 95.0, 5.0, 10.0]
+    })
+
+    assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
+
+    expected_energy_prices = pd.DataFrame({
+        'region': ['NSW'],
+        'price': [75.0]
+    })
+
+    assert_frame_equal(market.get_energy_prices(), expected_energy_prices)
+
+    expected_fcas_prices = pd.DataFrame({
+        'region': ['NSW', 'NSW'],
+        'service': ['raise_1s', 'raise_reg'],
+        'price': [35.0, 45.0]
+    })
+
+    assert_frame_equal(market.get_fcas_prices(), expected_fcas_prices)
+
+
+def test_lower_1s_and_lower_reg():
+    # Volume of each bid.
+    volume_bids = pd.DataFrame({
+        'unit': ['A', 'A', 'B', 'B', 'B'],
+        'service': ['energy', 'lower_1s', 'energy', 'lower_1s', 'lower_reg'],
+        '1': [100.0, 10.0, 110.0, 15.0, 15.0],  # MW
+    })
+
+    # Price of each bid.
+    price_bids = pd.DataFrame({
+        'unit': ['A', 'A', 'B', 'B', 'B'],
+        'service': ['energy', 'lower_1s', 'energy', 'lower_1s', 'lower_reg'],
+        '1': [50.0, 35.0, 60.0, 20.0, 30.0],  # $/MW
+    })
+
+    # Participant defined operational constraints on FCAS enablement.
+    fcas_trapeziums = pd.DataFrame({
+        'unit': ['B', 'B', 'A'],
+        'service': ['lower_reg', 'lower_1s', 'lower_1s'],
+        'max_availability': [15.0, 15.0, 10.0],
+        'enablement_min': [50.0, 50.0, 70.0],
+        'low_break_point': [65.0, 65.0, 80.0],
+        'high_break_point': [95.0, 95.0, 100.0],
+        'enablement_max': [110.0, 110.0, 110.0]
+    })
+
+    # Unit locations.
+    unit_info = pd.DataFrame({
+        'unit': ['A', 'B'],
+        'region': ['NSW', 'NSW']
+    })
+
+    # The demand in the region\s being dispatched.
+    demand = pd.DataFrame({
+        'region': ['NSW'],
+        'demand': [195.0]  # MW
+    })
+
+    # FCAS requirement in the region\s being dispatched.
+    fcas_requirements = pd.DataFrame({
+        'set': ['nsw_regulation_requirement', 'nsw_lower_1s_requirement'],
+        'region': ['NSW', 'NSW'],
+        'service': ['lower_reg', 'lower_1s'],
+        'volume': [10.0, 10.0]  # MW
+    })
+
+    # Create the market model with unit service bids.
+    market = markets.SpotMarket(unit_info=unit_info, market_regions=['NSW'])
+    market.set_unit_volume_bids(volume_bids)
+    market.set_unit_price_bids(price_bids)
+
+    # Create constraints that enforce the top of the FCAS trapezium.
+    fcas_availability = fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
+    market.set_fcas_max_availability(fcas_availability)
+
+    # Create constraints the enforce the lower and upper slope of the FCAS regulation
+    # service trapeziums.
+    regulation_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'lower_reg']
+    market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
+
+    # Create constraints that enforce the lower and upper slope of the FCAS contingency
+    # trapezium. These constrains also scale slopes of the trapezium to ensure the
+    # co-dispatch of contingency and regulation services is technically feasible.
+    contingency_trapeziums = fcas_trapeziums[fcas_trapeziums['service'] == 'lower_1s']
+    market.set_joint_capacity_constraints(contingency_trapeziums)
+
+    # Set the demand for energy.
+    market.set_demand_constraints(demand)
+
+    # Set the required volume of FCAS services.
+    market.set_fcas_requirements_constraints(fcas_requirements)
+
+    # Calculate dispatch and pricing
+    market.dispatch()
+
+    expected_dispatch = pd.DataFrame({
+        'unit': ['A', 'A', 'B', 'B', 'B'],
+        'service': ['energy', 'lower_1s', 'energy', 'lower_1s', 'lower_reg'],
+        'dispatch': [100.0, 0.0, 95.0, 10.0, 10.0]
+    })
+
+    assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
+
+    expected_energy_prices = pd.DataFrame({
+        'region': ['NSW'],
+        'price': [60.0]
+    })
+
+    assert_frame_equal(market.get_energy_prices(), expected_energy_prices)
+
+    expected_fcas_prices = pd.DataFrame({
+        'region': ['NSW', 'NSW'],
+        'service': ['lower_1s', 'lower_reg'],
+        'price': [20.0, 30.0]
+    })
+
+    assert_frame_equal(market.get_fcas_prices(), expected_fcas_prices)
+
+
 def test_two_region_energy_market_with_regional_generic_constraints():
     # Volume of each bid, number of bid bands must equal number of bands in price_bids.
     volume_bids = pd.DataFrame({
