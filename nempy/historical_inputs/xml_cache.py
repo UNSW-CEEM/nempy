@@ -26,6 +26,7 @@ class XMLCacheManager:
     ----------
     cache_folder : str
     """
+
     def __init__(self, cache_folder):
         self.cache_folder = cache_folder
         self.interval = None
@@ -86,7 +87,9 @@ class XMLCacheManager:
         if not self.interval_inputs_in_cache():
             self._download_xml_from_nemweb()
             if not self.interval_inputs_in_cache():
-                raise MissingDataError('File not downloaded, check internet connection and that NEMWeb contains data for interval {}.'.format(self.interval))
+                raise MissingDataError(
+                    'File not downloaded, check internet connection and that NEMWeb contains data for interval {}.'.format(
+                        self.interval))
         with open(self.get_file_path()) as file:
             read = file.read()
             self.xml = xmltodict.parse(read)
@@ -409,13 +412,14 @@ class XMLCacheManager:
 
 
         """
-        traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection']['TraderPeriod']
+        traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection'][
+            'TraderPeriod']
         trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], MAXAVAIL=[], ENABLEMENTMIN=[], ENABLEMENTMAX=[],
                                        LOWBREAKPOINT=[], HIGHBREAKPOINT=[], BANDAVAIL1=[], BANDAVAIL2=[],
                                        BANDAVAIL3=[], BANDAVAIL4=[], BANDAVAIL5=[], BANDAVAIL6=[], BANDAVAIL7=[],
                                        BANDAVAIL8=[], BANDAVAIL9=[], BANDAVAIL10=[], RAMPDOWNRATE=[], RAMPUPRATE=[])
         name_map = dict(BIDTYPE='@TradeType', MAXAVAIL='@MaxAvail', ENABLEMENTMIN='@EnablementMin',
-                        ENABLEMENTMAX='@EnablementMax',  LOWBREAKPOINT='@LowBreakpoint',
+                        ENABLEMENTMAX='@EnablementMax', LOWBREAKPOINT='@LowBreakpoint',
                         HIGHBREAKPOINT='@HighBreakpoint', BANDAVAIL1='@BandAvail1', BANDAVAIL2='@BandAvail2',
                         BANDAVAIL3='@BandAvail3', BANDAVAIL4='@BandAvail4', BANDAVAIL5='@BandAvail5',
                         BANDAVAIL6='@BandAvail6', BANDAVAIL7='@BandAvail7', BANDAVAIL8='@BandAvail8',
@@ -510,7 +514,8 @@ class XMLCacheManager:
         for trader in traders:
             if type(trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']
                     ['TradeTypePriceStructure']) != list:
-                trades = trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']
+                trades = trader['TradePriceStructureCollection']['TradePriceStructure'][
+                    'TradeTypePriceStructureCollection']
                 for _, trade in trades.items():
                     trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
                     for our_name, aemo_name in name_map.items():
@@ -523,7 +528,9 @@ class XMLCacheManager:
                             value = 0.0
                         trades_by_unit_and_type[our_name].append(value)
             else:
-                for trade in trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']['TradeTypePriceStructure']:
+                for trade in \
+                trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection'][
+                    'TradeTypePriceStructure']:
                     trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
                     for our_name, aemo_name in name_map.items():
                         if aemo_name in trade:
@@ -580,7 +587,8 @@ class XMLCacheManager:
 
 
         """
-        traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection']['TraderPeriod']
+        traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection'][
+            'TraderPeriod']
         trades_by_unit_and_type = dict(DUID=[], UIGF=[])
         for trader in traders:
             if '@UIGF' in trader:
@@ -999,7 +1007,9 @@ class XMLCacheManager:
                               interconnector, (as `str`)
             ================  ========================================
         """
-        inters = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection']['InterconnectorPeriod']
+        inters = \
+        self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection'][
+            'InterconnectorPeriod']
         bid_availability = dict(interconnector=[], to_region=[], availability=[])
         for inter in inters:
             if inter['@MNSP'] == '1':
@@ -1063,6 +1073,75 @@ class XMLCacheManager:
                 pass
             check_time += timedelta(minutes=5)
         return intervals
+
+    def get_service_prices(self):
+        """Get the energy market and FCAS prices by region.
+
+        Examples
+        --------
+
+        >>> manager = XMLCacheManager('test_nemde_cache')
+
+        >>> manager.load_interval('2019/01/01 00:00:00')
+
+        >>> manager.get_service_prices()
+           region     service     price
+        0    NSW1      ENERGY  62.93553
+        1    NSW1   RAISE5MIN      4.39
+        2    NSW1  RAISE60SEC         1
+        3    NSW1  LOWER60SEC      0.07
+        4    NSW1   RAISE6SEC         1
+        5    NSW1   LOWER6SEC      0.03
+        6    QLD1      ENERGY  58.71004
+        7    QLD1   RAISE5MIN      4.39
+        8    QLD1  RAISE60SEC         1
+        9    QLD1  LOWER60SEC      0.07
+        10   QLD1   RAISE6SEC         1
+        11   QLD1   LOWER6SEC      0.03
+        12    SA1      ENERGY   79.0014
+        13    SA1   RAISE5MIN      4.39
+        14    SA1  RAISE60SEC         1
+        15    SA1  LOWER60SEC      0.07
+        16    SA1   RAISE6SEC         1
+        17    SA1   LOWER6SEC      0.03
+        18   TAS1      ENERGY  79.00957
+        19   TAS1   RAISE5MIN      14.4
+        20   TAS1  RAISE60SEC      4.95
+        21   TAS1  LOWER60SEC      0.07
+        22   TAS1   RAISE6SEC      4.95
+        23   TAS1   LOWER6SEC      0.03
+        24   VIC1      ENERGY  75.23031
+        25   VIC1   RAISE5MIN      4.39
+        26   VIC1  RAISE60SEC         1
+        27   VIC1  LOWER60SEC      0.07
+        28   VIC1   RAISE6SEC         1
+        29   VIC1   LOWER6SEC      0.03
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ================  ========================================
+            Columns:          Description:
+            region            the region (as `str`)
+            service           the services (as `str`), i.e. energy, \n
+                              lower_1s, lower_5min, etc
+            price             the price of the service (as `np.float64`)
+            ================  ========================================
+        """
+        service_type_map = \
+            {'@EnergyPrice':'ENERGY', '@LRegPrice':'LOWERREG', '@RRegPrice':'RAISEREG', '@R5Price':'RAISE5MIN',
+             '@RL5Price':'LOWER5MIN', '@R60Price':'RAISE60SEC', '@L60Price':'LOWER60SEC', '@R6Price':'RAISE6SEC',
+             '@L6Price':'LOWER6SEC', '@R1Price':'RAISE1SEC', '@L1Price':'LOWER1SEC'}
+        prices = dict(region=[], service=[], price=[])
+        regions = self.xml['NEMSPDCaseFile']['NemSpdOutputs']['RegionSolution']
+        for region in regions:
+            for xml_service, mms_service in service_type_map.items():
+                if xml_service in region:
+                    prices['region'].append(region['@RegionID'])
+                    prices['service'].append(mms_service)
+                    prices['price'].append(region[xml_service])
+        return pd.DataFrame(prices)
 
 
 class MissingDataError(Exception):

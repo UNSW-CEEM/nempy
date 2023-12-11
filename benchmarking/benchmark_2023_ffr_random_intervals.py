@@ -6,13 +6,14 @@ from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, constraints, rhs_calculator
 from nempy.help_functions.helper_functions import update_rhs_values
+from nempy.historical_inputs.aemo_to_nempy_name_mapping import map_aemo_column_values_to_nempy_name
 
-con = sqlite3.connect('nempy/historical_mms.db')
+con = sqlite3.connect('D:/nempy_oct_2023/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('nempy/xml_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_oct_2023/xml_cache')
 
-download_inputs = True
+download_inputs = False
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
@@ -47,6 +48,8 @@ def get_test_intervals(number=100):
 
 # List for saving outputs to.
 outputs = []
+fcas_outputs = []
+
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
 for interval in get_test_intervals(number=100):
@@ -191,6 +194,7 @@ for interval in get_test_intervals(number=100):
                         energy_market_ceiling_price=16600.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_one = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
+    fcas_prices_run_one = market.get_fcas_prices()
 
     # Re-run dispatch with Basslink Frequency controller off.
     # Set frequency controller to off in rhs calculations
@@ -235,9 +239,13 @@ for interval in get_test_intervals(number=100):
                         energy_market_ceiling_price=16600.0,
                         fcas_market_ceiling_price=1000.0)
     prices_run_two = market.get_energy_prices()  # If this is the lowest cost run these will be the market prices.
+    fcas_prices_run_two = market.get_fcas_prices()
 
     prices_run_one['time'] = interval
     prices_run_two['time'] = interval
+    fcas_prices_run_one['time'] = interval
+    fcas_prices_run_two['time'] = interval
+
 
     # Getting historical prices for comparison. Note, ROP price, which is
     # the regional reference node price before the application of any
@@ -247,30 +255,55 @@ for interval in get_test_intervals(number=100):
     # The prices from the run with the lowest objective function value are used.
     if objective_value_run_one < objective_value_run_two:
         prices = prices_run_one
+        fcas_prices = fcas_prices_run_one
     else:
         prices = prices_run_two
+        fcas_prices = fcas_prices_run_two
 
     prices['time'] = interval
     prices = pd.merge(prices, historical_prices,
                       left_on=['time', 'region'],
                       right_on=['SETTLEMENTDATE', 'REGIONID'])
 
-    outputs.append(prices)
+    historical_prices = xml_cache_manager.get_service_prices()
+    historical_prices = map_aemo_column_values_to_nempy_name(historical_prices, 'service')
+    historical_prices = historical_prices.rename(columns={'price': 'ROP'})
+    historical_prices['ROP'] = historical_prices['ROP'].astype(float)
+    fcas_prices['time'] = interval
+    fcas_prices = pd.merge(fcas_prices, historical_prices, on=['region', 'service'])
 
-# con.close()
-#
-# outputs = pd.concat(outputs)
-#
-# outputs['error'] = outputs['price'] - outputs['ROP']
-# outputs.to_csv('benchmark_2023_ffr_random_intervals.csv')
-#
-# print('\n Summary of error in energy price across all regions. \n'
-#       'Comparison is against ROP, the region price prior to \n'
-#       'any post dispatch adjustments, scaling, capping etc.')
-# print('Mean price error: {}'.format(outputs['error'].mean()))
-# print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
-# print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
-# print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
+    outputs.append(prices)
+    fcas_outputs.append(fcas_prices)
+
+con.close()
+
+outputs = pd.concat(outputs)
+fcas_outputs = pd.concat(fcas_outputs)
+
+
+outputs['error'] = outputs['price'] - outputs['ROP']
+outputs.to_csv('benchmark_2023_ffr_random_intervals.csv')
+
+fcas_outputs['error'] = fcas_outputs['price'] - fcas_outputs['ROP']
+fcas_outputs.to_csv('benchmark_2023_ffr_fcas_random_intervals.csv')
+
+print('\n Summary of error in energy price across all regions. \n'
+      'Comparison is against ROP, the region price prior to \n'
+      'any post dispatch adjustments, scaling, capping etc.')
+print('Mean price error: {}'.format(outputs['error'].mean()))
+print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
+print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
+print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
+
+
+print('\n Summary of error in FCAS price across all regions. \n'
+      'Comparison is against ROP, the region price prior to \n'
+      'any post dispatch adjustments, scaling, capping etc.')
+print('Mean price error: {}'.format(fcas_outputs['error'].mean()))
+print('Median price error: {}'.format(fcas_outputs['error'].quantile(0.5)))
+print('5% percentile price error: {}'.format(fcas_outputs['error'].quantile(0.05)))
+print('95% percentile price error: {}'.format(fcas_outputs['error'].quantile(0.95)))
+
 
 # Summary of error in energy price across all regions.
 # Comparison is against ROP, the region price prior to
