@@ -17,7 +17,7 @@ classifiers=[
 repository="https://github.com/UNSW-CEEM/nempy"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.12"
+python = ">=3.8,<4.0"
 pandas = "<3.0.0"
 mip = ">=1.16rc0"
 xmltodict = "==0.12.0"
