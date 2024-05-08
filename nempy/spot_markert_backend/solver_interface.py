@@ -338,13 +338,11 @@ class InterfaceToSolver:
         5            5          0.0          5.0  continuous    0.0
 
         """
-        values = variable_definitions['variable_id'].apply(lambda x: self.mip_model.var_by_name(str(x)).x,
-                                                           self.mip_model)
+        values = variable_definitions['variable_id'].apply(lambda x: self.mip_model.var_by_name(str(x)).x)
         return values
 
     def get_optimal_values_of_decision_variables_lin(self, variable_definitions):
-        values = variable_definitions['variable_id'].apply(lambda x: self.linear_mip_model.var_by_name(str(x)).x,
-                                                           self.mip_model)
+        values = variable_definitions['variable_id'].apply(lambda x: self.linear_mip_model.var_by_name(str(x)).x)
         return values
 
     def get_slack_in_constraints(self, constraints_type_and_rhs):
