@@ -9,7 +9,7 @@ from nempy.historical_inputs import loaders, xml_cache, mms_db, units, \
 from tests import historical_market_builder
 
 test_db = 'D:/nempy_test_files/historical_mms.db'
-test_xml_cache = 'D:/nempy_data/nemde_cache'
+test_xml_cache = 'D:/nempy_test_files/nemde_cache'
 
 
 # These tests require some additional clean up and will probably not run on your machine. ##############################

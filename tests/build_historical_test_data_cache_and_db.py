@@ -8,11 +8,11 @@ running_for_first_time = True
 con = sqlite3.connect('D:/nempy_test_files/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_data/nemde_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_test_files/nemde_cache')
 
 if running_for_first_time:
-    # mms_db_manager.populate(start_year=2019, start_month=1, end_year=2019, end_month=12)
-    xml_cache_manager.populate(start_year=2019, start_month=1, end_year=2019, end_month=12)
+    mms_db_manager.populate(start_year=2019, start_month=1, end_year=2019, end_month=12)
+    #xml_cache_manager.populate(start_year=2019, start_month=1, end_year=2019, end_month=12)
 
 get_violation_intervals = False
 
