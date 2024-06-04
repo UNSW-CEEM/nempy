@@ -404,22 +404,23 @@ files = [
 
 [[package]]
 name = "mip"
-version = "1.15.0"
+version = "1.16rc0"
 description = "Python tools for Modeling and Solving Mixed-Integer Linear Programs (MIPs)"
 optional = false
-python-versions = "<3.12,>=3.7"
+python-versions = "<3.13,>=3.7"
 files = [
-    {file = "mip-1.15.0-py3-none-any.whl", hash = "sha256:9a48c993ddc9a48591a59e4a1221b400eb1e35fc087052085774360330bb9226"},
-    {file = "mip-1.15.0.tar.gz", hash = "sha256:7f6f0381cfe2c52c1b8640203da2cb56974b26e23950ddfb1a76b37d916f197e"},
+    {file = "mip-1.16rc0-py3-none-any.whl", hash = "sha256:62e04c27bce56da94d070f6b03d9e342600d10f4016984334af7dae8c0f9fd09"},
+    {file = "mip-1.16rc0.tar.gz", hash = "sha256:f250083a41f4e1f61b6885041d64ed2a88bff5ead7165c329b5b31d07c517466"},
 ]
 
 [package.dependencies]
-cffi = "==1.15.*"
+cffi = ">=1.15"
 
 [package.extras]
 gurobi = ["gurobipy (>=8)"]
-numpy = ["numpy (==1.21.6)", "numpy (==1.24.*)"]
-test = ["matplotlib (==3.5.3)", "matplotlib (==3.6.2)", "networkx (==2.6.3)", "networkx (==2.8.8)", "pytest (==7.2.0)"]
+highs = ["highspy (>=1.5.3)"]
+numpy = ["numpy (==1.21.*)", "numpy (==1.24.*)", "numpy (>=1.25)"]
+test = ["matplotlib (==3.5.3)", "matplotlib (==3.6.2)", "matplotlib (>=3.7)", "networkx (==2.6.3)", "networkx (==2.8.8)", "pytest (>=7.4)"]
 
 [[package]]
 name = "numpy"
@@ -935,5 +936,5 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 
 [metadata]
 lock-version = "2.0"
-python-versions = ">=3.8,<3.12"
-content-hash = "537d0c0eb765c21686925d52935ce74557ba525c3507b56f5e70e53c35ff3e29"
+python-versions = ">=3.8,<3.13"
+content-hash = "73dff1b41e265e9b504f0a8b4f6af19c7a1a53f64c72278d3c62a59e1c26bf03"
