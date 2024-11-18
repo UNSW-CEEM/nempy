@@ -155,3 +155,18 @@ venv_docs_build/*
 !/test_nemde_cache/NEMSPDOutputs_2019011009700.loaded
 !/tests/nemde_cache_rhs_calc_testing/NEMSPDOutputs_2012123124000.loaded
 tests/scratch.py
+scatch.py
+
+# for repopack
+#*.pdf
+#*.zip
+#*.pickle
+#*.csv
+#*.loaded
+#*.svg
+#*.lock
+#*.png
+#*.db
+#/benchmarking/*
+#/examples/*
+#nempy/historical_inputs/*
