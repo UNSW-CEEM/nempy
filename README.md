@@ -67,12 +67,12 @@ Contributions via pull requests are welcome. Contributions should:
 
 #### Installation for development
 
-Nempy uses [`poetry`](https://python-poetry.org/docs/) as a dependency and project management tool. To install Nempy for development, clone or fork the repo and then run the following command in the main directory to install required dependencies and the source code as an editable project:
+To install Nempy for development:
 
-```bash
-poetry install --with=dev
-```
-You can then work within the virtual environment using `poetry shell` or run commands within it using `poetry run`.
+1. Clone or fork the repo
+2. Install [`uv`](https://github.com/astral-sh/uv)
+3. Install `nempy` using `uv` by running `uv sync` in the project directory
+4. uv will create .venv, which you can configure your IDE to use, or you can use explicity to run a python file by running `uv run your_code.py`
 
 ## Author
 
