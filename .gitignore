@@ -157,15 +157,16 @@ venv_docs_build/*
 tests/scratch.py
 scatch.py
 
-*.pdf
-*.zip
-*.pickle
-*.csv
-*.loaded
-*.svg
-*.lock
-*.png
-*.db
-/benchmarking/*
-/examples/*
-nempy/historical_inputs/*
+# for repopack
+#*.pdf
+#*.zip
+#*.pickle
+#*.csv
+#*.loaded
+#*.svg
+#*.lock
+#*.png
+#*.db
+#/benchmarking/*
+#/examples/*
+#nempy/historical_inputs/*
