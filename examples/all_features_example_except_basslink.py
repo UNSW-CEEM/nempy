@@ -171,7 +171,7 @@ for interval in get_test_intervals(number=100):
     market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
     market.make_constraints_elastic('joint_ramping_raise_reg', cost)
 
-    if 'fast_start' in market.get_constraint_set_names.keys():
+    if 'fast_start' in market.get_constraint_set_names():
         cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
         market.make_constraints_elastic('fast_start', violation_cost=cost)
 
