@@ -28,31 +28,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Get poetry
-        uses: snok/install-poetry@v1
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v3
         with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+          enable-cache: true
 
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
-      
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: Sync dependencies
+        run: uv sync
 
-      - name: Install poetry env with dev group
-        run: poetry install --with=dev
-
-      - name: Run tests with pytest
-        run: |
-          source $VENV
-          python -m pytest
+      - name: Run tests
+        run: uv run --frozen pytest tests src -ra --doctest-modules
           
   publish:
     if: github.event_name == 'release' && github.event.action == 'created'
@@ -63,31 +48,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # Set up Python
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-
       # Install the specified version of poetry
-      - name: Get poetry
-        uses: snok/install-poetry@v1
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v3
         with:
-          version: 1.4.0
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+          enable-cache: true
 
-      # Load cached poetry env if it exists
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v2
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Build
+        run: uv build
 
       # Build and publish to PyPI
       - name: Build and publish # publish tsgen to PyPI
         env:
           PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
           PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: poetry publish -u $PYPI_USERNAME -p $PYPI_PASSWORD --build
+        run: uv publish -u $PYPI_USERNAME -p $PYPI_PASSWORD

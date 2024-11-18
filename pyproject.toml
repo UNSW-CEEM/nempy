@@ -1,39 +1,40 @@
-[tool.poetry]
-name="nempy"
-version="2.2.0"
+[project]
+name = "nempy"
+version = "2.2.0"
 description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure."
-authors=["Nicholas Gorman <n.gorman@unsw.edu.au>",]
-license = "BSD-3-Clause"
-readme = "README.md"
-classifiers=[
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "License :: OSI Approved :: BSD License",
-    "Operating System :: OS Independent",
+authors = [
+    { name = "nick-gorman", email = "n.gorman305@gmail.com" },
 ]
-repository="https://github.com/UNSW-CEEM/nempy"
-
-[tool.poetry.dependencies]
-python = ">=3.8,<3.13"
-pandas = "<3.0.0"
-mip = "=1.16rc0"
-xmltodict = "==0.12.0"
-requests = ">=2.0.0, <3.0.0"
-
-[tool.poetry.group.dev]
-optional = true
-
-[tool.poetry.group.dev.dependencies]
-pytest = ">=6.2.5"
-
-[tool.poetry.group.docs.dependencies]
-Sphinx = "^5"
-autodocsumm = "^0.2.11"
-sphinx-rtd-theme = "^1.3.0"
+dependencies = [
+    "mip==1.16rc0",
+    "pandas>=2.2.2",
+    "xmltodict==0.12.0",
+    "requests>=2.0.0",
+    "repopack>=0.1.4",
+]
+readme = "README.md"
+requires-python = ">= 3.9"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+managed = true
+dev-dependencies = [
+    "Sphinx>=5.0.0",
+    "autodocsumm>=0.2.11",
+    "sphinx-rtd-theme>=1.3.0",
+    "pytest>=8.3.2",
+]
+
+[tool.pytest.ini_options]
+# path to tests for pytest
+testpaths = ["src", "tests"]
+# addopts = add options
+addopts = "-ra --doctest-modules"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+

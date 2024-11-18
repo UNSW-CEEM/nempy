@@ -10,13 +10,13 @@ from nempy.historical_inputs import mms_db
 
 def test_download_to_df():
     if platform.system() == 'Windows':
-        server = subprocess.Popen(shlex.split('python -m http.server 8080 --bind 127.0.0.1'))
+        server = subprocess.Popen(shlex.split('python -m http.server 8888 --bind 127.0.0.1'))
     else:
-        server = subprocess.Popen(shlex.split('python3 -m http.server 8080 --bind 127.0.0.1'))
+        server = subprocess.Popen(shlex.split('python3 -m http.server 8888 --bind 127.0.0.1'))
     try:
         time.sleep(1)
         output_1 = mms_db._download_to_df(
-            url='http://127.0.0.1:8080/tests/test_files/{table}_{year}{month}01.zip',
+            url='http://127.0.0.1:8888/tests/test_files/{table}_{year}{month}01.zip',
             table_name='table_one', year=2020, month=1)
         expected_1 = pd.DataFrame({
             'a': [1, 2],
@@ -24,7 +24,7 @@ def test_download_to_df():
         })
 
         output_2 = mms_db._download_to_df(
-            url='http://127.0.0.1:8080/tests/test_files/{table}_{year}{month}01.zip',
+            url='http://127.0.0.1:8888/tests/test_files/{table}_{year}{month}01.zip',
             table_name='table_two', year=2019, month=2)
         expected_2 = pd.DataFrame({
             'c': [1, 2],
@@ -38,14 +38,14 @@ def test_download_to_df():
 
 def test_download_to_df_raises_on_missing_data():
     if platform.system() == 'Windows':
-        server = subprocess.Popen(shlex.split('python -m http.server 8080 --bind 127.0.0.1'))
+        server = subprocess.Popen(shlex.split('python -m http.server 8888 --bind 127.0.0.1'))
     else:
-        server = subprocess.Popen(shlex.split('python3 -m http.server 8080 --bind 127.0.0.1'))
+        server = subprocess.Popen(shlex.split('python3 -m http.server 8888 --bind 127.0.0.1'))
     time.sleep(1)
     try:
         with pytest.raises(mms_db._MissingData) as exc_info:
             mms_db._download_to_df(
-                url='http://127.0.0.1:8080/tests/test_files/{table}_{year}{month}01.zip',
+                url='http://127.0.0.1:8888/tests/test_files/{table}_{year}{month}01.zip',
                 table_name='table_two', year=2019, month=3)
     finally:
         server.terminate()
