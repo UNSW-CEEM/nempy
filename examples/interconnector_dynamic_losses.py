@@ -132,7 +132,7 @@ print(market.get_unit_dispatch())
 # 0    A  energy  920.205473
 
 # Understanding the dispatch results: Unit A is the only generator and it must
-# be dispatch to meet demand plus losses:
+# be dispatched to meet demand plus losses:
 # dispatch = VIC region demand + NSW region demand + losses
 # dispatch = 920.205473
 

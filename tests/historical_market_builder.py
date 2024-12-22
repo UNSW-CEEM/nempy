@@ -1,6 +1,7 @@
 import pandas as pd
 import pytest
 import numpy as np
+from datetime import datetime, timedelta
 
 from nempy import markets
 from nempy.help_functions import helper_functions as hf
@@ -14,6 +15,7 @@ class SpotMarketBuilder:
         self.interconnector_inputs = interconnector_inputs
         self.constraint_inputs = constraint_inputs
         self.regional_demand_inputs = demand_inputs
+        self.fast_start_profiles = None
 
         unit_info = self.unit_inputs.get_unit_info()
         self.market = markets.SpotMarket(market_regions=['QLD1', 'NSW1', 'VIC1', 'SA1', 'TAS1'], unit_info=unit_info)
@@ -24,6 +26,11 @@ class SpotMarketBuilder:
 
     def add_unit_bids_to_market(self):
         volume_bids, price_bids = self.unit_inputs.get_processed_bids()
+        # unit_bid_limit = self.unit_inputs.get_unit_bid_availability()
+        # units_with_zero_cap = unit_bid_limit[unit_bid_limit['capacity'] == 0.0].copy()
+        # keys = set(zip(units_with_zero_cap['unit'], units_with_zero_cap['dispatch_type']))
+        # volume_bids = volume_bids[~volume_bids[['unit', 'dispatch_type']].apply(tuple, axis=1).isin(keys)]
+        # price_bids = price_bids[~price_bids[['unit', 'dispatch_type']].apply(tuple, axis=1).isin(keys)]
         self.market.set_unit_volume_bids(volume_bids)
         self.market.set_unit_price_bids(price_bids)
 
@@ -33,51 +40,71 @@ class SpotMarketBuilder:
         cost = self.constraint_inputs.get_constraint_violation_prices()['unit_capacity']
         self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
         unit_uigf_limit = self.unit_inputs.get_unit_uigf_limits()
-        self.market.set_unconstrained_intermitent_generation_forecast_constraint(unit_uigf_limit)
+        self.market.set_unconstrained_intermittent_generation_forecast_constraint(unit_uigf_limit)
         cost = self.constraint_inputs.get_constraint_violation_prices()['uigf']
         self.market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
 
     def set_ramp_rate_limits(self):
         ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
-        self.market.set_unit_ramp_up_constraints(
-            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-        self.market.set_unit_ramp_down_constraints(
-            ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+        fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch()
+        self.market.set_unit_ramp_rate_constraints(ramp_rates, fast_start_profiles, run_type="fast_start_first_run")
         cost = self.constraint_inputs.get_constraint_violation_prices()['ramp_rate']
         self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
         self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
+        if 'bidirectional_ramp_up' in self.market.get_constraint_set_names():
+            self.market.make_constraints_elastic('bidirectional_ramp_up', violation_cost=cost)
+            self.market.make_constraints_elastic('bidirectional_ramp_down', violation_cost=cost)
 
     def set_fast_start_constraints(self):
         self.market.dispatch()
         dispatch = self.market.get_unit_dispatch()
-        fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-        self.market.set_fast_start_constraints(fast_start_profiles)
-        if 'fast_start' in self.market._constraints_rhs_and_type:
+        self.fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
+        profiles = self.fast_start_profiles.loc[:,
+                   ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length',
+                    'min_loading']]
+        self.market.set_fast_start_constraints(profiles)
+        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+        self.market.set_unit_ramp_rate_constraints(
+            ramp_rates, self.fast_start_profiles, run_type="fast_start_first_run")
+        cost = self.constraint_inputs.get_constraint_violation_prices()['ramp_rate']
+        self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
+        self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
+        if 'bidirectional_ramp_up' in self.market.get_constraint_set_names():
+            self.market.make_constraints_elastic('bidirectional_ramp_up', violation_cost=cost)
+            self.market.make_constraints_elastic('bidirectional_ramp_down', violation_cost=cost)
+
+        cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_profile']
+        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
+            run_type="fast_start_second_run")
+        self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
+        self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
+        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(
+            run_type="fast_start_second_run")
+        self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
+        self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+
+        if 'fast_start' in self.market.get_constraint_set_names():
             cost = self.constraint_inputs.get_constraint_violation_prices()['fast_start']
-            self.market.make_constraints_elastic('fast_start', cost)
+            self.market.make_constraints_elastic('fast_start', violation_cost=cost)
 
     def set_unit_fcas_constraints(self):
         self.unit_inputs.add_fcas_trapezium_constraints()
-
         cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_max_avail']
         fcas_availability = self.unit_inputs.get_fcas_max_availability()
         self.market.set_fcas_max_availability(fcas_availability)
         self.market.make_constraints_elastic('fcas_max_availability', cost)
-
         cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_profile']
-
         regulation_trapeziums = self.unit_inputs.get_fcas_regulation_trapeziums()
         self.market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
         self.market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-
-        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units()
+        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
+            run_type="fast_start_first_run")
         self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
         self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-
-        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units()
+        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(
+            run_type="fast_start_first_run")
         self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
         self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
-
         contingency_trapeziums = self.unit_inputs.get_contingency_services()
         self.market.set_joint_capacity_constraints(contingency_trapeziums)
         self.market.make_constraints_elastic('joint_capacity', cost)
@@ -132,28 +159,30 @@ class SpotMarketBuilder:
 
 
 class MarketOverrider:
-    def __init__(self, market, mms_db, interval):
+    def __init__(self, market, mms_db, interval, raw_inputs_loader):
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                         'LOWERREG', 'RAISEREG']
+                         'LOWERREG', 'RAISEREG', 'RAISE1SEC', 'LOWER1SEC']
 
         self.service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
                                      'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
-                                     'ENERGY': 'energy'}
+                                     'ENERGY': 'energy', 'RAISE1SEC': 'raise_1s', 'LOWER1SEC': 'lower_1s'}
 
         self.inputs_manager = mms_db
         self.interval = interval
-
+        self.raw_inputs_loader = raw_inputs_loader
         self.market = market
 
     def set_unit_dispatch_to_historical_values(self, wiggle_room=0.001):
         DISPATCHLOAD = self.inputs_manager.DISPATCHLOAD.get_data(self.interval)
+        trader_type = self.raw_inputs_loader.get_unit_initial_conditions().loc[:, ['DUID', 'TRADERTYPE']]
+        DISPATCHLOAD = pd.merge(DISPATCHLOAD, trader_type, on='DUID')
 
-        bounds = DISPATCHLOAD.loc[:, ['DUID'] + self.services]
-        bounds.columns = ['unit'] + self.services
+        bounds = DISPATCHLOAD.loc[:, ['DUID', 'TRADERTYPE'] + self.services]
+        bounds.columns = ['unit', 'trader_type'] + self.services
 
-        bounds = hf.stack_columns(bounds, cols_to_keep=['unit'], cols_to_stack=self.services, type_name='service',
-                                  value_name='dispatched')
+        bounds = hf.stack_columns(bounds, cols_to_keep=['unit', 'trader_type'], cols_to_stack=self.services,
+                                  type_name='service', value_name='dispatched')
 
         bounds['service'] = bounds['service'].apply(lambda x: self.service_name_mapping[x])
 
@@ -161,13 +190,32 @@ class MarketOverrider:
 
         decision_variables = pd.merge(decision_variables, bounds, on=['unit', 'service'])
 
-        decision_variables_first_bid = decision_variables.groupby(['unit', 'service'], as_index=False).first()
+        decision_variables_first_bid = decision_variables.groupby(['unit', 'service', 'dispatch_type'], as_index=False).first()
+
+        bdu = \
+            decision_variables_first_bid[decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL'].copy()
+
+        not_bdu = \
+            decision_variables_first_bid[~(decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL')].copy()
+
+        bdu_gen = bdu[bdu['dispatch_type'] == 'generator'].copy()
+        bdu_load = bdu[bdu['dispatch_type'] == 'load'].copy()
+
+        bdu_gen['dispatched'] = np.where(bdu_gen['dispatched'] < 0.0, 0.0, bdu_gen['dispatched'])
+
+        bdu_load['dispatched'] = np.where(bdu_load['dispatched'] > 0.0, 0.0, bdu_load['dispatched'].abs())
+
+        decision_variables_first_bid = pd.concat([
+            not_bdu,
+            bdu_gen,
+            bdu_load
+        ])
 
         def last_bids(df):
             return df.iloc[1:]
 
         decision_variables_remaining_bids = \
-            decision_variables.groupby(['unit', 'service'], as_index=False).apply(last_bids)
+            decision_variables.groupby(['unit', 'service', 'dispatch_type'], as_index=False).apply(last_bids)
 
         decision_variables_first_bid['lower_bound'] = decision_variables_first_bid['dispatched'] - wiggle_room
         decision_variables_first_bid['upper_bound'] = decision_variables_first_bid['dispatched'] + wiggle_room
@@ -405,6 +453,23 @@ class MarketChecker:
     def measured_violation_equals_historical_violation(self, historical_name, nempy_constraints):
         measured = 0.0
         for name in nempy_constraints:
-            measured += self.market.get_elastic_constraints_violation_degree(name)
+            # v = self.violation_details(name)
+            if name in self.market.get_constraint_set_names():
+                measured += self.market.get_elastic_constraints_violation_degree(name)
         historical = self.xml.get_violations()[historical_name]
         return measured == pytest.approx(historical, abs=0.1)
+
+    def violation_details(self, constraint_set):
+        violations = self.market._decision_variables[constraint_set + '_deficit']
+        violations = violations[violations['value'].abs() > 0.0]
+        lhs = self.market._lhs_coefficients[constraint_set + '_deficit']
+        violations = pd.merge(violations, lhs, on='variable_id')
+        rhs_and_type = self.market._constraints_rhs_and_type[constraint_set]
+        return pd.merge(violations, rhs_and_type, on='constraint_id')
+
+
+def get_next_interval(interval):
+    interval = datetime.strptime(interval, '%Y/%m/%d %H:%M:%S')
+    next_interval = interval + timedelta(minutes=5)
+    next_interval = next_interval.strftime('%Y/%m/%d %H:%M:%S')
+    return next_interval

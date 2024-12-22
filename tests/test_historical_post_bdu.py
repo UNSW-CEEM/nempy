@@ -7,8 +7,10 @@ import pickle
 from nempy.historical_inputs import loaders, xml_cache, mms_db, units, \
     interconnectors, constraints, demand
 import historical_market_builder
+from nempy.historical_inputs import aemo_to_nempy_name_mapping as an
 
-test_db = 'D:/nempy_test_files/historical_mms.db'
+
+test_db = 'D:/nempy_2024_07/historical_mms.db'
 test_xml_cache = 'D:/nempy_test_files/nemde_cache'
 
 
@@ -16,8 +18,8 @@ test_xml_cache = 'D:/nempy_test_files/nemde_cache'
 
 
 def get_test_intervals(number=100):
-    start_time = datetime(year=2019, month=1, day=1, hour=0, minute=0)
-    end_time = datetime(year=2019, month=12, day=31, hour=0, minute=0)
+    start_time = datetime(year=2024, month=7, day=1, hour=0, minute=0)
+    end_time = datetime(year=2024, month=8, day=1, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(2)
@@ -55,14 +57,16 @@ def test_xml_price_bid_loader_vs_mms_db_loader():
     assert_frame_equal(xml_bids.reset_index(drop=True), mms_bids.reset_index(drop=True), check_less_precise=3)
 
 
-def test_ramp_rate_constraints():
+def test_find_intervals_where_fast_start_unit_commitment_works():
     con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
     xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
-    for interval in get_test_intervals(number=10):
+    working_intervals = []
+
+    for interval in get_test_intervals(number=100):
 
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
@@ -91,9 +95,66 @@ def test_ramp_rate_constraints():
 
         calculated_fs_profiles = market_builder.fast_start_profiles
 
+        next_interval_fs_profiles = an.map_aemo_column_names_to_nempy_names(next_interval_fs_profiles)
+        next_interval_fs_profiles = next_interval_fs_profiles.rename(columns={
+            'current_mode': 'end_mode',
+            'time_in_current_mode': 'time_in_end_mode'
+        })
+        cols_convert_to_float = ['end_mode', 'time_in_end_mode']
+        next_interval_fs_profiles[cols_convert_to_float] = next_interval_fs_profiles[cols_convert_to_float].astype(float)
+        calculated_fs_profiles[cols_convert_to_float] = calculated_fs_profiles[cols_convert_to_float].astype(float)
+        calculated_fs_profiles = calculated_fs_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode']]
+        calculated_fs_profiles = calculated_fs_profiles.sort_values('unit').reset_index(drop=True)
+        next_interval_fs_profiles = next_interval_fs_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode']]
+        next_interval_fs_profiles = next_interval_fs_profiles.sort_values('unit').reset_index(drop=True)
+
+        if calculated_fs_profiles.equals(next_interval_fs_profiles):
+            working_intervals.append(interval)
+            print(interval)
+
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'wb') as file:
+        pickle.dump(working_intervals, file)
+
+
+def test_ramp_rate_constraints():
+    con = sqlite3.connect(test_db)
+    mms_database = mms_db.DBManager(con)
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
+    raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
+                                                market_management_system_database=mms_database)
+
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
+        intervals = pickle.load(file)
+
+    for interval in ['2024/07/29 13:30:00']:
+        # if interval in ['2024/07/23 09:20:00', '2024/07/29 13:30:00']: # Small initial mw and 0 ramp rate cause violations
+        #     continue
+        print(interval)
+
+        raw_inputs_loader.set_interval(interval)
+        unit_inputs = units.UnitData(raw_inputs_loader)
+        interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
+        constraint_inputs = constraints.ConstraintData(raw_inputs_loader)
+        demand_inputs = demand.DemandData(raw_inputs_loader)
+
+        market_builder = historical_market_builder.SpotMarketBuilder(unit_inputs=unit_inputs,
+                                                                     interconnector_inputs=interconnector_inputs,
+                                                                     constraint_inputs=constraint_inputs,
+                                                                     demand_inputs=demand_inputs)
+        market_builder.add_unit_bids_to_market()
+        market_builder.set_ramp_rate_limits()
+        market_builder.set_unit_limit_constraints()
+        market_builder.add_interconnectors_to_market()
+        market_builder.add_generic_constraints()
+        market_builder.set_unit_fcas_constraints()
+        market_builder.set_region_demand_constraints()
+        market_builder.set_fast_start_constraints()
+        market = market_builder.get_market_object()
+
         market_overrider = historical_market_builder.MarketOverrider(market=market,
                                                                      mms_db=mms_database,
-                                                                     interval=interval)
+                                                                     interval=interval,
+                                                                     raw_inputs_loader=raw_inputs_loader)
 
         market_overrider.set_unit_dispatch_to_historical_values()
 
@@ -104,8 +165,15 @@ def test_ramp_rate_constraints():
                                                                  xml_cache=xml_cache_manager,
                                                                  interval=interval)
 
-        assert market_checker.measured_violation_equals_historical_violation(historical_name='ramp_rate',
-                                                                             nempy_constraints=['ramp_up', 'ramp_down'])
+        assert market_checker.measured_violation_equals_historical_violation(
+            historical_name='ramp_rate',
+            nempy_constraints=[
+                'ramp_up',
+                'ramp_down',
+                'bidirectional_ramp_up',
+                'bidirectional_ramp_down'
+            ]
+        )
 
 
 def test_ramp_rate_constraints_where_constraints_violated():

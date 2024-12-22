@@ -88,7 +88,7 @@ for interval in get_test_intervals(number=1000):
     # Set limits provided by the unconstrained intermittent generation
     # forecasts. Primarily for wind and solar.
     unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
-    market.set_unconstrained_intermitent_generation_forecast_constraint(
+    market.set_unconstrained_intermittent_generation_forecast_constraint(
         unit_uigf_limit)
     cost = constraint_inputs.get_constraint_violation_prices()['uigf']
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)

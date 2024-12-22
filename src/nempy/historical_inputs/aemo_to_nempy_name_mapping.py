@@ -37,7 +37,10 @@ name_map = {'TOTALCLEARED': 'energy',
             'MWBREAKPOINT': 'break_point',
             'RAMPUPRATE': 'ramp_up_rate',
             'RAMPDOWNRATE': 'ramp_down_rate',
-            'INITIALMW': 'initial_output'}
+            'SCADARAMPUPRATE': 'scada_ramp_up_rate',
+            'SCADARAMPDOWNRATE': 'scada_ramp_down_rate',
+            'INITIALMW': 'initial_output',
+            'DIRECTION': 'dispatch_type'}
 
 
 def map_aemo_column_names_to_nempy_names(dataframe):

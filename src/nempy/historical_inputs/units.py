@@ -14,6 +14,7 @@ def _test_setup():
     xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
     inputs_loader.set_interval('2019/01/10 12:05:00')
+    # inputs_loader.set_interval('2024/08/01 02:15:00')
     return inputs_loader
 
 
@@ -72,17 +73,32 @@ class UnitData:
                                      'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min', 'LOWER6SEC': 'lower_6s',
                                      'LOWER1SEC': 'lower_1s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min'}
 
-        self.volume_bids = self.raw_input_loader.get_unit_volume_bids()
+        self.price_bids = self.raw_input_loader.get_unit_price_bids()
+        volume_bids = self.raw_input_loader.get_unit_volume_bids()
+        self.volume_bids = self._map_direction_to_volume_bids(volume_bids, self.price_bids)
+
         self.fast_start_profiles = self.raw_input_loader.get_unit_fast_start_parameters()
         self.initial_conditions = self.raw_input_loader.get_unit_initial_conditions()
         self.uigf_values = self.raw_input_loader.get_UIGF_values()
 
-        self.price_bids = self.raw_input_loader.get_unit_price_bids()
         self.unit_details = self.raw_input_loader.get_unit_details()
-
         self.BIDPEROFFER_D = None
         self.fcas_trapeziums = None
         self.updated_fast_start_profiles = None
+
+    @staticmethod
+    def _map_direction_to_volume_bids(volume_bids, price_bids):
+        volume_bids_with_missing_directions = volume_bids[volume_bids['DIRECTION'].isna()].copy()
+        volume_bids_without_missing_directions = volume_bids[~volume_bids['DIRECTION'].isna()].copy()
+        volume_bids_with_missing_directions = volume_bids_with_missing_directions.drop(columns='DIRECTION')
+        volume_bids_with_missing_directions = pd.merge(
+            volume_bids_with_missing_directions,
+            price_bids.loc[:, ["DUID", "BIDTYPE", "DIRECTION"]],
+            how='left',
+            on=['DUID', 'BIDTYPE']
+        )
+        volume_bids = pd.concat([volume_bids_with_missing_directions, volume_bids_without_missing_directions])
+        return volume_bids
 
     def get_unit_bid_availability(self):
         """Get the bid in maximum availability for scheduled units.
@@ -95,20 +111,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_unit_bid_availability()
-                  unit  capacity
-        0       AGLHAL     170.0
-        1       AGLSOM     160.0
-        2      ANGAST1      44.0
-        23      BALBG1       0.0
-        33      BALBL1       0.0
-        ...        ...       ...
-        989   YARWUN_1     165.0
-        990      YWPS1     380.0
-        999      YWPS2     180.0
-        1008     YWPS3     350.0
-        1017     YWPS4     340.0
+                  unit  direction  capacity
+        0       AGLHAL  generator     170.0
+        1       AGLSOM  generator     160.0
+        2      ANGAST1  generator      44.0
+        23      BALBG1  generator       0.0
+        33      BALBL1       load       0.0
+        ...        ...        ...       ...
+        989   YARWUN_1  generator     165.0
+        990      YWPS1  generator     380.0
+        999      YWPS2  generator     180.0
+        1008     YWPS3  generator     350.0
+        1017     YWPS4  generator     340.0
         <BLANKLINE>
-        [218 rows x 2 columns]
+        [218 rows x 3 columns]
 
         Returns
         -------
@@ -122,11 +138,12 @@ class UnitData:
             ================  ========================================
 
         """
-        bid_availability = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL']]
+        bid_availability = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'MAXAVAIL']]
         bid_availability = self._remove_non_energy_bids(bid_availability)
-        bid_availability = bid_availability.loc[:, ['DUID', 'MAXAVAIL']]
+        bid_availability = bid_availability.loc[:, ['DUID', 'DIRECTION', 'MAXAVAIL']]
         bid_availability = self._remove_non_scheduled_units(bid_availability)
         bid_availability = an.map_aemo_column_names_to_nempy_names(bid_availability)
+        bid_availability = an.map_aemo_column_values_to_nempy_name(bid_availability, 'dispatch_type')
         return bid_availability
 
     @staticmethod
@@ -199,20 +216,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_ramp_rates_used_for_energy_dispatch()
-                 unit  initial_output  ramp_up_rate  ramp_down_rate
-        0      AGLHAL        0.000000    720.000000      720.000000
-        1      AGLSOM        0.000000    480.000000      480.000000
-        2     ANGAST1        0.000000    840.000000      840.000000
-        3       ARWF1       15.800001   1200.000000      600.000000
-        4      BALBG1        0.000000   6000.000000     6000.000000
-        ..        ...             ...           ...             ...
-        275  YARWUN_1      157.019989      0.000000        0.000000
-        276     YWPS1      383.959503    177.750006      177.750006
-        277     YWPS2      180.445572    177.750006      177.750006
-        278     YWPS3      353.460754    175.499997      175.499997
-        279     YWPS4      338.782288    180.000000      180.000000
+                 unit  direction  initial_output  ramp_up_rate  ramp_down_rate
+        0      AGLHAL  generator        0.000000    720.000000      720.000000
+        1      AGLSOM  generator        0.000000    480.000000      480.000000
+        2     ANGAST1  generator        0.000000    840.000000      840.000000
+        3       ARWF1  generator       15.800001   1200.000000      600.000000
+        4      BALBG1  generator        0.000000   6000.000000     6000.000000
+        ..        ...        ...             ...           ...             ...
+        275  YARWUN_1  generator      157.019989      0.000000        0.000000
+        276     YWPS1  generator      383.959503    177.750006      177.750006
+        277     YWPS2  generator      180.445572    177.750006      177.750006
+        278     YWPS3  generator      353.460754    175.499997      175.499997
+        279     YWPS4  generator      338.782288    180.000000      180.000000
         <BLANKLINE>
-        [280 rows x 4 columns]
+        [280 rows x 5 columns]
 
         Parameters
         ----------
@@ -226,6 +243,8 @@ class UnitData:
             ================  ========================================
             Columns:          Description:
             unit              unique identifier for units, (as `str`) \n
+            dispatch_type    "load" or "generator", optional default
+                             'generator', (as `str`) \n
             initial_output    the output/consumption of the unit at \n
                               the start of the dispatch interval, \n
                               in MW, (as `np.float64`)
@@ -235,32 +254,92 @@ class UnitData:
                               (as `np.float64`)
             ================  ========================================
         """
-        ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
-        # ramp_rates = self._remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates)
-        if run_type == 'fast_start_first_run':
-            ramp_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(ramp_rates)
-        elif run_type == 'fast_start_second_run':
-            if self.updated_fast_start_profiles is None:
-                raise ValueError("Can't use run type fast_start_second_run before calling "
-                                 "get_fast_start_profiles_for_dispatch.")
-            ramp_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(ramp_rates)
-            ramp_rates = self._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates,
-                                                                                        self.dispatch_interval)
-        elif run_type != 'no_fast_start_units':
-            raise ValueError("run_type provided not recognised.")
-
-        ramp_rates = ramp_rates.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
-        ramp_rates.columns = ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']
+        # ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
+        # if run_type == 'fast_start_first_run':
+        #     ramp_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(ramp_rates)
+        # elif run_type == 'fast_start_second_run':
+        #     if self.updated_fast_start_profiles is None:
+        #         raise ValueError("Can't use run type fast_start_second_run before calling "
+        #                          "get_fast_start_profiles_for_dispatch.")
+        #     ramp_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(ramp_rates)
+        #     ramp_rates = self._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates,
+        #                                                                                 self.dispatch_interval)
+        # elif run_type != 'no_fast_start_units':
+        #     raise ValueError("run_type provided not recognised.")
+        #
+        # ramp_rates = ramp_rates.loc[:, ['DUID', 'DIRECTION', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
+        # ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
+        # ramp_rates = an.map_aemo_column_values_to_nempy_name(ramp_rates, 'dispatch_type')
+        # ramp_rates['initial_output'] = np.where(
+        #     ramp_rates['initial_output'].abs() < 1.0,
+        #     0.0,
+        #     ramp_rates['initial_output']
+        # )
+        bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        bid_ramp_rates = self._remove_non_energy_bids(bid_ramp_rates)
+        scada_telemetered_ramp_rates = \
+            self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        scada_telemetered_ramp_rates = scada_telemetered_ramp_rates.rename(
+            columns={'RAMPDOWNRATE': 'SCADARAMPDOWNRATE', 'RAMPUPRATE': 'SCADARAMPUPRATE'}
+        )
+        ramp_rates = pd.merge(bid_ramp_rates, scada_telemetered_ramp_rates, 'left', on='DUID')
+        ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
+        ramp_rates = an.map_aemo_column_values_to_nempy_name(ramp_rates, 'dispatch_type')
+        ramp_rates = ramp_rates.drop(columns='service')
+        # ramp_rates = ramp_rates.fillna(np.inf)
         return ramp_rates
 
     def _get_minimum_of_bid_and_scada_telemetered_ramp_rates(self):
-        bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        bid_ramp_rates = bid_ramp_rates.rename(
+            columns={'RAMPDOWNRATE': 'BIDRAMPDOWNRATE', 'RAMPUPRATE': 'BIDRAMPUPRATE'}
+        )
         bid_ramp_rates = self._remove_non_energy_bids(bid_ramp_rates)
-        scada_telemetered_ramp_rates = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE',
-                                                                       'RAMPUPRATE']]
+
+        scada_telemetered_ramp_rates = \
+            self.initial_conditions.loc[:, ['DUID', 'TRADERTYPE', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        scada_telemetered_ramp_rates = scada_telemetered_ramp_rates.rename(
+            columns={'RAMPDOWNRATE': 'SCADARAMPDOWNRATE', 'RAMPUPRATE': 'SCADARAMPUPRATE'}
+        )
         ramp_rates = pd.merge(bid_ramp_rates, scada_telemetered_ramp_rates, 'left', on='DUID')
+
+        ramp_rates_bidirectional_gens = ramp_rates[
+            (ramp_rates['TRADERTYPE'] == 'BIDIRECTIONAL') &
+            (ramp_rates['DIRECTION'] == 'GENERATOR')
+        ].copy()
+
+        ramp_rates_bidirectional_loads = ramp_rates[
+            (ramp_rates['TRADERTYPE'] == 'BIDIRECTIONAL') &
+            (ramp_rates['DIRECTION'] == 'LOAD')
+        ].copy()
+
+        ramp_rates = ramp_rates[
+            ~(ramp_rates['TRADERTYPE'] == 'BIDIRECTIONAL')
+        ].copy()
+
         ramp_rates['RAMPDOWNRATE'] = np.fmin(ramp_rates['RAMPDOWNRATE_x'], ramp_rates['RAMPDOWNRATE_y'])
         ramp_rates['RAMPUPRATE'] = np.fmin(ramp_rates['RAMPUPRATE_x'], ramp_rates['RAMPUPRATE_y'])
+
+        ramp_rates_bidirectional_gens['RAMPDOWNRATE'] = np.fmin(
+            ramp_rates_bidirectional_gens['RAMPDOWNRATE_x'], ramp_rates_bidirectional_gens['RAMPUPRATE_y'])
+        ramp_rates_bidirectional_gens['RAMPUPRATE'] = np.fmin(
+            ramp_rates_bidirectional_gens['RAMPUPRATE_x'], ramp_rates_bidirectional_gens['RAMPDOWNRATE_y'])
+
+        ramp_rates_bidirectional_gens['INITIALMW'] = np.where(
+            ramp_rates_bidirectional_gens['INITIALMW'] < 0.0, 0.0,
+            ramp_rates_bidirectional_gens['INITIALMW']
+        )
+
+        ramp_rates_bidirectional_loads['INITIALMW'] = np.where(
+            ramp_rates_bidirectional_loads['INITIALMW'] > 0.0, 0.0,
+            ramp_rates_bidirectional_loads['INITIALMW'].abs()
+        )
+
+        ramp_rates = pd.concat([
+            ramp_rates,
+            ramp_rates_bidirectional_gens
+        ])
+
         return ramp_rates
 
     def _remove_fast_start_units_starting_in_mode_0_1_2(self, dataframe):
@@ -359,20 +438,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_as_bid_ramp_rates()
-                  unit  ramp_up_rate  ramp_down_rate
-        0       AGLHAL         720.0           720.0
-        1       AGLSOM         480.0           480.0
-        2      ANGAST1         840.0           840.0
-        9        ARWF1        1200.0           600.0
-        23      BALBG1        6000.0          6000.0
-        ...        ...           ...             ...
-        989   YARWUN_1           0.0             0.0
-        990      YWPS1         180.0           180.0
-        999      YWPS2         180.0           180.0
-        1008     YWPS3         180.0           180.0
-        1017     YWPS4         180.0           180.0
+                  unit  direction  ramp_up_rate  ramp_down_rate
+        0       AGLHAL  generator         720.0           720.0
+        1       AGLSOM  generator         480.0           480.0
+        2      ANGAST1  generator         840.0           840.0
+        9        ARWF1  generator        1200.0           600.0
+        23      BALBG1  generator        6000.0          6000.0
+        ...        ...        ...           ...             ...
+        989   YARWUN_1  generator           0.0             0.0
+        990      YWPS1  generator         180.0           180.0
+        999      YWPS2  generator         180.0           180.0
+        1008     YWPS3  generator         180.0           180.0
+        1017     YWPS4  generator         180.0           180.0
         <BLANKLINE>
-        [280 rows x 3 columns]
+        [280 rows x 4 columns]
 
         Returns
         -------
@@ -381,16 +460,19 @@ class UnitData:
             ================  ========================================
             Columns:          Description:
             unit              unique identifier for units, (as `str`) \n
+            dispatch_type    "load" or "generator", optional default
+                             'generator', (as `str`) \n
             ramp_up_rate      the ramp up rate, in MW/h, \n
                               (as `np.float64`)
             ramp_down_rate    the ramp down rate, in MW/h, \n
                               (as `np.float64`)
             ================  ========================================
         """
-        ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        ramp_rates = self.volume_bids.loc[:, ['DUID', 'DIRECTION', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
         ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY'].copy()
-        ramp_rates = ramp_rates.loc[:, ['DUID', 'RAMPUPRATE', 'RAMPDOWNRATE']]
+        ramp_rates = ramp_rates.loc[:, ['DUID', 'DIRECTION', 'RAMPUPRATE', 'RAMPDOWNRATE']]
         ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
+        ramp_rates = an.map_aemo_column_values_to_nempy_name(ramp_rates, 'direction')
         return ramp_rates
 
     def get_initial_unit_output(self):
@@ -438,8 +520,8 @@ class UnitData:
     def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
         """Get the parameters needed to construct the fast dispatch inflexibility profiles used for dispatch.
 
-        If the results of an non fast start constrained dispatch run are provided then these are used to commit fast
-        start units starting the interval in mode zero, when the they have a non-zero dispatch result.
+        If the results of a non-fast start constrained dispatch run are provided then these are used to commit fast
+        start units starting the interval in mode zero, when they have a non-zero dispatch result.
 
         For more info on fast start dispatch inflexibility profiles :download:`see AEMO docs <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`.
 
@@ -468,8 +550,9 @@ class UnitData:
         profiles['mode_two_length'] = np.float64(profiles['mode_two_length'])
         profiles['mode_four_length'] = np.float64(profiles['mode_four_length'])
         profiles['min_loading'] = np.float64(profiles['min_loading'])
-        return profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
-                                'mode_four_length', 'min_loading']]
+        # profiles = profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+        #                             'mode_four_length', 'min_loading']]
+        return profiles
 
     def _get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.fast_start_profiles
@@ -530,13 +613,19 @@ class UnitData:
                                              fsp['time_left_in_interval'])
         df1 = fsp[mask].copy()
         df2 = fsp[~mask].copy()
-        df1['temp_current_mode'] = 5
-        df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_four_length'] - df1['temp_time_in_current_mode'])
-        df1['temp_time_in_current_mode'] = 0.0
+        df1['temp_current_mode'] = 4
+        # df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_four_length'] - df1['temp_time_in_current_mode'])
+        df1['time_in_end_mode'] = df1['mode_four_length']
+
+        df2['time_in_end_mode'] = df2['temp_time_in_current_mode'] + df2['time_left_in_interval']
+
         fsp = pd.concat([df1, df2])
 
         fsp['end_mode'] = fsp['temp_current_mode']
-        fsp['time_in_end_mode'] = fsp['temp_time_in_current_mode'] + fsp['time_left_in_interval']
+
+        fsp['time_in_end_mode'] = np.where(
+            fsp['end_mode'] == 0, 0.0, fsp['time_in_end_mode']
+        )
 
         return fsp.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
                            'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
@@ -662,11 +751,35 @@ class UnitData:
 
         """
         unit_details = self.unit_details
-        unit_details['LOSSFACTOR'] = unit_details['TRANSMISSIONLOSSFACTOR'] * unit_details['DISTRIBUTIONLOSSFACTOR']
-        unit_details = unit_details.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
+
+        directions = self.price_bids.loc[:, ["DUID", "DIRECTION"]]
+        directions = directions.drop_duplicates()
+
+        unit_details = pd.merge(
+            directions,
+            unit_details,
+            on="DUID"
+        )
+
+        trader_type = self.initial_conditions.loc[:, ["DUID", "TRADERTYPE"]]
+
+        unit_details = pd.merge(
+            trader_type,
+            unit_details,
+            on="DUID"
+        )
+
+        unit_details['SECONDARY_TLF'] = pd.to_numeric(unit_details['SECONDARY_TLF']).astype(np.float64)
+
+        unit_details['LOSSFACTOR'] = np.where(
+            ~unit_details['SECONDARY_TLF'].isna() & (unit_details['DIRECTION'] == "GENERATOR") & (unit_details['TRADERTYPE'] == "BIDIRECTIONAL"),
+            unit_details['SECONDARY_TLF'] * unit_details['DISTRIBUTIONLOSSFACTOR'],
+            unit_details['TRANSMISSIONLOSSFACTOR'] * unit_details['DISTRIBUTIONLOSSFACTOR']
+        )
+        unit_details = unit_details.loc[:, ['DUID', 'DIRECTION', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
         unit_details = an.map_aemo_column_names_to_nempy_names(unit_details)
         unit_details = an.map_aemo_column_values_to_nempy_name(unit_details, column='dispatch_type')
-        return unit_details.loc[:, ['unit', 'region', 'dispatch_type', 'loss_factor']]
+        return unit_details.loc[:, ['unit', 'dispatch_type', 'region', 'loss_factor']]
 
     def _get_unit_availability(self):
         bid_availability = self.get_unit_bid_availability()
@@ -730,6 +843,7 @@ class UnitData:
             Columns:          Description:
             unit              unique identifier for units, (as `str`)
             service           the service the bid applies to, (as `str`)
+            dispatch_type     "load" or "generator", (as `str`)
             1                 the volume bid the first bid band, in MW, \n
                               (as `np.float64`)
             :
@@ -743,6 +857,7 @@ class UnitData:
             Columns:          Description:
             unit              unique identifier for units, (as `str`)
             service           the service the bid applies to, (as `str`)
+            dispatch_type     "load" or "generator", (as `str`)
             1                 the price of the first bid band, in MW, \n
                               (as `np.float64`)
             :
@@ -756,6 +871,7 @@ class UnitData:
 
         BIDDAYOFFER_D = self.price_bids
         unit_info = self.get_unit_info()
+        # TODO: check if this should really be based as bid availability as it is now.
         unit_availability = self._get_unit_availability()
 
         agc_enablement_limits = self.raw_input_loader.get_agc_enablement_limits()
@@ -768,10 +884,10 @@ class UnitData:
         volume_bids = _format_volume_bids(self.BIDPEROFFER_D, self.service_name_mapping)
         price_bids = _format_price_bids(BIDDAYOFFER_D, self.service_name_mapping)
         volume_bids = volume_bids[volume_bids['unit'].isin(list(unit_info['unit']))]
-        volume_bids = volume_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
+        volume_bids = volume_bids.loc[:, ['unit', 'service', 'dispatch_type', '1', '2', '3', '4', '5',
                                           '6', '7', '8', '9', '10']]
         price_bids = price_bids[price_bids['unit'].isin(list(unit_info['unit']))]
-        price_bids = price_bids.loc[:, ['unit', 'service', '1', '2', '3', '4', '5',
+        price_bids = price_bids.loc[:, ['unit', 'service', 'dispatch_type', '1', '2', '3', '4', '5',
                                         '6', '7', '8', '9', '10']]
 
         # Price bids  coming from xml have already been scaled by loss factors, so we need to undo this.
@@ -781,7 +897,11 @@ class UnitData:
 
     @staticmethod
     def _unscale_price_bids(price_bids, unit_info):
-        price_bids = pd.merge(price_bids, unit_info.loc[:, ['unit', 'loss_factor']], on='unit')
+        price_bids = pd.merge(
+            price_bids,
+            unit_info.loc[:, ['unit', 'dispatch_type', 'loss_factor']],
+            on=['unit', 'dispatch_type']
+        )
         for col in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']:
             price_bids[col] = np.where(price_bids['service'] == 'energy', price_bids[col] * price_bids['loss_factor'],
                                        price_bids[col])
@@ -905,7 +1025,7 @@ class UnitData:
         """
         if self.fcas_trapeziums is None:
             raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_fcas_max_availability.')
-        return self.fcas_trapeziums.loc[:, ['unit', 'service', 'max_availability']]
+        return self.fcas_trapeziums.loc[:, ['unit', 'service', 'dispatch_type', 'max_availability']]
 
     def get_fcas_regulation_trapeziums(self):
         """Get the unit bid FCAS trapeziums for regulation services.
@@ -1216,6 +1336,7 @@ def _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
     >>> BIDPEROFFER_D = pd.DataFrame({
     ... 'DUID': ['A', 'B'],
     ... 'BIDTYPE': ['RAISE60SEC', 'ENERGY'],
+    ... 'DIRECTION': ['GENERATOR', 'LOAD'],
     ... 'MAXAVAIL': [60.0, 0.0],
     ... 'ENABLEMENTMIN': [20.0, 0.0],
     ... 'LOWBREAKPOINT': [40.0, 0.0],
@@ -1227,16 +1348,19 @@ def _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
     >>> fcas_trapeziums = _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping)
 
     >>> print(fcas_trapeziums)
-      unit    service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
-    0    A  raise_60s              60.0            20.0             40.0              60.0            80.0
+      unit    service  ... high_break_point  enablement_max
+    0    A  raise_60s  ...             60.0            80.0
+    <BLANKLINE>
+    [1 rows x 8 columns]
 
     """
     BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
-    trapezium_cons = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'MAXAVAIL', 'ENABLEMENTMIN', 'LOWBREAKPOINT',
+    trapezium_cons = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'MAXAVAIL', 'ENABLEMENTMIN', 'LOWBREAKPOINT',
                                            'HIGHBREAKPOINT', 'ENABLEMENTMAX']]
-    trapezium_cons.columns = ['unit', 'service', 'max_availability', 'enablement_min', 'low_break_point',
+    trapezium_cons.columns = ['unit', 'service', 'dispatch_type', 'max_availability', 'enablement_min', 'low_break_point',
                               'high_break_point', 'enablement_max']
     trapezium_cons['service'] = trapezium_cons['service'].apply(lambda x: service_name_mapping[x])
+    trapezium_cons = an.map_aemo_column_values_to_nempy_name(trapezium_cons, 'dispatch_type')
     return trapezium_cons
 
 
@@ -1249,6 +1373,7 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     >>> BIDPEROFFER_D = pd.DataFrame({
     ...   'DUID': ['A', 'B'],
     ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
+    ...   'DIRECTION': ['GENERATOR', 'LOAD'],
     ...   'BANDAVAIL1': [100.0, 50.0],
     ...   'BANDAVAIL2': [10.0, 10.0],
     ...   'BANDAVAIL3': [0.0, 0.0],
@@ -1265,9 +1390,11 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     >>> volume_bids = _format_volume_bids(BIDPEROFFER_D, service_name_mapping)
 
     >>> print(volume_bids)
-      unit    service      1     2    3     4     5     6     7    8    9   10
-    0    A     energy  100.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
-    1    B  raise_reg   50.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+      unit    service dispatch_type      1     2  ...     6     7    8    9   10
+    0    A     energy     generator  100.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
+    1    B  raise_reg          load   50.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
+    <BLANKLINE>
+    [2 rows x 13 columns]
 
     Parameters
     ----------
@@ -1277,6 +1404,7 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
         Columns:     Description:
         DUID         unique identifier of a unit (as `str`)
         BIDTYPE      the service being provided (as `str`)
+        DIRECTION    "LOAD" or "GENERATOR", (as `str`)
         PRICEBAND1   bid volume in the 1st band, in MW (as `np.float64`)
         PRICEBAND2   bid volume in the 2nd band, in MW (as `np.float64`)
         PRICEBAND10  bid volume in the 10th band, in MW (as `np.float64`)
@@ -1291,6 +1419,7 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
         Columns:          Description:
         unit              unique identifier of a dispatch unit (as `str`)
         service           the service being provided, optional, if missing energy assumed (as `str`)
+        dispatch_type     "load" or "generator", (as `str`)
         1                 bid volume in the 1st band, in MW (as `np.float64`)
         2                 bid volume in the 2nd band, in MW (as `np.float64`)
         :
@@ -1299,11 +1428,12 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
         ================  ======================================================================================
     """
 
-    volume_bids = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3', 'BANDAVAIL4',
-                                        'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8', 'BANDAVAIL9',
-                                        'BANDAVAIL10']]
-    volume_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    volume_bids = BIDPEROFFER_D.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'BANDAVAIL1', 'BANDAVAIL2', 'BANDAVAIL3',
+                                        'BANDAVAIL4', 'BANDAVAIL5', 'BANDAVAIL6', 'BANDAVAIL7', 'BANDAVAIL8',
+                                        'BANDAVAIL9', 'BANDAVAIL10']]
+    volume_bids.columns = ['unit', 'service', 'dispatch_type', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
     volume_bids['service'] = volume_bids['service'].apply(lambda x: service_name_mapping[x])
+    volume_bids = an.map_aemo_column_values_to_nempy_name(volume_bids, 'dispatch_type')
     return volume_bids
 
 
@@ -1316,6 +1446,7 @@ def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     >>> BIDDAYOFFER_D = pd.DataFrame({
     ...   'DUID': ['A', 'B'],
     ...   'BIDTYPE': ['ENERGY', 'RAISEREG'],
+    ...   'DIRECTION': ['GENERATOR', 'LOAD'],
     ...   'PRICEBAND1': [100.0, 50.0],
     ...   'PRICEBAND2': [10.0, 10.0],
     ...   'PRICEBAND3': [0.0, 0.0],
@@ -1332,9 +1463,11 @@ def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     >>> price_bids = _format_price_bids(BIDDAYOFFER_D, service_name_mapping)
 
     >>> print(price_bids)
-      unit    service      1     2    3     4     5     6     7    8    9   10
-    0    A     energy  100.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
-    1    B  raise_reg   50.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+      unit    service dispatch_type      1     2  ...     6     7    8    9   10
+    0    A     energy     generator  100.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
+    1    B  raise_reg          load   50.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
+    <BLANKLINE>
+    [2 rows x 13 columns]
 
     Parameters
     ----------
@@ -1344,6 +1477,7 @@ def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
         Columns:     Description:
         DUID         unique identifier of a unit (as `str`)
         BIDTYPE      the service being provided (as `str`)
+        DIRECTION    "LOAD" or "GENERATOR", (as `str`)
         PRICEBAND1   bid price in the 1st band, in MW (as `np.float64`)
         PRICEBAND2   bid price in the 2nd band, in MW (as `np.float64`)
         PRICEBAND10  bid price in the 10th band, in MW (as `np.float64`)
@@ -1353,84 +1487,24 @@ def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     ----------
     demand_coefficients : pd.DataFrame
 
-        ========  ================================================================
-        Columns:  Description:
-        unit      unique identifier of a dispatch unit (as `str`)
-        service   the service being provided, optional, if missing energy assumed (as `str`)
-        1         bid price in the 1st band, in MW (as `np.float64`)
-        2         bid price in the 2nd band, in MW (as `np.float64`)
-        10        bid price in the nth band, in MW (as `np.float64`)
-        ========  ================================================================
+        =============  ================================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        service        the service being provided, optional, if missing energy assumed (as `str`)
+        dispatch_type  "load" or "generator", (as `str`)
+        1              bid price in the 1st band, in MW (as `np.float64`)
+        2              bid price in the 2nd band, in MW (as `np.float64`)
+        10             bid price in the nth band, in MW (as `np.float64`)
+        =============  ================================================================
     """
 
-    price_bids = BIDDAYOFFER_D.loc[:, ['DUID', 'BIDTYPE', 'PRICEBAND1', 'PRICEBAND2', 'PRICEBAND3', 'PRICEBAND4',
-                                       'PRICEBAND5', 'PRICEBAND6', 'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9',
-                                       'PRICEBAND10']]
-    price_bids.columns = ['unit', 'service', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+    price_bids = \
+        BIDDAYOFFER_D.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'PRICEBAND1', 'PRICEBAND2', 'PRICEBAND3', 'PRICEBAND4',
+                              'PRICEBAND5', 'PRICEBAND6', 'PRICEBAND7', 'PRICEBAND8', 'PRICEBAND9', 'PRICEBAND10']]
+    price_bids.columns = ['unit', 'service', 'dispatch_type', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']
     price_bids['service'] = price_bids['service'].apply(lambda x: service_name_mapping[x])
+    price_bids = an.map_aemo_column_values_to_nempy_name(price_bids, 'dispatch_type')
     return price_bids
-
-
-def _format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map):
-    """Re-formats the AEMO MSS table DUDETAILSUMMARY to be compatible with the Spot market class.
-
-    Loss factors get combined into a single value.
-
-    Examples
-    --------
-
-    >>> DUDETAILSUMMARY = pd.DataFrame({
-    ...   'DUID': ['A', 'B'],
-    ...   'DISPATCHTYPE': ['GENERATOR', 'LOAD'],
-    ...   'CONNECTIONPOINTID': ['X2', 'Z30'],
-    ...   'REGIONID': ['NSW1', 'SA1'],
-    ...   'TRANSMISSIONLOSSFACTOR': [0.9, 0.85],
-    ...   'DISTRIBUTIONLOSSFACTOR': [0.9, 0.99]})
-
-    >>> dispatch_type_name_map = {'GENERATOR': 'generator', 'LOAD': 'load'}
-
-    >>> unit_info = _format_unit_info(DUDETAILSUMMARY, dispatch_type_name_map)
-
-    >>> print(unit_info)
-      unit dispatch_type connection_point region  loss_factor
-    0    A     generator               X2   NSW1       0.8100
-    1    B          load              Z30    SA1       0.8415
-
-    Parameters
-    ----------
-    BIDPEROFFER_D : pd.DataFrame
-
-        ======================  =================================================================
-        Columns:                Description:
-        DUID                    unique identifier of a unit (as `str`)
-        DISPATCHTYPE            whether the unit is GENERATOR or LOAD (as `str`)
-        CONNECTIONPOINTID       the unique identifier of the units location (as `str`)
-        REGIONID                the unique identifier of the units market region (as `str`)
-        TRANSMISSIONLOSSFACTOR  the units loss factor at the transmission level (as `np.float64`)
-        DISTRIBUTIONLOSSFACTOR  the units loss factor at the distribution level (as `np.float64`)
-        ======================  =================================================================
-
-    Returns
-    ----------
-    unit_info : pd.DataFrame
-
-        ======================  ==============================================================================
-        Columns:                Description:
-        unit                    unique identifier of a unit (as `str`)
-        dispatch_type           whether the unit is 'generator' or 'load' (as `str`)
-        connection_point        the unique identifier of the units location (as `str`)
-        region                  the unique identifier of the units market region (as `str`)
-        loss_factor             the units combined transmission and distribution loss factor (as `np.float64`)
-        ======================  ==============================================================================
-    """
-
-    # Combine loss factors.
-    DUDETAILSUMMARY['LOSSFACTOR'] = DUDETAILSUMMARY['TRANSMISSIONLOSSFACTOR'] * \
-                                    DUDETAILSUMMARY['DISTRIBUTIONLOSSFACTOR']
-    unit_info = DUDETAILSUMMARY.loc[:, ['DUID', 'DISPATCHTYPE', 'CONNECTIONPOINTID', 'REGIONID', 'LOSSFACTOR']]
-    unit_info.columns = ['unit', 'dispatch_type', 'connection_point', 'region', 'loss_factor']
-    unit_info['dispatch_type'] = unit_info['dispatch_type'].apply(lambda x: dispatch_type_name_map[x])
-    return unit_info
 
 
 def _scaling_for_agc_enablement_limits(BIDPEROFFER_D, DISPATCHLOAD):
@@ -2106,7 +2180,13 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     fcas_bids = fcas_bids.drop(['band_greater_than_zero'], axis=1)
 
     # Filter out fcas_bids where their maximum energy output is less than the fcas enablement minimum value. If the
-    fcas_bids = pd.merge(fcas_bids, capacity_limits, 'left', left_on='DUID', right_on='unit')
+    fcas_bids = pd.merge(
+        fcas_bids,
+        capacity_limits,
+        'left',
+        left_on=['DUID', 'DIRECTION'],
+        right_on=['unit', 'dispatch_type']
+    )
     fcas_bids = fcas_bids[(fcas_bids['capacity'] >= fcas_bids['ENABLEMENTMIN']) | (fcas_bids['capacity'].isna())]
     fcas_bids = fcas_bids.drop(['unit', 'capacity'], axis=1)
 
@@ -2126,7 +2206,12 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW'], axis=1)
 
     # Filter the fcas price bids use the remaining volume bids.
-    fcas_price_bids = pd.merge(fcas_price_bids, fcas_bids.loc[:, ['DUID', 'BIDTYPE']], 'inner', on=['DUID', 'BIDTYPE'])
+    fcas_price_bids = pd.merge(
+        fcas_price_bids,
+        fcas_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION']],
+        'inner',
+        on=['DUID', 'BIDTYPE', 'DIRECTION']
+    )
 
     # Combine fcas and energy bid back together.
     BIDDAYOFFER_D = pd.concat([energy_price_bids, fcas_price_bids])

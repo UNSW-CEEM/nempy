@@ -72,7 +72,7 @@ class ConstraintData:
 
         bid_type_map = dict(ENOF='energy', LDOF='energy', DROF='energy', L5RE='lower_reg', R5RE='raise_reg',
                             R5MI='raise_5min', L5MI='lower_5min', R60S='raise_60s', L60S='lower_60s', R6SE='raise_6s',
-                            L6SE='lower_6s', R1SE='raise_1s', L1SE='lower_1s')
+                            L6SE='lower_6s', R1SE='raise_1s', L1SE='lower_1s', BDOF='energy')
 
         self.unit_generic_lhs = self.raw_inputs_loader.get_constraint_unit_lhs()
         self.unit_generic_lhs['service'] = self.unit_generic_lhs['service'].apply(lambda x: bid_type_map[x])

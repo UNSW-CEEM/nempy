@@ -146,7 +146,7 @@ class DBManager:
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
                                                          'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
-                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
+                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE', 'SECONDARY_TLF'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
         self.DUDETAIL = InputsByEffectiveDateVersionNo(
             table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY'],
@@ -471,7 +471,8 @@ class _MMSTable:
             'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER6SECROP': 'REAL',
             'LOWER1SECROP': 'REAL', 'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL',
             'FROM_REGION_TLF': 'REAL', 'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT',
-            'FROMREGION': 'TEXT', 'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
+            'FROMREGION': 'TEXT', 'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR',
+            'ROP': 'REAL', 'SECONDARY_TLF': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):

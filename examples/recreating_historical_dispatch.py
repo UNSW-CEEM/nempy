@@ -67,7 +67,7 @@ for interval in dispatch_intervals:
     market.set_unit_bid_capacity_constraints(unit_bid_limit)
 
     unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
-    market.set_unconstrained_intermitent_generation_forecast_constraint(
+    market.set_unconstrained_intermittent_generation_forecast_constraint(
         unit_uigf_limit)
 
     regional_demand = demand_inputs.get_operational_demand()

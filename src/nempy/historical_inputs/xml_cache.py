@@ -258,7 +258,7 @@ class XMLCacheManager:
 
         """
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
-        initial_conditions = dict(DUID=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[], AGCSTATUS=[])
+        initial_conditions = dict(DUID=[], TRADERTYPE=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[], AGCSTATUS=[])
         if self.is_intervention_period():
             INITIALMW_name = 'WhatIfInitialMW'
         else:
@@ -267,6 +267,7 @@ class XMLCacheManager:
                         AGCSTATUS='AGCStatus')
         for trader in traders:
             initial_conditions['DUID'].append(trader['@TraderID'])
+            initial_conditions['TRADERTYPE'].append(trader['@TraderType'])
             initial_cons = trader['TraderInitialConditionCollection']['TraderInitialCondition']
             for our_name, aemo_name in name_map.items():
                 for con in initial_cons:
@@ -363,6 +364,8 @@ class XMLCacheManager:
 
         >>> manager.load_interval('2019/01/01 00:00:00')
 
+        # >>> manager.load_interval('2024/08/01 02:15:00')
+
         >>> manager.get_unit_volume_bids()
                  DUID     BIDTYPE  MAXAVAIL  ENABLEMENTMIN  ENABLEMENTMAX  LOWBREAKPOINT  HIGHBREAKPOINT  BANDAVAIL1  BANDAVAIL2  BANDAVAIL3  BANDAVAIL4  BANDAVAIL5  BANDAVAIL6  BANDAVAIL7  BANDAVAIL8  BANDAVAIL9  BANDAVAIL10  RAMPDOWNRATE  RAMPUPRATE
         0      AGLHAL      ENERGY     173.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0        60.0         0.0         0.0        160.0         720.0       720.0
@@ -414,48 +417,48 @@ class XMLCacheManager:
         """
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection'][
             'TraderPeriod']
-        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], MAXAVAIL=[], ENABLEMENTMIN=[], ENABLEMENTMAX=[],
+        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], DIRECTION=[], MAXAVAIL=[], ENABLEMENTMIN=[], ENABLEMENTMAX=[],
                                        LOWBREAKPOINT=[], HIGHBREAKPOINT=[], BANDAVAIL1=[], BANDAVAIL2=[],
                                        BANDAVAIL3=[], BANDAVAIL4=[], BANDAVAIL5=[], BANDAVAIL6=[], BANDAVAIL7=[],
                                        BANDAVAIL8=[], BANDAVAIL9=[], BANDAVAIL10=[], RAMPDOWNRATE=[], RAMPUPRATE=[])
-        name_map = dict(BIDTYPE='@TradeType', MAXAVAIL='@MaxAvail', ENABLEMENTMIN='@EnablementMin',
+        name_map = dict(BIDTYPE='@TradeType', DIRECTION='@Direction', MAXAVAIL='@MaxAvail', ENABLEMENTMIN='@EnablementMin',
                         ENABLEMENTMAX='@EnablementMax', LOWBREAKPOINT='@LowBreakpoint',
                         HIGHBREAKPOINT='@HighBreakpoint', BANDAVAIL1='@BandAvail1', BANDAVAIL2='@BandAvail2',
                         BANDAVAIL3='@BandAvail3', BANDAVAIL4='@BandAvail4', BANDAVAIL5='@BandAvail5',
                         BANDAVAIL6='@BandAvail6', BANDAVAIL7='@BandAvail7', BANDAVAIL8='@BandAvail8',
                         BANDAVAIL9='@BandAvail9', BANDAVAIL10='@BandAvail10', RAMPDOWNRATE='@RampDnRate',
                         RAMPUPRATE='@RampUpRate')
+
+        def append_values(trade, trades_by_unit_and_type):
+            trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
+            for our_name, aemo_name in name_map.items():
+                if aemo_name in trade:
+                    if aemo_name in ['@TradeType', '@Direction']:
+                        value = trade[aemo_name]
+                    else:
+                        value = float(trade[aemo_name])
+                elif aemo_name == '@Direction':
+                    value = 'missing'
+                trades_by_unit_and_type[our_name].append(value)
+            return trades_by_unit_and_type
+
         for trader in traders:
             if type(trader['TradeCollection']['Trade']) != list:
                 trades = trader['TradeCollection']
                 for _, trade in trades.items():
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
             else:
                 for trade in trader['TradeCollection']['Trade']:
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
+
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
-        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
+        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', BDOF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
                             R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
                             L6SE='LOWER6SEC', R1SE='RAISE1SEC', L1SE='LOWER1SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
+        direction_type_map = dict(GEN='GENERATOR', LOAD='LOAD', missing=None)
+        trades_by_unit_and_type["DIRECTION"] = (
+            trades_by_unit_and_type["DIRECTION"].apply(lambda x: direction_type_map[x]))
         return trades_by_unit_and_type
 
     def get_unit_price_bids(self):
@@ -464,6 +467,8 @@ class XMLCacheManager:
         Examples
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
+
+        # >>> manager.load_interval('2024/08/01 02:15:00')
 
         >>> manager.load_interval('2019/01/01 00:00:00')
 
@@ -494,6 +499,7 @@ class XMLCacheManager:
                               (as `str`)
             BIDTYPE           the service the bid applies to, \n
                               (as `str`)
+            DIRECTION         "LOAD" or "GENERATOR"
             PRICEBAND1        the volume bid in the first bid band,
                               in MW, (as `np.float64`)
                  :
@@ -504,48 +510,54 @@ class XMLCacheManager:
 
         """
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
-        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], PRICEBAND1=[], PRICEBAND2=[], PRICEBAND3=[], PRICEBAND4=[],
-                                       PRICEBAND5=[], PRICEBAND6=[], PRICEBAND7=[], PRICEBAND8=[], PRICEBAND9=[],
-                                       PRICEBAND10=[])
-        name_map = dict(BIDTYPE='@TradeType', PRICEBAND1='@PriceBand1', PRICEBAND2='@PriceBand2',
-                        PRICEBAND3='@PriceBand3', PRICEBAND4='@PriceBand4', PRICEBAND5='@PriceBand5',
-                        PRICEBAND6='@PriceBand6', PRICEBAND7='@PriceBand7', PRICEBAND8='@PriceBand8',
-                        PRICEBAND9='@PriceBand9', PRICEBAND10='@PriceBand10')
+        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], DIRECTION=[], PRICEBAND1=[], PRICEBAND2=[], PRICEBAND3=[],
+                                       PRICEBAND4=[], PRICEBAND5=[], PRICEBAND6=[], PRICEBAND7=[], PRICEBAND8=[],
+                                       PRICEBAND9=[], PRICEBAND10=[])
+        name_map = dict(BIDTYPE='@TradeType', DIRECTION='@Direction', PRICEBAND1='@PriceBand1',
+                        PRICEBAND2='@PriceBand2', PRICEBAND3='@PriceBand3', PRICEBAND4='@PriceBand4',
+                        PRICEBAND5='@PriceBand5', PRICEBAND6='@PriceBand6', PRICEBAND7='@PriceBand7',
+                        PRICEBAND8='@PriceBand8', PRICEBAND9='@PriceBand9', PRICEBAND10='@PriceBand10')
+
+        def append_values(trade, trades_by_unit_and_type):
+            trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
+            for our_name, aemo_name in name_map.items():
+                value = None
+                if aemo_name in trade:
+                    if aemo_name in ['@TradeType', '@Direction']:
+                        value = trade[aemo_name]
+                    else:
+                        value = float(trade[aemo_name])
+                elif '@Direction' not in trade:
+                    if trader['@TraderType'] in ["GENERATOR", "NORMALLY_ON_LOAD", "WDR", "BIDIRECTIONAL"]:
+                        value = "GEN"
+                    elif trader['@TraderType'] in ["LOAD"]:
+                        value = "LOAD"
+                trades_by_unit_and_type[our_name].append(value)
+            return trades_by_unit_and_type
+
         for trader in traders:
             if type(trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']
                     ['TradeTypePriceStructure']) != list:
                 trades = trader['TradePriceStructureCollection']['TradePriceStructure'][
                     'TradeTypePriceStructureCollection']
                 for _, trade in trades.items():
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
             else:
                 for trade in \
-                trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection'][
-                    'TradeTypePriceStructure']:
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                        trader['TradePriceStructureCollection']['TradePriceStructure'][
+                            'TradeTypePriceStructureCollection'][
+                            'TradeTypePriceStructure']:
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
+
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
-        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
+        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', BDOF='ENERGY', L5RE='LOWERREG',
+                            R5RE='RAISEREG',
                             R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
                             L6SE='LOWER6SEC', R1SE='RAISE1SEC', L1SE='LOWER1SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
+        direction_type_map = dict(GEN='GENERATOR', LOAD='LOAD')
+        trades_by_unit_and_type["DIRECTION"] = (
+            trades_by_unit_and_type["DIRECTION"].apply(lambda x: direction_type_map[x]))
         return trades_by_unit_and_type
 
     def get_UIGF_values(self):
@@ -632,13 +644,22 @@ class XMLCacheManager:
                         ugif='@TotalUIGFViolation')
         violations = {}
         if type(outputs['PeriodSolution']) == list:
-            for solution in outputs['PeriodSolution']:
-                if solution['@Intervention'] == '0':
-                    for name, aemo_name in name_map.items():
-                        violations[name] = float(solution[aemo_name])
+            for name, aemo_name in name_map.items():
+                for solution in outputs['PeriodSolution']:
+                    if solution['@Intervention'] == '0':
+                        if aemo_name in solution:
+                            violations[name] = float(solution[aemo_name])
+                for solution in outputs['CaseSolution']:
+                    if solution['@Intervention'] == '0':
+                        if name not in violations:
+                            violations[name] = float(solution[aemo_name])
         else:
             for name, aemo_name in name_map.items():
-                violations[name] = float(outputs['PeriodSolution'][aemo_name])
+                if aemo_name in outputs['PeriodSolution']:
+                    violations[name] = float(outputs['PeriodSolution'][aemo_name])
+                else:
+                    violations[name] = float(outputs['CaseSolution'][aemo_name])
+
         return violations
 
     def get_constraint_violation_prices(self):
@@ -1008,8 +1029,8 @@ class XMLCacheManager:
             ================  ========================================
         """
         inters = \
-        self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection'][
-            'InterconnectorPeriod']
+            self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection'][
+                'InterconnectorPeriod']
         bid_availability = dict(interconnector=[], to_region=[], availability=[])
         for inter in inters:
             if inter['@MNSP'] == '1':
@@ -1130,9 +1151,9 @@ class XMLCacheManager:
             ================  ========================================
         """
         service_type_map = \
-            {'@EnergyPrice':'ENERGY', '@LRegPrice':'LOWERREG', '@RRegPrice':'RAISEREG', '@R5Price':'RAISE5MIN',
-             '@RL5Price':'LOWER5MIN', '@R60Price':'RAISE60SEC', '@L60Price':'LOWER60SEC', '@R6Price':'RAISE6SEC',
-             '@L6Price':'LOWER6SEC', '@R1Price':'RAISE1SEC', '@L1Price':'LOWER1SEC'}
+            {'@EnergyPrice': 'ENERGY', '@LRegPrice': 'LOWERREG', '@RRegPrice': 'RAISEREG', '@R5Price': 'RAISE5MIN',
+             '@RL5Price': 'LOWER5MIN', '@R60Price': 'RAISE60SEC', '@L60Price': 'LOWER60SEC', '@R6Price': 'RAISE6SEC',
+             '@L6Price': 'LOWER6SEC', '@R1Price': 'RAISE1SEC', '@L1Price': 'LOWER1SEC'}
         prices = dict(region=[], service=[], price=[])
         regions = self.xml['NEMSPDCaseFile']['NemSpdOutputs']['RegionSolution']
         for region in regions:

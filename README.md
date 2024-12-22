@@ -171,7 +171,7 @@ from datetime import datetime, timedelta
 import random
 import pandas as pd
 from nempy import markets
-from nempy.historical_inputs import loaders, mms_db, \
+from nempy.historical_inputs import loaders, mms_db,
     xml_cache, units, demand, interconnectors, constraints, rhs_calculator
 from nempy.help_functions.helper_functions import update_rhs_values
 
@@ -244,10 +244,11 @@ for interval in get_test_intervals(number=100):
     # Set limits provided by the unconstrained intermittent generation
     # forecasts. Primarily for wind and solar.
     unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
-    market.set_unconstrained_intermitent_generation_forecast_constraint(
+    market.set_unconstrained_intermittent_generation_forecast_constraint(
         unit_uigf_limit)
     cost = constraint_inputs.get_constraint_violation_prices()['uigf']
     market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
+
 
     # Set unit ramp rates.
     def set_ramp_rates(run_type):
@@ -293,9 +294,9 @@ for interval in get_test_intervals(number=100):
     set_joint_ramping_constraints(run_type="fast_start_first_run")
 
     # Set interconnector definitions, limits and loss models.
-    interconnectors_definitions = \
+    interconnectors_definitions =
         interconnector_inputs.get_interconnector_definitions()
-    loss_functions, interpolation_break_points = \
+    loss_functions, interpolation_break_points =
         interconnector_inputs.get_interconnector_loss_model()
     market.set_interconnectors(interconnectors_definitions)
     market.set_interconnector_losses(loss_functions,

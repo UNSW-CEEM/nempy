@@ -1,6 +1,6 @@
 import pandas as pd
 from pandas._testing import assert_frame_equal
-from nempy.spot_markert_backend import unit_constraints
+from nempy.spot_market_backend import unit_constraints
 
 
 def test_create_constraints():
