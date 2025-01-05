@@ -130,7 +130,7 @@ def _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates, fast_s
 
 
 def _bidirectional_ramp_constraints(ramp_rates, type, next_constraint_id, dispatch_interval):
-    rhs_and_type = ramp_rates.drop_duplicates('unit')
+    rhs_and_type = ramp_rates.drop_duplicates('unit').copy()
     if type == 'up':
         rhs_and_type['rhs'] = ramp_rates['initial_output'] + ramp_rates['ramp_up_rate'] * (dispatch_interval / 60)
         rhs_and_type['type'] = "<="
@@ -143,9 +143,7 @@ def _bidirectional_ramp_constraints(ramp_rates, type, next_constraint_id, dispat
     rhs_and_type = rhs_and_type.loc[:, ['unit', 'service', 'dispatch_type', 'constraint_id', 'type', 'rhs']]
 
     variable_map = ramp_rates.loc[:, ['unit', 'dispatch_type']]
-    variable_map['coefficient'] = np.where(
-        variable_map['dispatch_type'] == 'generator', 1.0, -1.0
-    )
+    variable_map['coefficient'] = 1.0
     variable_map = pd.merge(
         variable_map,
         rhs_and_type.loc[:, ['unit', 'service', 'constraint_id']],

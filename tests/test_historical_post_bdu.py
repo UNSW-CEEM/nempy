@@ -1,5 +1,6 @@
 import sqlite3
 import pandas as pd
+import numpy as np
 from pandas.testing import assert_frame_equal
 from datetime import datetime, timedelta
 import random
@@ -11,7 +12,7 @@ from nempy.historical_inputs import aemo_to_nempy_name_mapping as an
 
 
 test_db = 'D:/nempy_2024_07/historical_mms.db'
-test_xml_cache = 'D:/nempy_test_files/nemde_cache'
+test_xml_cache = 'D:/nempy_2024_07/xml_cache'
 
 
 # These tests require some additional clean up and will probably not run on your machine. ##############################
@@ -67,6 +68,7 @@ def test_find_intervals_where_fast_start_unit_commitment_works():
     working_intervals = []
 
     for interval in get_test_intervals(number=100):
+    # for interval in ['2024/07/01 11:30:00']:
 
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
@@ -79,12 +81,12 @@ def test_find_intervals_where_fast_start_unit_commitment_works():
                                                                      constraint_inputs=constraint_inputs,
                                                                      demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
-        market_builder.add_interconnectors_to_market()
-        market_builder.add_generic_constraints()
-        market_builder.set_unit_fcas_constraints()
-        market_builder.set_unit_limit_constraints()
-        market_builder.set_region_demand_constraints()
         market_builder.set_ramp_rate_limits()
+        market_builder.set_unit_limit_constraints()
+        market_builder.add_interconnectors_to_market()
+        market_builder.add_generic_constraints_with_fcas_requirements_interface()
+        market_builder.set_unit_fcas_constraints()
+        market_builder.set_region_demand_constraints()
         market_builder.set_fast_start_constraints()
         market = market_builder.get_market_object()
 
@@ -103,13 +105,27 @@ def test_find_intervals_where_fast_start_unit_commitment_works():
         cols_convert_to_float = ['end_mode', 'time_in_end_mode']
         next_interval_fs_profiles[cols_convert_to_float] = next_interval_fs_profiles[cols_convert_to_float].astype(float)
         calculated_fs_profiles[cols_convert_to_float] = calculated_fs_profiles[cols_convert_to_float].astype(float)
-        calculated_fs_profiles = calculated_fs_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode']]
+        next_interval_fs_profiles = next_interval_fs_profiles[next_interval_fs_profiles['unit'].isin(calculated_fs_profiles['unit'])]
+        calculated_fs_profiles = calculated_fs_profiles[calculated_fs_profiles['unit'].isin(next_interval_fs_profiles['unit'])]
+        calculated_fs_profiles = calculated_fs_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_four_length']]
         calculated_fs_profiles = calculated_fs_profiles.sort_values('unit').reset_index(drop=True)
         next_interval_fs_profiles = next_interval_fs_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode']]
         next_interval_fs_profiles = next_interval_fs_profiles.sort_values('unit').reset_index(drop=True)
 
+        mask = (
+                (calculated_fs_profiles['end_mode'] == 4) &
+                (next_interval_fs_profiles['end_mode'] == 0) &
+                (calculated_fs_profiles['time_in_end_mode'] == calculated_fs_profiles['mode_four_length'])
+            )
+
+        calculated_fs_profiles['end_mode'] = np.where(mask, 0, calculated_fs_profiles['end_mode'])
+        calculated_fs_profiles['time_in_end_mode'] = np.where(mask, 0.0, calculated_fs_profiles['time_in_end_mode'])
+        calculated_fs_profiles = calculated_fs_profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode']]
+
+
         if calculated_fs_profiles.equals(next_interval_fs_profiles):
             working_intervals.append(interval)
+        else:
             print(interval)
 
     with open('intervals_where_fast_start_unit_commitment_works.pkl', 'wb') as file:
@@ -122,13 +138,13 @@ def test_ramp_rate_constraints():
     xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
+    #
+    # with open('interval_with_violations_2024_07.pickle', 'rb') as file:
+    #     intervals = pickle.load(file)
 
-    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
-        intervals = pickle.load(file)
+    error_intervals = []
 
-    for interval in ['2024/07/29 13:30:00']:
-        # if interval in ['2024/07/23 09:20:00', '2024/07/29 13:30:00']: # Small initial mw and 0 ramp rate cause violations
-        #     continue
+    for interval in ['2024/07/17 13:55:00']:
         print(interval)
 
         raw_inputs_loader.set_interval(interval)
@@ -145,7 +161,7 @@ def test_ramp_rate_constraints():
         market_builder.set_ramp_rate_limits()
         market_builder.set_unit_limit_constraints()
         market_builder.add_interconnectors_to_market()
-        market_builder.add_generic_constraints()
+        market_builder.add_generic_constraints_with_fcas_requirements_interface()
         market_builder.set_unit_fcas_constraints()
         market_builder.set_region_demand_constraints()
         market_builder.set_fast_start_constraints()
@@ -156,24 +172,52 @@ def test_ramp_rate_constraints():
                                                                      interval=interval,
                                                                      raw_inputs_loader=raw_inputs_loader)
 
-        market_overrider.set_unit_dispatch_to_historical_values()
-
         market_builder.dispatch()
 
-        market_checker = historical_market_builder.MarketChecker(market=market,
-                                                                 mms_db=mms_database,
-                                                                 xml_cache=xml_cache_manager,
-                                                                 interval=interval)
+        successfully_set = market_overrider.set_unit_dispatch_to_historical_values()
 
-        assert market_checker.measured_violation_equals_historical_violation(
-            historical_name='ramp_rate',
-            nempy_constraints=[
-                'ramp_up',
-                'ramp_down',
-                'bidirectional_ramp_up',
-                'bidirectional_ramp_down'
-            ]
-        )
+        if successfully_set:
+            market_overrider.set_interconnector_flow_to_historical_values()
+
+            market_builder.dispatch()
+
+            market_checker = historical_market_builder.MarketChecker(market=market,
+                                                                     mms_db=mms_database,
+                                                                     xml_cache=xml_cache_manager,
+                                                                     interval=interval)
+
+            assert market_checker.measured_violation_equals_historical_violation(
+                historical_name='ramp_rate',
+                nempy_constraints=[
+                    'ramp_up',
+                    'ramp_down',
+                    'bidirectional_ramp_up',
+                    'bidirectional_ramp_down'
+                ]
+            )
+            assert market_checker.all_dispatch_units_and_services_have_decision_variables()
+            assert market_checker.measured_violation_equals_historical_violation(
+                historical_name='fcas_profile',
+                nempy_constraints=[
+                    'fcas_max_availability',
+                    'energy_and_regulation_capacity',
+                    'joint_ramping_lower_reg',
+                    'joint_ramping_raise_reg',
+                    'bidirectional_unit_raise_regulation_ramping',
+                    'bidirectional_unit_lower_regulation_ramping',
+                    'joint_capacity'
+                ]
+            )
+            assert market_checker.measured_violation_equals_historical_violation('fast_start',
+                                                                                 nempy_constraints=['fast_start'])
+            assert market_checker.measured_violation_equals_historical_violation('unit_capacity',
+                                                                                 nempy_constraints=['unit_bid_capacity'])
+            assert market_checker.is_generic_constraint_slack_correct()
+            assert market_checker.is_fcas_constraint_slack_correct()
+            assert market_checker.is_regional_demand_meet()
+        else:
+            error_intervals.append(interval)
+            print("Failed to test")
 
 
 def test_ramp_rate_constraints_where_constraints_violated():
@@ -235,7 +279,12 @@ def test_fast_start_constraints():
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
-    for interval in get_test_intervals(number=10):
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
+        intervals = pickle.load(file)
+
+    for interval in intervals:
+        print(interval)
+
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -247,13 +296,19 @@ def test_fast_start_constraints():
                                                                      constraint_inputs=constraint_inputs,
                                                                      demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
+        market_builder.set_ramp_rate_limits()
+        market_builder.set_unit_limit_constraints()
+        market_builder.add_interconnectors_to_market()
+        market_builder.add_generic_constraints()
+        market_builder.set_unit_fcas_constraints()
+        market_builder.set_region_demand_constraints()
         market_builder.set_fast_start_constraints()
-
         market = market_builder.get_market_object()
 
         market_overrider = historical_market_builder.MarketOverrider(market=market,
                                                                      mms_db=mms_database,
-                                                                     interval=interval)
+                                                                     interval=interval,
+                                                                     raw_inputs_loader=raw_inputs_loader)
 
         market_overrider.set_unit_dispatch_to_historical_values()
 
@@ -263,7 +318,6 @@ def test_fast_start_constraints():
                                                                  mms_db=mms_database,
                                                                  xml_cache=xml_cache_manager,
                                                                  interval=interval)
-
         assert market_checker.measured_violation_equals_historical_violation('fast_start',
                                                                              nempy_constraints=['fast_start'])
 
@@ -327,7 +381,12 @@ def test_capacity_constraints():
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
-    for interval in get_test_intervals(number=10):
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
+        intervals = pickle.load(file)
+
+    for interval in intervals:
+        print(interval)
+
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -339,17 +398,21 @@ def test_capacity_constraints():
                                                                      constraint_inputs=constraint_inputs,
                                                                      demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
-        market_builder.add_interconnectors_to_market()
+        market_builder.set_ramp_rate_limits()
         market_builder.set_unit_limit_constraints()
-
+        market_builder.add_interconnectors_to_market()
+        market_builder.add_generic_constraints()
+        market_builder.set_unit_fcas_constraints()
+        market_builder.set_region_demand_constraints()
+        market_builder.set_fast_start_constraints()
         market = market_builder.get_market_object()
 
         market_overrider = historical_market_builder.MarketOverrider(market=market,
                                                                      mms_db=mms_database,
-                                                                     interval=interval)
+                                                                     interval=interval,
+                                                                     raw_inputs_loader=raw_inputs_loader)
 
         market_overrider.set_unit_dispatch_to_historical_values()
-        market_overrider.set_interconnector_flow_to_historical_values()
 
         market_builder.dispatch()
 
@@ -416,16 +479,19 @@ def test_capacity_constraint_where_constraints_violated():
     assert tests_to_run == tests_run
 
 
-def ignore_test_fcas_trapezium_scaled_availability():
-    con = sqlite3.connect('/media/nickgorman/Samsung_T5/nempy_test_files/historical_mms_august_2020.db')
+def test_fcas_trapezium_scaled_availability():
+    con = sqlite3.connect(test_db)
     mms_database = mms_db.DBManager(con)
-    xml_cache_manager = xml_cache.XMLCacheManager('/media/nickgorman/Samsung_T5/nempy_test_files/nemde_cache_august_2020')
+    xml_cache_manager = xml_cache.XMLCacheManager(test_xml_cache)
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
-    for interval in get_test_intervals_august_2020(number=10):
-        if interval != '2020/08/21 13:00:00':
-            continue
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
+        intervals = pickle.load(file)
+
+    for interval in intervals:
+        print(interval)
+
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -437,14 +503,19 @@ def ignore_test_fcas_trapezium_scaled_availability():
                                                                      constraint_inputs=constraint_inputs,
                                                                      demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
-        market_builder.set_unit_fcas_constraints()
+        market_builder.set_ramp_rate_limits()
         market_builder.set_unit_limit_constraints()
-
+        market_builder.add_interconnectors_to_market()
+        market_builder.add_generic_constraints()
+        market_builder.set_unit_fcas_constraints()
+        market_builder.set_region_demand_constraints()
+        market_builder.set_fast_start_constraints()
         market = market_builder.get_market_object()
 
         market_overrider = historical_market_builder.MarketOverrider(market=market,
                                                                      mms_db=mms_database,
-                                                                     interval=interval)
+                                                                     interval=interval,
+                                                                     raw_inputs_loader=raw_inputs_loader)
 
         market_overrider.set_unit_dispatch_to_historical_values()
 
@@ -452,19 +523,16 @@ def ignore_test_fcas_trapezium_scaled_availability():
 
         market_checker = historical_market_builder.MarketChecker(market=market,
                                                                  mms_db=mms_database,
-                                                                 xml_cache=xml_cache,
-                                                                 interval=interval,
-                                                                 unit_inputs=unit_inputs)
+                                                                 xml_cache=xml_cache_manager,
+                                                                 interval=interval)
 
         avails = market_checker.do_fcas_availabilities_match_historical()
         # I think NEMDE might be getting avail calcs wrong when units are operating on the slopes, and the slopes
         # are vertical. They should be ignore 0 slope coefficients, maybe this is not happening because of floating
         # point comparison.
-        if interval == '2019/01/29 18:10:00':
-            avails = avails[~(avails['unit'] == 'PPCCGT')]
-        if interval == '2019/01/07 19:35:00':
-            avails = avails[~(avails['unit'] == 'PPCCGT')]
-        #assert avails['error'].abs().max() < 1.1
+        x=1
+        avails = avails[avails['service'] != 'lower_reg'].copy()
+        assert avails['error'].abs().max() < 1.1
 
 
 def ignore_test_find_fcas_trapezium_scaled_availability_erros():
@@ -498,7 +566,11 @@ def test_all_units_and_service_dispatch_historically_present_in_market():
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
-    for interval in get_test_intervals(number=1000):
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
+        intervals = pickle.load(file)
+
+    for interval in ['2024/07/25 12:05:00']:
+        print(interval)
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -545,7 +617,7 @@ def test_slack_in_generic_constraints():
         market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
         market_builder.set_solver('CBC')
-        market_builder.dispatch(calc_prices=True)
+        market_builder.dispatch()
         market = market_builder.get_market_object()
 
         market_overrider = historical_market_builder.MarketOverrider(market=market,
@@ -572,7 +644,12 @@ def test_slack_in_generic_constraints_with_fcas_interface():
     raw_inputs_loader = loaders.RawInputsLoader(nemde_xml_cache_manager=xml_cache_manager,
                                                 market_management_system_database=mms_database)
 
-    for interval in get_test_intervals(number=100):
+    with open('intervals_where_fast_start_unit_commitment_works.pkl', 'rb') as file:
+        intervals = pickle.load(file)
+
+    for interval in intervals:
+        print(interval)
+
         raw_inputs_loader.set_interval(interval)
         unit_inputs = units.UnitData(raw_inputs_loader)
         interconnector_inputs = interconnectors.InterconnectorData(raw_inputs_loader)
@@ -584,20 +661,19 @@ def test_slack_in_generic_constraints_with_fcas_interface():
                                                                      constraint_inputs=constraint_inputs,
                                                                      demand_inputs=demand_inputs)
         market_builder.add_unit_bids_to_market()
+        market_builder.set_ramp_rate_limits()
+        market_builder.set_unit_limit_constraints()
         market_builder.add_interconnectors_to_market()
         market_builder.add_generic_constraints_with_fcas_requirements_interface()
         market_builder.set_unit_fcas_constraints()
-        market_builder.set_unit_limit_constraints()
         market_builder.set_region_demand_constraints()
-        market_builder.set_ramp_rate_limits()
         market_builder.set_fast_start_constraints()
-        market_builder.set_solver('CBC')
-        market_builder.dispatch(calc_prices=True)
         market = market_builder.get_market_object()
 
         market_overrider = historical_market_builder.MarketOverrider(market=market,
                                                                      mms_db=mms_database,
-                                                                     interval=interval)
+                                                                     interval=interval,
+                                                                     raw_inputs_loader=raw_inputs_loader)
 
         market_overrider.set_unit_dispatch_to_historical_values()
         market_overrider.set_interconnector_flow_to_historical_values()

@@ -703,9 +703,10 @@ def create_unit_level_generic_constraint_lhs(generic_constraint_units, generic_c
         =============  ===============================================================
     """
     unit_lhs = pd.merge(generic_constraint_units,
-                        unit_bids_to_constraint_map.loc[:, ['unit', 'service', 'variable_id']],
+                        unit_bids_to_constraint_map.loc[:, ['unit', 'service', 'variable_id', 'coefficient']],
                         on=['unit', 'service'])
     unit_lhs = pd.merge(unit_lhs, generic_constraint_ids.loc[:, ['constraint_id', 'set']], on='set')
+    unit_lhs['coefficient'] = unit_lhs['coefficient_x'] * unit_lhs['coefficient_y']
     return unit_lhs.loc[:, ['constraint_id', 'variable_id', 'coefficient']]
 
 

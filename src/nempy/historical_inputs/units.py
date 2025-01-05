@@ -552,6 +552,8 @@ class UnitData:
         profiles['min_loading'] = np.float64(profiles['min_loading'])
         # profiles = profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
         #                             'mode_four_length', 'min_loading']]
+        unit_info = self.get_unit_info().loc[:, ['unit', 'dispatch_type']]
+        profiles = pd.merge(profiles, unit_info, on='unit')
         return profiles
 
     def _get_fast_start_profiles(self, unconstrained_dispatch=None):
@@ -578,7 +580,7 @@ class UnitData:
 
         # Move units from mode one to mode two
         # If the time left in the mode is less than 5 minutes than progress to next mode
-        mask = (fsp['temp_current_mode'] == 1) & (fsp['mode_one_length'] - fsp['temp_time_in_current_mode'] <=
+        mask = (fsp['temp_current_mode'] == 1) & (fsp['mode_one_length'] - fsp['temp_time_in_current_mode'] <
                                              fsp['time_left_in_interval'])
         df1 = fsp[mask].copy()
         df2 = fsp[~mask].copy()
@@ -588,7 +590,7 @@ class UnitData:
         fsp = pd.concat([df1, df2])
 
         # Move units from mode two to mode three
-        mask = (fsp['temp_current_mode'] == 2) & (fsp['mode_two_length'] - fsp['temp_time_in_current_mode'] <=
+        mask = (fsp['temp_current_mode'] == 2) & (fsp['mode_two_length'] - fsp['temp_time_in_current_mode'] <
                                              fsp['time_left_in_interval'])
         df1 = fsp[mask].copy()
         df2 = fsp[~mask].copy()
@@ -599,7 +601,7 @@ class UnitData:
         fsp = pd.concat([df1, df2])
 
         # Move units from mode three to mode four
-        mask = (fsp['temp_current_mode'] == 3) & (fsp['mode_three_length'] - fsp['temp_time_in_current_mode'] <=
+        mask = (fsp['temp_current_mode'] == 3) & (fsp['mode_three_length'] - fsp['temp_time_in_current_mode'] <
                                              fsp['time_left_in_interval'])
         df1 = fsp[mask].copy()
         df2 = fsp[~mask].copy()
@@ -608,23 +610,27 @@ class UnitData:
         df1['temp_time_in_current_mode'] = 0.0
         fsp = pd.concat([df1, df2])
 
-        # Move units from mode four to mode five
-        mask = (fsp['temp_current_mode'] == 4) & (fsp['mode_four_length'] - fsp['temp_time_in_current_mode'] <=
-                                             fsp['time_left_in_interval'])
-        df1 = fsp[mask].copy()
-        df2 = fsp[~mask].copy()
-        df1['temp_current_mode'] = 4
+        # Move units from mode four to mode 0
+        # mask = (fsp['temp_current_mode'] == 4) & (fsp['mode_four_length'] - fsp['temp_time_in_current_mode'] <
+        #                                      fsp['time_left_in_interval'])
+        # df1 = fsp[mask].copy()
+        # df2 = fsp[~mask].copy()
+        # df1['temp_current_mode'] = 0
         # df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_four_length'] - df1['temp_time_in_current_mode'])
-        df1['time_in_end_mode'] = df1['mode_four_length']
+        # df1['time_in_end_mode'] = 0.0
+        # fsp = pd.concat([df1, df2])
 
-        df2['time_in_end_mode'] = df2['temp_time_in_current_mode'] + df2['time_left_in_interval']
-
-        fsp = pd.concat([df1, df2])
-
+        fsp['time_in_end_mode'] = fsp['temp_time_in_current_mode'] + fsp['time_left_in_interval']
         fsp['end_mode'] = fsp['temp_current_mode']
 
         fsp['time_in_end_mode'] = np.where(
             fsp['end_mode'] == 0, 0.0, fsp['time_in_end_mode']
+        )
+
+        fsp['time_in_end_mode'] = np.where(
+            (fsp['end_mode'] == 4) & (fsp['time_in_end_mode'] > fsp['mode_four_length']),
+            fsp['mode_four_length'],
+            fsp['time_in_end_mode']
         )
 
         return fsp.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
@@ -2190,16 +2196,87 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     fcas_bids = fcas_bids[(fcas_bids['capacity'] >= fcas_bids['ENABLEMENTMIN']) | (fcas_bids['capacity'].isna())]
     fcas_bids = fcas_bids.drop(['unit', 'capacity'], axis=1)
 
+
+    fcas_bids = pd.merge(
+        fcas_bids,
+        DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'AGCSTATUS', 'TRADERTYPE']],
+        'inner',
+        on='DUID'
+    )
+
+    fcas_bids_bdu = fcas_bids[fcas_bids['TRADERTYPE'] == 'BIDIRECTIONAL']
+    fcas_bids_not_bdu = fcas_bids[~(fcas_bids['TRADERTYPE'] == 'BIDIRECTIONAL')].copy()
+    fcas_bids_bdu_gen = fcas_bids_bdu[fcas_bids_bdu['DIRECTION'] == 'GENERATOR']
+    fcas_bids_bdu_load = fcas_bids_bdu[fcas_bids_bdu['DIRECTION'] == 'LOAD']
+    fcas_bids_bdu_gen_reg = fcas_bids_bdu_gen[fcas_bids_bdu_gen['BIDTYPE'].str.find('REG') != -1].copy()
+    fcas_bids_bdu_load_reg = fcas_bids_bdu_load[fcas_bids_bdu_load['BIDTYPE'].str.find('REG') != -1].copy()
+    fcas_bids_bdu_gen_con = fcas_bids_bdu_gen[~(fcas_bids_bdu_gen['BIDTYPE'].str.find('REG') != -1)].copy()
+    fcas_bids_bdu_load_con = fcas_bids_bdu_load[~(fcas_bids_bdu_load['BIDTYPE'].str.find('REG') != -1)].copy()
+
     # Filter out fcas_bids where the enablement max is not greater than zero.
-    fcas_bids = fcas_bids[fcas_bids['ENABLEMENTMAX'] >= 0.0]
+    fcas_bids_not_bdu = fcas_bids_not_bdu[fcas_bids_not_bdu['ENABLEMENTMAX'] >= 0.0]
+    fcas_bids_bdu_gen_con = fcas_bids_bdu_gen_con[fcas_bids_bdu_gen_con['ENABLEMENTMAX'] >= 0.0]
+
+    # Filter out fcas_bids where the enablement min is not less than zero.
+    fcas_bids_bdu_load_con = fcas_bids_bdu_load_con[fcas_bids_bdu_load_con['ENABLEMENTMIN'] <= 0.0]
+
+    fcas_bids_bdu_load_reg['FILTERENABLMENTMIN'] = fcas_bids_bdu_load_reg['ENABLEMENTMIN']
+    fcas_bids_bdu_load_reg_f = fcas_bids_bdu_load_reg.loc[:, ['DUID', 'BIDTYPE', 'FILTERENABLMENTMIN']]
+    # fcas_bids_bdu_load_reg = fcas_bids_bdu_load_reg.drop(columns=['FILTERENABLMENTMIN'])
+    fcas_bids_bdu_gen_reg['FILTERENABLMENTMAX'] = fcas_bids_bdu_gen_reg['ENABLEMENTMAX']
+    fcas_bids_bdu_gen_reg_f = fcas_bids_bdu_gen_reg.loc[:, ['DUID', 'BIDTYPE', 'FILTERENABLMENTMAX']]
+    # fcas_bids_bdu_gen_reg = fcas_bids_bdu_gen_reg.drop(columns=['FILTERENABLMENTMAX'])
+
+    fcas_bids_bdu_load_reg = pd.merge(
+        fcas_bids_bdu_load_reg,
+        fcas_bids_bdu_gen_reg_f,
+        how='left',
+        on=['DUID', 'BIDTYPE']
+    )
+
+    fcas_bids_bdu_load_reg['FILTERENABLMENTMAX'] = np.where(
+        fcas_bids_bdu_load_reg['FILTERENABLMENTMAX'].isna(),
+        fcas_bids_bdu_load_reg['ENABLEMENTMAX'],
+        fcas_bids_bdu_load_reg['FILTERENABLMENTMAX']
+    )
+
+    fcas_bids_bdu_gen_reg = pd.merge(
+        fcas_bids_bdu_gen_reg,
+        fcas_bids_bdu_load_reg_f,
+        how='left',
+        on=['DUID', 'BIDTYPE']
+    )
+
+    fcas_bids_bdu_gen_reg['FILTERENABLMENTMIN'] = np.where(
+        fcas_bids_bdu_gen_reg['FILTERENABLMENTMIN'].isna(),
+        fcas_bids_bdu_gen_reg['ENABLEMENTMIN'],
+        fcas_bids_bdu_gen_reg['FILTERENABLMENTMIN']
+    )
+
+    fcas_bids_bdu_gen_reg = fcas_bids_bdu_gen_reg[fcas_bids_bdu_gen_reg['ENABLEMENTMAX'] >= 0.0]
+    fcas_bids_bdu_load_reg = fcas_bids_bdu_load_reg[fcas_bids_bdu_load_reg['ENABLEMENTMIN'] <= 0.0]
+
+    fcas_bids = pd.concat([fcas_bids_bdu_load_con, fcas_bids_bdu_gen_con, fcas_bids_not_bdu])
+
+    fcas_bids_bdu_reg = pd.concat([fcas_bids_bdu_gen_reg, fcas_bids_bdu_load_reg])
 
     # Filter out fcas_bids where the unit is not initially operating between the enablement min and max.
     # Round initial ouput to 5 decimial places because the enablement min and max are given to this number, without
     # this some units are dropped that shouldn't be.
-    fcas_bids = pd.merge(fcas_bids, DISPATCHLOAD.loc[:, ['DUID', 'INITIALMW', 'AGCSTATUS']], 'inner', on='DUID')
-    fcas_bids['INITIALMW'] = np.where(fcas_bids['INITIALMW'] < 0.0, 0.0, fcas_bids['INITIALMW'])
+    fcas_bids['INITIALMW'] = np.where(
+        (fcas_bids['INITIALMW'] < 0.0) & (fcas_bids['TRADERTYPE'] != 'BIDIRECTIONAL'),
+        0.0,
+        fcas_bids['INITIALMW']
+    )
+
     fcas_bids = fcas_bids[(fcas_bids['ENABLEMENTMAX'] >= fcas_bids['INITIALMW'].round(5)) &
                           (fcas_bids['ENABLEMENTMIN'] <= fcas_bids['INITIALMW'].round(5))]
+
+    fcas_bids_bdu_reg = \
+        fcas_bids_bdu_reg[(fcas_bids_bdu_reg['FILTERENABLMENTMAX'] >= fcas_bids_bdu_reg['INITIALMW'].round(5)) &
+                          (fcas_bids_bdu_reg['FILTERENABLMENTMIN'] <= fcas_bids_bdu_reg['INITIALMW'].round(5))]
+
+    fcas_bids = pd.concat([fcas_bids, fcas_bids_bdu_reg])
 
     # Filter out fcas_bids where the AGC status is not set to 1.0
     fcas_bids = fcas_bids[~((fcas_bids['AGCSTATUS'] == 0.0) & (fcas_bids['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])))]

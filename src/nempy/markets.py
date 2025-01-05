@@ -122,6 +122,9 @@ class SpotMarket:
 
         self._unit_info = unit_info
 
+        units = unit_info['unit'].value_counts()
+        self._bidirectional_units = units[units == 2].index.tolist()
+
     def _validate_unit_info(self, unit_info):
         schema = dv.DataFrameSchema(name='unit_info', primary_keys=['unit', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str))
@@ -241,8 +244,8 @@ class SpotMarket:
         if self.validate_inputs:
             self._validate_volume_bids(volume_bids)
 
-        self._decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map = \
-            variable_ids.bids(volume_bids, self._unit_info, self._next_variable_id)
+        self._decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map, = \
+            variable_ids.bids(volume_bids, self._unit_info, self._next_variable_id, self._bidirectional_units)
 
         self._variable_to_constraint_map['regional']['bids'] = variable_to_regional_constraint_map
         self._variable_to_constraint_map['unit_level']['bids'] = variable_to_unit_level_constraint_map
@@ -484,6 +487,11 @@ class SpotMarket:
         self._check_unit_volume_bids_set()
         self._validate_unit_limits(unit_limits)
         rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self._next_constraint_id)
+        variable_map['coefficient'] = np.where(
+            (variable_map['dispatch_type'] == 'load') & (variable_map['unit'].isin(self._bidirectional_units)),
+            -1.0,
+            1.0
+        )
         self._constraints_rhs_and_type['unit_bid_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['unit_bid_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
@@ -981,6 +989,8 @@ class SpotMarket:
     def _validate_fast_start_profiles(self, fast_start_profiles):
         schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['unit'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
+                                          optional=True)
         schema.add_column(dv.SeriesSchema(name='end_mode', data_type=np.int64, must_be_real_number=True,
                                           not_negative=True))
         schema.add_column(dv.SeriesSchema(name='time_in_end_mode', data_type=np.float64, must_be_real_number=True,
@@ -1583,7 +1593,7 @@ class SpotMarket:
         if self.validate_inputs:
             self._validate_contingency_trapeziums(contingency_trapeziums)
         rhs_and_type, variable_map = fcas_constraints.joint_capacity_constraints(
-            contingency_trapeziums, self._next_constraint_id)
+            contingency_trapeziums, self._bidirectional_units, self._next_constraint_id)
         self._constraints_rhs_and_type['joint_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
@@ -1735,6 +1745,67 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
                           optional=True)
         schema.validate(contingency_trapeziums)
+
+    def set_bidirectional_unit_raise_regulation_ramping_constraints(self, ramp_details):
+        bdu_ramp_details = ramp_details[ramp_details['unit'].isin(self._bidirectional_units)]
+
+        if not bdu_ramp_details.empty:
+            rhs_type_raise_reg = bdu_ramp_details.drop_duplicates('unit')
+            rhs_type_raise_reg['type'] = '<='
+            rhs_type_raise_reg['rhs'] = rhs_type_raise_reg['ramp_up_rate'] * (self.dispatch_interval / 60)
+            rhs_type_raise_reg = hf.save_index(rhs_type_raise_reg, 'constraint_id', self._next_constraint_id)
+            rhs_type_raise_reg = rhs_type_raise_reg.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+            self._next_constraint_id = max(rhs_type_raise_reg['constraint_id']) + 1
+
+            variable_map_raise_reg = bdu_ramp_details.loc[:, ['unit']]
+            variable_map_raise_reg['service'] = 'raise_reg'
+            variable_map_raise_reg['coefficient'] = 1.0
+            variable_map_raise_reg = pd.merge(
+                variable_map_raise_reg,
+                rhs_type_raise_reg.loc[:, ['unit', 'constraint_id']]
+            )
+            variable_map_raise_reg['dispatch_type'] = 'generator'
+            variable_map_raise_reg_gen = variable_map_raise_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
+                                                                        'coefficient']]
+            variable_map_raise_reg_load = variable_map_raise_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
+                                                                        'coefficient']]
+            variable_map_raise_reg_load['dispatch_type'] = 'load'
+            variable_map_raise_reg = pd.concat([variable_map_raise_reg_gen, variable_map_raise_reg_load])
+
+            self._constraints_rhs_and_type['bidirectional_unit_raise_regulation_ramping'] = rhs_type_raise_reg
+            self._constraint_to_variable_map['unit_level']['bidirectional_unit_raise_regulation_ramping'] = (
+                variable_map_raise_reg)
+
+    def set_bidirectional_unit_lower_regulation_ramping_constraints(self, ramp_details):
+        bdu_ramp_details = ramp_details[ramp_details['unit'].isin(self._bidirectional_units)]
+
+        if not bdu_ramp_details.empty:
+            rhs_type_lower_reg = bdu_ramp_details.drop_duplicates('unit')
+            rhs_type_lower_reg['type'] = '<='
+            rhs_type_lower_reg['rhs'] = rhs_type_lower_reg['ramp_down_rate'] * (self.dispatch_interval / 60)
+            rhs_type_lower_reg = hf.save_index(rhs_type_lower_reg, 'constraint_id', self._next_constraint_id)
+            rhs_type_lower_reg = rhs_type_lower_reg.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+            self._next_constraint_id = max(rhs_type_lower_reg['constraint_id']) + 1
+
+            variable_map_lower_reg = bdu_ramp_details.loc[:, ['unit']]
+            variable_map_lower_reg['service'] = 'raise_reg'
+            variable_map_lower_reg['coefficient'] = 1.0
+            variable_map_lower_reg = pd.merge(
+                variable_map_lower_reg,
+                rhs_type_lower_reg.loc[:, ['unit', 'constraint_id']]
+            )
+
+            variable_map_lower_reg['dispatch_type'] = 'generator'
+            variable_map_lower_reg_gen = variable_map_lower_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
+                                                                        'coefficient']]
+            variable_map_lower_reg_load = variable_map_lower_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
+                                                                        'coefficient']]
+            variable_map_lower_reg_load['dispatch_type'] = 'load'
+            variable_map_lower_reg = pd.concat([variable_map_lower_reg_load, variable_map_lower_reg_gen])
+
+            self._constraints_rhs_and_type['bidirectional_unit_lower_regulation_ramping'] = rhs_type_lower_reg
+            self._constraint_to_variable_map['unit_level']['bidirectional_unit_lower_regulation_ramping'] = (
+                variable_map_lower_reg)
 
     def set_interconnectors(self, interconnector_directions_and_limits):
         """Create lossless links between specified regions.
@@ -3090,9 +3161,9 @@ class SpotMarket:
             ModelBuildError
                 If a model build process is incomplete, i.e. there are energy bids but not energy demand set.
         """
-        dispatch = self._decision_variables['bids'].loc[:, ['unit', 'service', 'value']]
-        dispatch.columns = ['unit', 'service', 'dispatch']
-        return dispatch.groupby(['unit', 'service'], as_index=False).sum()
+        dispatch = self._decision_variables['bids'].loc[:, ['unit', 'dispatch_type', 'service', 'value']]
+        dispatch.columns = ['unit', 'dispatch_type', 'service', 'dispatch']
+        return dispatch.groupby(['unit', 'dispatch_type', 'service'], as_index=False).sum()
 
     def get_energy_prices(self):
         """Retrieves the energy price in each market region.
@@ -3400,7 +3471,11 @@ class SpotMarket:
         unit_dispatch = self.get_unit_dispatch()
         unit_dispatch = unit_dispatch[unit_dispatch['service'] == 'energy']
         unit_dispatch_types = self._unit_info.loc[:, ['unit', 'region', 'dispatch_type']]
-        unit_dispatch = pd.merge(unit_dispatch, unit_dispatch_types, on='unit')
+        unit_dispatch = pd.merge(
+            unit_dispatch,
+            unit_dispatch_types,
+            on=['unit', 'dispatch_type']
+        )
 
         def make_load_dispatch_negative(dispatch_type, dispatch):
             if dispatch_type == 'load':
@@ -3624,7 +3699,8 @@ class SpotMarket:
         """
         fcas_variable_slack = []
         for constraint_type in ['fcas_max_availability', 'joint_ramping_raise_reg', 'joint_ramping_lower_reg',
-                                'joint_capacity', 'energy_and_regulation_capacity']:
+                                'joint_capacity', 'energy_and_regulation_capacity', 'bidirectional_ramp_up',
+                                'bidirectional_ramp_down']:
             if constraint_type in self._constraints_rhs_and_type.keys():
                 service_coefficients = self._constraint_to_variable_map['unit_level'][constraint_type]
                 service_coefficients = service_coefficients.loc[:, ['constraint_id', 'unit', 'service', 'coefficient']]

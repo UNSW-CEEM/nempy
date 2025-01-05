@@ -3,7 +3,7 @@ import numpy as np
 from nempy.help_functions import helper_functions as hf
 
 
-def bids(volume_bids, unit_info, next_variable_id):
+def bids(volume_bids, unit_info, next_variable_id, bidirectional_units=None):
     """Create decision variables that correspond to unit bids, for use in the linear program.
 
     This function defines the needed parameters for each variable, with a lower bound equal to zero, an upper bound
@@ -149,7 +149,10 @@ def bids(volume_bids, unit_info, next_variable_id):
     constraint_map = decision_variables.loc[:, ['variable_id'] + bid_id_columns]
 
     constraint_map = pd.merge(
-        constraint_map, unit_info.loc[:, ['unit', 'region']], 'inner', on='unit'
+        constraint_map,
+        unit_info.loc[:, ['unit', 'dispatch_type', 'region']],
+        'inner',
+        on=['unit', 'dispatch_type']
     )
 
     regional_constraint_map = constraint_map.loc[:,  ['variable_id', 'region', 'service', 'dispatch_type']]
@@ -157,7 +160,13 @@ def bids(volume_bids, unit_info, next_variable_id):
                                                       (regional_constraint_map['service'] == 'energy'), -1.0, 1.0)
 
     unit_level_constraint_map = constraint_map.loc[:,  ['variable_id', 'unit', 'service', 'dispatch_type']]
-    unit_level_constraint_map['coefficient'] = 1.0
+    unit_level_constraint_map['coefficient'] = np.where(
+        unit_level_constraint_map['unit'].isin(bidirectional_units) &
+        (unit_level_constraint_map['service'] == 'energy') &
+        (unit_level_constraint_map['dispatch_type'] == 'load'),
+        -1.0,
+        1.0
+    )
 
     decision_variables = \
         decision_variables.loc[:, ['unit', 'capacity_band', 'service', 'dispatch_type', 'variable_id', 'lower_bound',

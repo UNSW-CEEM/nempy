@@ -135,7 +135,8 @@ class DBManager:
                                                       'RAISE1SECACTUALAVAILABILITY',
                                                       'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
                                                       'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
-                                                      'LOWER1SECACTUALAVAILABILITY'],
+                                                      'LOWER1SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
+                                                      'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
             table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
@@ -1084,9 +1085,14 @@ class InputsStartAndEnd(_SingleDataSource):
         pd.DataFrame
         """
 
-        query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE > '{datetime}'"
+        query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE >= '{datetime}'"
+        # date_time = datetime.strptime(date_time, '%Y/%m/%d %H:%M:%S') - timedelta(hours=4, minutes=5)
+        # date_time = date_time.strftime('%Y/%m/%d %H:%M:%S')
         query = query.format(table=self.table_name, datetime=date_time)
-        return pd.read_sql_query(query, con=self.con)
+        data = pd.read_sql_query(query, con=self.con)
+        data = data.sort_values('START_DATE')
+        data = data.drop_duplicates(subset=["DUID"], keep='last')
+        return data
 
 
 class InputsByMatchDispatchConstraints(_AllHistDataSource):

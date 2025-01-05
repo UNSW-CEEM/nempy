@@ -27,8 +27,8 @@ if download_inputs:
                             end_year=2024, end_month=7)
 
     # This requires approximately 50 GB of storage.
-    xml_cache_manager.populate_by_day(start_year=2024, start_month=7, start_day=1,
-                                      end_year=2024, end_month=8, end_day=1)
+    # xml_cache_manager.populate_by_day(start_year=2024, start_month=7, start_day=1,
+    #                                   end_year=2024, end_month=8, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,

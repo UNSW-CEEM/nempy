@@ -74,7 +74,7 @@ def joint_ramping_constraints_generic_constructor(constraints, settings, dispatc
     return rhs_and_type, variable_mapping
 
 
-def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
+def joint_capacity_constraints(contingency_trapeziums, bidirectional_units, next_constraint_id):
     """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch targets.
 
     Create two constraints for each contingency services, one ensures operation on upper slope of the fcas contingency
@@ -213,34 +213,66 @@ def joint_capacity_constraints(contingency_trapeziums, next_constraint_id):
     energy_mapping_upper_slope = constraints_upper_slope.loc[:, ['constraint_id', 'unit', 'dispatch_type']]
     energy_mapping_upper_slope['service'] = 'energy'
     energy_mapping_upper_slope['coefficient'] = 1.0
+
+    # Bidirectional fcas traps come tagged as generator but apply to both gen and load side of unit.
+    energy_mapping_upper_slope_load_side_of_bidirectionals = (
+        energy_mapping_upper_slope[energy_mapping_upper_slope['unit'].isin(bidirectional_units)].copy())
+    energy_mapping_upper_slope_load_side_of_bidirectionals['dispatch_type'] = 'load'
+    energy_mapping_upper_slope_load_side_of_bidirectionals['coefficient'] = 1.0
+
     contingency_mapping_upper_slope = \
         constraints_upper_slope.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type', 'upper_slope_coefficient']]
     contingency_mapping_upper_slope = \
         contingency_mapping_upper_slope.rename(columns={"upper_slope_coefficient": "coefficient"})
+
     regulation_mapping_upper_slope = constraints_upper_slope.loc[:, ['constraint_id', 'unit', 'dispatch_type']]
     regulation_mapping_upper_slope['service'] = np.where(regulation_mapping_upper_slope['dispatch_type'] == 'generator',
                                                          'raise_reg', 'lower_reg')
     regulation_mapping_upper_slope['coefficient'] = 1.0
 
+    # Bidirectional fcas traps come tagged as generator but apply to both gen and load side of unit.
+    regulation_mapping_upper_slope_load_side_of_bidirectionals = (
+        regulation_mapping_upper_slope[regulation_mapping_upper_slope['unit'].isin(bidirectional_units)].copy())
+    regulation_mapping_upper_slope_load_side_of_bidirectionals['dispatch_type'] = 'load'
+
     # Define the variables on the lhs of the lower slope constraints and their coefficients.
     energy_mapping_lower_slope = constraints_lower_slope.loc[:, ['constraint_id', 'unit', 'dispatch_type']]
     energy_mapping_lower_slope['service'] = 'energy'
     energy_mapping_lower_slope['coefficient'] = 1.0
+
+    # Bidirectional fcas traps come tagged as generator but apply to both gen and load side of unit.
+    energy_mapping_lower_slope_load_side_of_bidirectionals = (
+        energy_mapping_lower_slope[energy_mapping_lower_slope['unit'].isin(bidirectional_units)].copy())
+    energy_mapping_lower_slope_load_side_of_bidirectionals['dispatch_type'] = 'load'
+    energy_mapping_lower_slope_load_side_of_bidirectionals['coefficient'] = 1.0
+
     contingency_mapping_lower_slope = \
         constraints_lower_slope.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type', 'lower_slope_coefficient']]
     contingency_mapping_lower_slope = \
         contingency_mapping_lower_slope.rename(columns={"lower_slope_coefficient": "coefficient"})
     contingency_mapping_lower_slope['coefficient'] = -1 * contingency_mapping_lower_slope['coefficient']
+
     regulation_mapping_lower_slope = constraints_lower_slope.loc[:, ['constraint_id', 'unit', 'dispatch_type']]
-    regulation_mapping_lower_slope['service'] = np.where(regulation_mapping_lower_slope['dispatch_type'] == 'generator',
-                                                         'lower_reg', 'raise_reg')
+    regulation_mapping_lower_slope['service'] = (
+        np.where(regulation_mapping_lower_slope['dispatch_type'] == 'generator',
+                                                         'lower_reg', 'raise_reg'))
     regulation_mapping_lower_slope['coefficient'] = -1.0
+
+    # Bidirectional fcas traps come tagged as generator but apply to both gen and load side of unit.
+    regulation_mapping_lower_slope_load_side_of_bidirectionals = (
+        regulation_mapping_lower_slope[regulation_mapping_lower_slope['unit'].isin(bidirectional_units)].copy())
+    regulation_mapping_lower_slope_load_side_of_bidirectionals['dispatch_type'] = 'load'
+    regulation_mapping_lower_slope_load_side_of_bidirectionals['coefficient'] = 1.0
 
     # Combine type_and_rhs and variable_mapping.
     type_and_rhs = pd.concat([type_and_rhs_upper_slope, type_and_rhs_lower_slope])
     variable_mapping = pd.concat([energy_mapping_upper_slope, contingency_mapping_upper_slope,
+                                  energy_mapping_upper_slope_load_side_of_bidirectionals,
+                                  regulation_mapping_upper_slope_load_side_of_bidirectionals,
                                   regulation_mapping_upper_slope, energy_mapping_lower_slope,
-                                  contingency_mapping_lower_slope, regulation_mapping_lower_slope])
+                                  energy_mapping_lower_slope_load_side_of_bidirectionals,
+                                  contingency_mapping_lower_slope, regulation_mapping_lower_slope,
+                                  regulation_mapping_lower_slope_load_side_of_bidirectionals])
     return type_and_rhs, variable_mapping
 
 

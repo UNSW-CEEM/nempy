@@ -26,11 +26,6 @@ class SpotMarketBuilder:
 
     def add_unit_bids_to_market(self):
         volume_bids, price_bids = self.unit_inputs.get_processed_bids()
-        # unit_bid_limit = self.unit_inputs.get_unit_bid_availability()
-        # units_with_zero_cap = unit_bid_limit[unit_bid_limit['capacity'] == 0.0].copy()
-        # keys = set(zip(units_with_zero_cap['unit'], units_with_zero_cap['dispatch_type']))
-        # volume_bids = volume_bids[~volume_bids[['unit', 'dispatch_type']].apply(tuple, axis=1).isin(keys)]
-        # price_bids = price_bids[~price_bids[['unit', 'dispatch_type']].apply(tuple, axis=1).isin(keys)]
         self.market.set_unit_volume_bids(volume_bids)
         self.market.set_unit_price_bids(price_bids)
 
@@ -60,7 +55,7 @@ class SpotMarketBuilder:
         dispatch = self.market.get_unit_dispatch()
         self.fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
         profiles = self.fast_start_profiles.loc[:,
-                   ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length',
+                   ['unit', 'dispatch_type', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length',
                     'min_loading']]
         self.market.set_fast_start_constraints(profiles)
         ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
@@ -82,6 +77,12 @@ class SpotMarketBuilder:
             run_type="fast_start_second_run")
         self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
         self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+
+        self.market.set_bidirectional_unit_raise_regulation_ramping_constraints(scada_ramp_up_rates)
+        self.market.set_bidirectional_unit_lower_regulation_ramping_constraints(scada_ramp_down_rates)
+        if 'bidirectional_unit_raise_regulation_ramping' in self.market.get_constraint_set_names():
+            self.market.make_constraints_elastic('bidirectional_unit_raise_regulation_ramping', cost)
+            self.market.make_constraints_elastic('bidirectional_unit_lower_regulation_ramping', cost)
 
         if 'fast_start' in self.market.get_constraint_set_names():
             cost = self.constraint_inputs.get_constraint_violation_prices()['fast_start']
@@ -105,6 +106,11 @@ class SpotMarketBuilder:
             run_type="fast_start_first_run")
         self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
         self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
+        self.market.set_bidirectional_unit_raise_regulation_ramping_constraints(scada_ramp_up_rates)
+        self.market.set_bidirectional_unit_lower_regulation_ramping_constraints(scada_ramp_down_rates)
+        if 'bidirectional_unit_raise_regulation_ramping' in self.market.get_constraint_set_names():
+            self.market.make_constraints_elastic('bidirectional_unit_raise_regulation_ramping', cost)
+            self.market.make_constraints_elastic('bidirectional_unit_lower_regulation_ramping', cost)
         contingency_trapeziums = self.unit_inputs.get_contingency_services()
         self.market.set_joint_capacity_constraints(contingency_trapeziums)
         self.market.make_constraints_elastic('joint_capacity', cost)
@@ -146,7 +152,7 @@ class SpotMarketBuilder:
         regions_generic_lhs = self.constraint_inputs.get_region_lhs()
         self.market.link_regions_to_generic_constraints(regions_generic_lhs)
 
-    def dispatch(self, calc_prices=True):
+    def dispatch(self):
         if self.constraint_inputs.is_over_constrained_dispatch_rerun():
             self.market.dispatch(allow_over_constrained_dispatch_re_run=True,
                                  energy_market_floor_price=-1000.0, energy_market_ceiling_price=14500.0,
@@ -193,10 +199,21 @@ class MarketOverrider:
         decision_variables_first_bid = decision_variables.groupby(['unit', 'service', 'dispatch_type'], as_index=False).first()
 
         bdu = \
-            decision_variables_first_bid[decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL'].copy()
+            decision_variables_first_bid[
+                (decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL') &
+                (decision_variables_first_bid['service'] == 'energy')
+            ].copy()
+
+        bdu_fcas = \
+            decision_variables_first_bid[
+                (decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL') &
+                (decision_variables_first_bid['service'] != 'energy')
+            ].copy()
 
         not_bdu = \
-            decision_variables_first_bid[~(decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL')].copy()
+            decision_variables_first_bid[
+                ~(decision_variables_first_bid['trader_type'] == 'BIDIRECTIONAL')
+                ].copy()
 
         bdu_gen = bdu[bdu['dispatch_type'] == 'generator'].copy()
         bdu_load = bdu[bdu['dispatch_type'] == 'load'].copy()
@@ -205,10 +222,45 @@ class MarketOverrider:
 
         bdu_load['dispatched'] = np.where(bdu_load['dispatched'] > 0.0, 0.0, bdu_load['dispatched'].abs())
 
+        bdu_fcas_total = \
+            decision_variables[
+                (decision_variables['trader_type'] == 'BIDIRECTIONAL') &
+                (decision_variables['service'] != 'energy')
+            ].copy()
+
+        bdu_fcas_total = bdu_fcas_total.groupby(['unit', 'service', 'dispatch_type'], as_index=False)['value'].sum()
+
+        bdu_fcas_dispatched = bdu_fcas_total[bdu_fcas_total['value'] > 0.0].copy()
+        if not bdu_fcas_dispatched[bdu_fcas_dispatched.duplicated(['unit', 'service', 'dispatch_type'])].empty:
+            return False
+
+        bdu_fcas_total = bdu_fcas_total.rename(columns={'value': 'total_fcas_dispatch'})
+
+        bdu_fcas = pd.merge(
+            bdu_fcas,
+            bdu_fcas_total,
+            'left',
+            on=['unit', 'service', 'dispatch_type']
+        )
+
+        bdu_fcas_comp = bdu_fcas.groupby(['unit', 'service'], as_index=False).agg({
+            'dispatched': 'first', 'total_fcas_dispatch': 'first'
+        })
+        fcas_not_dispatched = bdu_fcas_comp[
+            (bdu_fcas_comp['dispatched'] > 0.0) &
+            (bdu_fcas_comp['total_fcas_dispatch'] == 0.0)
+        ].copy()
+        if not fcas_not_dispatched.empty:
+            return False
+
+        bdu_fcas['dispatched'] = np.where(bdu_fcas['total_fcas_dispatch'] <= 0.0, 0.0, bdu_fcas['dispatched'])
+        bdu_fcas = bdu_fcas.drop(columns=['total_fcas_dispatch'])
+
         decision_variables_first_bid = pd.concat([
             not_bdu,
             bdu_gen,
-            bdu_load
+            bdu_load,
+            bdu_fcas
         ])
 
         def last_bids(df):
@@ -229,6 +281,8 @@ class MarketOverrider:
         decision_variables = pd.concat([decision_variables_first_bid, decision_variables_remaining_bids])
 
         self.market._decision_variables['bids'] = decision_variables
+
+        return True
 
     def set_interconnector_flow_to_historical_values(self, wiggle_room=0.1):
         # Historical interconnector dispatch
@@ -327,6 +381,7 @@ class MarketChecker:
             generic_cons_slack.apply(lambda x: calc_slack(x['RHS'], x['LHS'], x['type']), axis=1)
         generic_cons_slack['comp'] = (generic_cons_slack['aemo_slack'] - generic_cons_slack['slack']).abs()
         generic_cons_slack['no_error'] = generic_cons_slack['comp'] < 0.9
+        generic_cons_slack = generic_cons_slack.sort_values('comp', ascending=False)
         return generic_cons_slack['no_error'].all()
 
     def is_fcas_constraint_slack_correct(self):
@@ -352,6 +407,7 @@ class MarketChecker:
             generic_cons_slack.apply(lambda x: calc_slack(x['RHS'], x['LHS'], x['type']), axis=1)
         generic_cons_slack['comp'] = (generic_cons_slack['aemo_slack'] - generic_cons_slack['slack']).abs()
         generic_cons_slack['no_error'] = generic_cons_slack['comp'] < 0.9
+        generic_cons_slack = generic_cons_slack.sort_values('comp', ascending=False)
         return generic_cons_slack['no_error'].all()
 
     def all_constraints_presenet(self):
@@ -405,14 +461,17 @@ class MarketChecker:
         availabilities = ['RAISE6SECACTUALAVAILABILITY', 'RAISE60SECACTUALAVAILABILITY',
                           'RAISE5MINACTUALAVAILABILITY', 'RAISEREGACTUALAVAILABILITY',
                           'LOWER6SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
-                          'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY']
+                          'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY',
+                          'RAISE1SECACTUALAVAILABILITY', 'LOWER1SECACTUALAVAILABILITY']
 
         availabilities_mapping = {'RAISEREGACTUALAVAILABILITY': 'raise_reg',
                                   'LOWERREGACTUALAVAILABILITY': 'lower_reg',
                                   'RAISE6SECACTUALAVAILABILITY': 'raise_6s',
+                                  'RAISE1SECACTUALAVAILABILITY': 'raise_1s',
                                   'RAISE60SECACTUALAVAILABILITY': 'raise_60s',
                                   'RAISE5MINACTUALAVAILABILITY': 'raise_5min',
                                   'LOWER6SECACTUALAVAILABILITY': 'lower_6s',
+                                  'LOWER1SECACTUALAVAILABILITY': 'lower_1s',
                                   'LOWER60SECACTUALAVAILABILITY': 'lower_60s',
                                   'LOWER5MINACTUALAVAILABILITY': 'lower_5min'}
 
