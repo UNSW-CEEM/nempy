@@ -54,10 +54,7 @@ class SpotMarketBuilder:
         self.market.dispatch()
         dispatch = self.market.get_unit_dispatch()
         self.fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-        profiles = self.fast_start_profiles.loc[:,
-                   ['unit', 'dispatch_type', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length',
-                    'min_loading']]
-        self.market.set_fast_start_constraints(profiles)
+        self.market.set_fast_start_constraints(self.fast_start_profiles)
 
         ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
         self.market.set_unit_ramp_rate_constraints(
@@ -168,12 +165,18 @@ class SpotMarketBuilder:
 class MarketOverrider:
     def __init__(self, market, mms_db, interval, raw_inputs_loader):
         self.services = ['TOTALCLEARED', 'LOWER5MIN', 'LOWER60SEC', 'LOWER6SEC', 'RAISE5MIN', 'RAISE60SEC', 'RAISE6SEC',
-                         'LOWERREG', 'RAISEREG', 'RAISE1SEC', 'LOWER1SEC']
+                         'LOWERREG', 'RAISEREG']
 
         self.service_name_mapping = {'TOTALCLEARED': 'energy', 'RAISEREG': 'raise_reg', 'LOWERREG': 'lower_reg',
                                      'RAISE6SEC': 'raise_6s', 'RAISE60SEC': 'raise_60s', 'RAISE5MIN': 'raise_5min',
                                      'LOWER6SEC': 'lower_6s', 'LOWER60SEC': 'lower_60s', 'LOWER5MIN': 'lower_5min',
-                                     'ENERGY': 'energy', 'RAISE1SEC': 'raise_1s', 'LOWER1SEC': 'lower_1s'}
+                                     'ENERGY': 'energy'}
+
+        if interval > "2022/01/01 00:00:00":
+            self.service_name_mapping.update(
+                {'RAISE1SEC': 'raise_1s', 'LOWER1SEC': 'lower_1s'}
+            )
+            self.services += ['RAISE1SEC', 'LOWER1SEC']
 
         self.inputs_manager = mms_db
         self.interval = interval

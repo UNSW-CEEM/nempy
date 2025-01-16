@@ -77,9 +77,12 @@ def _calculate_composite_ramp_rates(ramp_rates, dispatch_interval):
 
 
 def _adjust_for_scada_ramp_rates(ramp_rates):
-    ramp_rates['ramp_down_rate'] = np.fmin(ramp_rates['ramp_down_rate'], ramp_rates['scada_ramp_down_rate'])
-    ramp_rates['ramp_up_rate'] = np.fmin(ramp_rates['ramp_up_rate'], ramp_rates['scada_ramp_up_rate'])
-    ramp_rates = ramp_rates.drop(columns=['scada_ramp_down_rate', 'scada_ramp_up_rate'])
+    if "scada_ramp_down_rate" in ramp_rates.columns:
+        ramp_rates['ramp_down_rate'] = np.fmin(ramp_rates['ramp_down_rate'], ramp_rates['scada_ramp_down_rate'])
+        ramp_rates = ramp_rates.drop(columns=['scada_ramp_down_rate'])
+    if "scada_ramp_up_rate" in ramp_rates.columns:
+        ramp_rates['ramp_up_rate'] = np.fmin(ramp_rates['ramp_up_rate'], ramp_rates['scada_ramp_up_rate'])
+        ramp_rates = ramp_rates.drop(columns=['scada_ramp_down_rate'])
     return ramp_rates
 
 

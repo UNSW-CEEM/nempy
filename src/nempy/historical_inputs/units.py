@@ -141,7 +141,8 @@ class UnitData:
         bid_availability = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'MAXAVAIL']]
         bid_availability = self._remove_non_energy_bids(bid_availability)
         bid_availability = bid_availability.loc[:, ['DUID', 'DIRECTION', 'MAXAVAIL']]
-        # bid_availability = self._remove_non_scheduled_units(bid_availability)
+        if self.raw_input_loader.interval < "2023/07/07 13:40":
+            bid_availability = self._remove_non_scheduled_units(bid_availability)
         bid_availability = an.map_aemo_column_names_to_nempy_names(bid_availability)
         bid_availability = an.map_aemo_column_values_to_nempy_name(bid_availability, 'dispatch_type')
         return bid_availability

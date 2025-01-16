@@ -45,12 +45,13 @@ class SpotMarket:
 
         =============  ===============================================
         Columns:       Description:
-        unit           unique identifier of a dispatch unit,
+        unit           unique identifier of a dispatch unit, \n
                        (as `str`)
         region         location of unit, required (as `str`)
-        dispatch_type  "load" or "generator", optional default
-                       'generator', if provided for unit_info must also
-                       be provided for price bids and volume bids, (as `str`)
+        dispatch_type  "load" or "generator", optional default \n
+                       'generator', if provided for unit_info must also \n
+                       be provided other input tables with 'unit' column \n
+                       except . . .
         loss_factor    marginal, average or combined loss factors, \n
                        :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
                        optional, (as `np.int64`)
@@ -71,7 +72,7 @@ class SpotMarket:
         RepeatedRowError
             If there is more than one row for any 'unit'.
         ColumnDataTypeError
-            If columns are not of the require type.
+            If columns are not of the required type.
         MissingColumnError
             If the column 'units' or 'regions' is missing.
         UnexpectedColumn
@@ -115,7 +116,10 @@ class SpotMarket:
             unit_info['loss_factor'] = 1.0
 
         if 'dispatch_type' not in unit_info.columns:
+            self.dispatch_type_required = False
             unit_info['dispatch_type'] = 'generator'
+        else:
+            self.dispatch_type_required = True
 
         if self.validate_inputs:
             self._validate_unit_info(unit_info)
@@ -211,8 +215,10 @@ class SpotMarket:
             unit           unique identifier of a dispatch unit (as `str`)
             service        the service being provided, optional, \n
                            default 'energy', (as `str`)
-            dispatch_type  "load" or "generator", optional default
-                           'generator', if provided for volume bids must also
+            dispatch_type  "load" or "generator", must be provided if \n
+                           given in unit_info and cannot be provided \n
+                           if not given in unit_info. Defaults to \n
+                           'generator'.
                            be provided for price bids and vise a versa, (as `str`)
             1              bid volume in the 1st band, in MW, \n
                            (as `np.float64`)
@@ -254,8 +260,8 @@ class SpotMarket:
     def _validate_volume_bids(self, volume_bids):
         schema = dv.DataFrameSchema(name='volume_bids', primary_keys=['unit', 'service', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
+        if self.dispatch_type_required:
+            schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services),
                           optional=True)
         schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True,
@@ -334,9 +340,10 @@ class SpotMarket:
             unit           unique identifier of a dispatch unit (as `str`)
             service        the service being provided, optional,
                            default 'energy', (as `str`)
-            dispatch_type  "load" or "generator", optional default
-                           'generator', if provided for volume bids must also
-                           be provided for price bids and vise a versa, (as `str`)
+            dispatch_type  "load" or "generator", must be provided if \n
+                           given in unit_info and cannot be provided \n
+                           if not given in unit_info. Defaults to \n
+                           'generator'.
             1              bid price in the 1st band, in $/MW, \n
                            (as `np.float64`)
             2              bid price in the 2nd band, in $/MW, optional, \n
@@ -381,8 +388,8 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
         schema.add_column(dv.SeriesSchema(name='service', data_type=str, allowed_values=self._allowed_services),
                           optional=True)
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
+        if self.dispatch_type_required:
+            schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.add_column(dv.SeriesSchema(name=str(1), data_type=np.float64, must_be_real_number=True))
         for bid_band in range(2, 11):
             schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True),
@@ -459,8 +466,10 @@ class SpotMarket:
             =============  =====================================================
             Columns:       Description:
             unit           unique identifier of a dispatch unit (as `str`)
-            dispatch_type  "load" or "generator", optional default
-                           'generator'
+            dispatch_type  "load" or "generator", must be provided if \n
+                           given in unit_info and cannot be provided \n
+                           if not given in unit_info. Defaults to \n
+                           'generator'.
             capacity       The maximum output of the unit if unconstrained \n
                            by ramp rate, in MW (as `np.float64`)
             =============  ======================================================
@@ -499,13 +508,15 @@ class SpotMarket:
     def _validate_unit_limits(self, unit_limits):
         schema = dv.DataFrameSchema(name='unit_limits', primary_keys=['unit', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
+        if self.dispatch_type_required:
+            schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.add_column(dv.SeriesSchema(name='capacity', data_type=np.float64))
         schema.validate(unit_limits)
 
     def set_unconstrained_intermittent_generation_forecast_constraint(self, unit_limits):
         """Creates constraints that limit unit output based on their forecast output.
+
+        Note: All semi-scheduled units are assumed not to be bidirectional.
 
         Examples
         --------
@@ -642,7 +653,8 @@ class SpotMarket:
         >>> ramp_details = pd.DataFrame({
         ...     'unit': ['A', 'B'],
         ...     'initial_output': [20.0, 50.0],
-        ...     'ramp_up_rate': [30.0, 100.0]})
+        ...     'ramp_up_rate': [30.0, 100.0],
+        ...     'ramp_down_rate': [30.0, 100.0]})
 
         Create unit capacity based constraints.
 
@@ -655,6 +667,12 @@ class SpotMarket:
         0    A  energy     generator              0   <=   35.0
         1    B  energy     generator              1   <=  100.0
 
+
+        >>> print(market._constraints_rhs_and_type['ramp_down'])
+          unit service dispatch_type  constraint_id type  rhs
+        0    A  energy     generator              2   >=  5.0
+        1    B  energy     generator              3   >=  0.0
+
         ... and a mapping of those constraints to variable type for the lhs.
 
         >>> unit_mapping = market._constraint_to_variable_map['unit_level']
@@ -664,16 +682,23 @@ class SpotMarket:
         0              0    A  energy     generator          1.0
         1              1    B  energy     generator          1.0
 
+        >>> print(unit_mapping['ramp_down'])
+           constraint_id unit service dispatch_type  coefficient
+        0              2    A  energy     generator          1.0
+        1              3    B  energy     generator          1.0
+
         Parameters
         ----------
         ramp_details : pd.DataFrame
 
-            ===================  ==========================================
-            Columns:             Description:
-            unit                 unique identifier of a dispatch unit, \n
-                                 (as `str`)
-            dispatch_type        "load" or "generator", optional default
-                                 'generator'
+            ===================   ==========================================
+            Columns:              Description:
+            unit                  unique identifier of a dispatch unit, \n
+                                  (as `str`)
+            dispatch_type         "load" or "generator", must be provided if \n
+                                  given in unit_info and cannot be provided \n
+                                  if not given in unit_info. Defaults to \n
+                                 'generator'.
             initial_output        the output of the unit at the start of \n
                                   the dispatch interval, in MW, \n
                                   (as `np.float64`)
@@ -707,6 +732,9 @@ class SpotMarket:
                 If there are inf, null or negative values in the bid band columns.
         """
         self._validate_ramp_rates(ramp_details)
+
+        if "dispatch_type" not in ramp_details.columns:
+            ramp_details["dispatch_type"] = "generator"
 
         ramp_details, bidirectional_unit_ramp_details = rrp._calculate_composite_ramp_rates(
             ramp_rates=ramp_details, dispatch_interval=self.dispatch_interval
@@ -759,123 +787,14 @@ class SpotMarket:
                           optional=True)
         schema.add_column(dv.SeriesSchema(name='scada_ramp_down_rate', data_type=np.float64),
                           optional=True)
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
-        schema.validate(ramp_details)
-
-    def set_unit_ramp_down_constraints(self, ramp_details):
-        """Creates constraints on unit output based on ramp down rate.
-
-        Will constrain the unit output to be >= initial_output - ramp_down_rate * (dispatch_interval / 60).
-
-        Examples
-        --------
-        Define the unit information data set needed to initialise the market, in this example all units are in the same
-        region.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW']})
-
-        Initialise the market instance.
-
-        >>> market = SpotMarket(market_regions=['NSW'],
-        ...                     unit_info=unit_info,
-        ...                     dispatch_interval=30)
-
-        Define a set of bids, in this example we have two units called A and B, with three bid bands.
-
-        >>> volume_bids = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     '1': [20.0, 50.0],
-        ...     '2': [20.0, 30.0],
-        ...     '3': [5.0, 10.0]})
-
-        Create energy unit bid decision variables.
-
-        >>> market.set_unit_volume_bids(volume_bids)
-
-        Define a set of unit ramp down rates, also need to provide the initial output of the units at the start of
-        dispatch interval.
-
-        >>> ramp_details = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'initial_output': [20.0, 50.0],
-        ...     'ramp_down_rate': [20.0, 10.0]})
-
-        Create unit capacity based constraints.
-
-        >>> market.set_unit_ramp_down_constraints(ramp_details)
-
-        The market should now have a set of constraints.
-
-        >>> print(market._constraints_rhs_and_type['ramp_down'])
-          unit service dispatch_type  constraint_id type   rhs
-        0    A  energy     generator              0   >=  10.0
-        1    B  energy     generator              1   >=  45.0
-
-        ... and a mapping of those constraints to variable type for the lhs.
-
-        >>> unit_mapping = market._constraint_to_variable_map['unit_level']
-
-        >>> print(unit_mapping['ramp_down'])
-           constraint_id unit service dispatch_type  coefficient
-        0              0    A  energy     generator          1.0
-        1              1    B  energy     generator          1.0
-
-        Parameters
-        ----------
-        ramp_details : pd.DataFrame
-
-            ==============  ==========================================
-            Columns:        Description:
-            unit            unique identifier of a dispatch unit, \n
-                            (as `str`)
-            dispatch_type  "load" or "generator", optional default \n
-                            (as `str`)
-            initial_output  the output of the unit at the start of \n
-                            the dispatch interval, in MW, \n
-                            (as `np.float64`)
-            ramp_down_rate  the maximum rate at which the unit can, \n
-                            decrease output, in MW/h, (as `np.float64`)
-            ==============  ==========================================
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-            RepeatedRowError
-                If there is more than one row for any unit.
-            ColumnDataTypeError
-                If columns are not of the required type.
-            MissingColumnError
-                If the column 'units', 'initial_output' or 'ramp_down_rate' is missing.
-            UnexpectedColumn
-                There is a column that is not 'units', 'initial_output' or 'ramp_down_rate'.
-            ColumnValues
-                If there are inf, null or negative values in the bid band columns.
-        """
-        self._validate_ramp_down_rates(ramp_details)
-        rhs_and_type, variable_map = unit_constraints.ramp_down(ramp_details, self._next_constraint_id,
-                                                                self.dispatch_interval)
-        self._constraints_rhs_and_type['ramp_down'] = rhs_and_type
-        self._constraint_to_variable_map['unit_level']['ramp_down'] = variable_map
-        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
-
-    def _validate_ramp_down_rates(self, ramp_details):
-        schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit', 'dispatch_type'])
-        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='initial_output', data_type=np.float64, must_be_real_number=True))
-        schema.add_column(dv.SeriesSchema(name='ramp_down_rate', data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
+        if self.dispatch_type_required:
+            schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.validate(ramp_details)
 
     def set_fast_start_constraints(self, fast_start_profiles):
         """Create the constraints on fast start units dispatch, :download:`see AEMO doc <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`
+
+        Note: All fast start type units are assumed not to be bidirectional.
 
         Examples
         --------
