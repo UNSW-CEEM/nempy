@@ -1001,6 +1001,8 @@ class SpotMarket:
                                           not_negative=True))
         schema.add_column(dv.SeriesSchema(name='min_loading', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
+        schema.add_column(dv.SeriesSchema(name='time_since_end_of_mode_two', data_type=np.float64,
+                                          not_negative=True))
         schema.validate(fast_start_profiles)
 
     def set_demand_constraints(self, demand):

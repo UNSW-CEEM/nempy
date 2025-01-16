@@ -2,6 +2,7 @@ import requests
 import zipfile
 import io
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 
 pd.set_option('display.width', None)
@@ -263,7 +264,7 @@ class DBManager:
 
     def populate(self, start_year, start_month, end_year, end_month, verbose=True):
 
-        self.create_tables()
+        # self.create_tables()
 
         if start_month == 1:
             start_year -= 1
@@ -273,43 +274,43 @@ class DBManager:
 
         # Download data were inputs are needed on a monthly basis.
         finished = False
-        for year in range(start_year, end_year + 1):
-            for month in range(start_month, 13):
-                if year == end_year and month == end_month + 1:
-                    finished = True
-                    break
+        # for year in range(start_year, end_year + 1):
+        #     for month in range(start_month, 13):
+        #         if year == end_year and month == end_month + 1:
+        #             finished = True
+        #             break
+        #
+        #         if verbose:
+        #             print('Downloading MMS table for year={} month={}'.format(year, month))
+        #
+        #         self.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
+        #         self.DISPATCHREGIONSUM.add_data(year=year, month=month)
+        #         self.DISPATCHLOAD.add_data(year=year, month=month)
+        #         self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
+        #         self.DISPATCHPRICE.add_data(year=year, month=month)
 
-                if verbose:
-                    print('Downloading MMS table for year={} month={}'.format(year, month))
-
-                self.DISPATCHINTERCONNECTORRES.add_data(year=year, month=month)
-                self.DISPATCHREGIONSUM.add_data(year=year, month=month)
-                self.DISPATCHLOAD.add_data(year=year, month=month)
-                self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
-                self.DISPATCHPRICE.add_data(year=year, month=month)
-
-            if finished:
-                break
-
-            start_month = 1
+            # if finished:
+            #     break
+            #
+            # start_month = 1
 
         # Download data where inputs are just needed from the latest month.
-        self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
-        self.LOSSMODEL.set_data(year=end_year, month=end_month)
+        # self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
+        # self.LOSSMODEL.set_data(year=end_year, month=end_month)
         self.DUDETAILSUMMARY.create_table_in_sqlite_db()
         self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
-        self.DUDETAIL.set_data(year=end_year, month=end_month)
-        self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.GENCONDATA.set_data(year=end_year, month=end_month)
-        self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
-        self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
-        self.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.DUDETAIL.create_table_in_sqlite_db()
-        self.DUDETAIL.set_data(year=end_year, month=end_month)
+        # self.DUDETAIL.set_data(year=end_year, month=end_month)
+        # self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.GENCONDATA.set_data(year=end_year, month=end_month)
+        # self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
+        # self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
+        # self.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
+        # self.DUDETAIL.create_table_in_sqlite_db()
+        # self.DUDETAIL.set_data(year=end_year, month=end_month)
 
 
 def _download_to_df(url, table_name, year, month):
@@ -525,6 +526,7 @@ class _MMSTable:
             create_query = base_create_query.format(self.table_name, columns, primary_keys)
             cur.execute(create_query)
             self.con.commit()
+            x=1
 
     def _create_sample_table(self, date_time):
         print(self.table_name)
@@ -608,6 +610,8 @@ class _SingleDataSource(_MMSTable):
         None
         """
         data = _download_to_df(self.url, self.table_name, year, month)
+        cols_to_add = [col for col in self.table_columns if col not in data.columns]
+        data.loc[:, cols_to_add] = np.nan
         data = data.loc[:, self.table_columns]
         with self.con:
             data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)

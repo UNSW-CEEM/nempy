@@ -58,9 +58,10 @@ class SpotMarketBuilder:
                    ['unit', 'dispatch_type', 'end_mode', 'time_in_end_mode', 'mode_two_length', 'mode_four_length',
                     'min_loading']]
         self.market.set_fast_start_constraints(profiles)
+
         ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
         self.market.set_unit_ramp_rate_constraints(
-            ramp_rates, self.fast_start_profiles, run_type="fast_start_first_run")
+            ramp_rates, self.fast_start_profiles, run_type="fast_start_second_run")
         cost = self.constraint_inputs.get_constraint_violation_prices()['ramp_rate']
         self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
         self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
@@ -231,7 +232,7 @@ class MarketOverrider:
         bdu_fcas_total = bdu_fcas_total.groupby(['unit', 'service', 'dispatch_type'], as_index=False)['value'].sum()
 
         bdu_fcas_dispatched = bdu_fcas_total[bdu_fcas_total['value'] > 0.0].copy()
-        if not bdu_fcas_dispatched[bdu_fcas_dispatched.duplicated(['unit', 'service', 'dispatch_type'])].empty:
+        if not bdu_fcas_dispatched[bdu_fcas_dispatched.duplicated(['unit', 'service'])].empty:
             return False
 
         bdu_fcas_total = bdu_fcas_total.rename(columns={'value': 'total_fcas_dispatch'})

@@ -141,7 +141,7 @@ class UnitData:
         bid_availability = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'MAXAVAIL']]
         bid_availability = self._remove_non_energy_bids(bid_availability)
         bid_availability = bid_availability.loc[:, ['DUID', 'DIRECTION', 'MAXAVAIL']]
-        bid_availability = self._remove_non_scheduled_units(bid_availability)
+        # bid_availability = self._remove_non_scheduled_units(bid_availability)
         bid_availability = an.map_aemo_column_names_to_nempy_names(bid_availability)
         bid_availability = an.map_aemo_column_values_to_nempy_name(bid_availability, 'dispatch_type')
         return bid_availability
@@ -550,8 +550,9 @@ class UnitData:
         profiles['mode_two_length'] = np.float64(profiles['mode_two_length'])
         profiles['mode_four_length'] = np.float64(profiles['mode_four_length'])
         profiles['min_loading'] = np.float64(profiles['min_loading'])
-        # profiles = profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
-        #                             'mode_four_length', 'min_loading']]
+        if unconstrained_dispatch is not None:
+            profiles = profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+                                        'mode_four_length', 'min_loading' , 'time_since_end_of_mode_two']]
         unit_info = self.get_unit_info().loc[:, ['unit', 'dispatch_type']]
         profiles = pd.merge(profiles, unit_info, on='unit')
         return profiles
@@ -2186,6 +2187,7 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     fcas_bids = fcas_bids.drop(['band_greater_than_zero'], axis=1)
 
     # Filter out fcas_bids where their maximum energy output is less than the fcas enablement minimum value. If the
+    capacity_limits['dispatch_type'] = capacity_limits['dispatch_type'].str.upper()
     fcas_bids = pd.merge(
         fcas_bids,
         capacity_limits,
@@ -2194,8 +2196,6 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
         right_on=['unit', 'dispatch_type']
     )
     fcas_bids = fcas_bids[(fcas_bids['capacity'] >= fcas_bids['ENABLEMENTMIN']) | (fcas_bids['capacity'].isna())]
-    fcas_bids = fcas_bids.drop(['unit', 'capacity'], axis=1)
-
 
     fcas_bids = pd.merge(
         fcas_bids,
@@ -2217,15 +2217,35 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     fcas_bids_not_bdu = fcas_bids_not_bdu[fcas_bids_not_bdu['ENABLEMENTMAX'] >= 0.0]
     fcas_bids_bdu_gen_con = fcas_bids_bdu_gen_con[fcas_bids_bdu_gen_con['ENABLEMENTMAX'] >= 0.0]
 
+    fcas_bids_not_bdu = fcas_bids_not_bdu[(fcas_bids_not_bdu['capacity'] >= fcas_bids_not_bdu['ENABLEMENTMIN']) | (
+        fcas_bids_not_bdu['capacity'].isna())]
+
+    fcas_bids_bdu_gen_con = fcas_bids_bdu_gen_con[
+        (fcas_bids_bdu_gen_con['capacity'] >= fcas_bids_bdu_gen_con['ENABLEMENTMIN']) | (
+            fcas_bids_bdu_gen_con['capacity'].isna())]
+    fcas_bids_bdu_gen_con = fcas_bids_bdu_gen_con.drop(columns=['capacity'])
+
+    fcas_bids_bdu_gen_con['DIRECTION'] = 'LOAD'
+    fcas_bids_bdu_gen_con = pd.merge(
+        fcas_bids_bdu_gen_con,
+        capacity_limits,
+        'left',
+        left_on=['DUID', 'DIRECTION'],
+        right_on=['unit', 'dispatch_type']
+    )
+    fcas_bids_bdu_gen_con = fcas_bids_bdu_gen_con[
+        (-1 * fcas_bids_bdu_gen_con['capacity'] <= fcas_bids_bdu_gen_con['ENABLEMENTMAX']) | (
+            fcas_bids_bdu_gen_con['capacity'].isna())]
+    fcas_bids_bdu_gen_con['DIRECTION'] = 'GENERATOR'
+
     # Filter out fcas_bids where the enablement min is not less than zero.
     fcas_bids_bdu_load_con = fcas_bids_bdu_load_con[fcas_bids_bdu_load_con['ENABLEMENTMIN'] <= 0.0]
 
     fcas_bids_bdu_load_reg['FILTERENABLMENTMIN'] = fcas_bids_bdu_load_reg['ENABLEMENTMIN']
     fcas_bids_bdu_load_reg_f = fcas_bids_bdu_load_reg.loc[:, ['DUID', 'BIDTYPE', 'FILTERENABLMENTMIN']]
-    # fcas_bids_bdu_load_reg = fcas_bids_bdu_load_reg.drop(columns=['FILTERENABLMENTMIN'])
+
     fcas_bids_bdu_gen_reg['FILTERENABLMENTMAX'] = fcas_bids_bdu_gen_reg['ENABLEMENTMAX']
     fcas_bids_bdu_gen_reg_f = fcas_bids_bdu_gen_reg.loc[:, ['DUID', 'BIDTYPE', 'FILTERENABLMENTMAX']]
-    # fcas_bids_bdu_gen_reg = fcas_bids_bdu_gen_reg.drop(columns=['FILTERENABLMENTMAX'])
 
     fcas_bids_bdu_load_reg = pd.merge(
         fcas_bids_bdu_load_reg,
@@ -2254,7 +2274,16 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     )
 
     fcas_bids_bdu_gen_reg = fcas_bids_bdu_gen_reg[fcas_bids_bdu_gen_reg['ENABLEMENTMAX'] >= 0.0]
+
+    fcas_bids_bdu_gen_reg = fcas_bids_bdu_gen_reg[
+        (fcas_bids_bdu_gen_reg['capacity'] >= fcas_bids_bdu_gen_reg['ENABLEMENTMIN']) | (
+            fcas_bids_bdu_gen_reg['capacity'].isna())]
+
     fcas_bids_bdu_load_reg = fcas_bids_bdu_load_reg[fcas_bids_bdu_load_reg['ENABLEMENTMIN'] <= 0.0]
+
+    fcas_bids_bdu_load_reg = fcas_bids_bdu_load_reg[
+        (-1 * fcas_bids_bdu_load_reg['capacity'] <= fcas_bids_bdu_load_reg['ENABLEMENTMAX']) | (
+            fcas_bids_bdu_load_reg['capacity'].isna())]
 
     fcas_bids = pd.concat([fcas_bids_bdu_load_con, fcas_bids_bdu_gen_con, fcas_bids_not_bdu])
 
@@ -2280,7 +2309,7 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
 
     # Filter out fcas_bids where the AGC status is not set to 1.0
     fcas_bids = fcas_bids[~((fcas_bids['AGCSTATUS'] == 0.0) & (fcas_bids['BIDTYPE'].isin(['RAISEREG', 'LOWERREG'])))]
-    fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW'], axis=1)
+    fcas_bids = fcas_bids.drop(['AGCSTATUS', 'INITIALMW', 'capacity'], axis=1)
 
     # Filter the fcas price bids use the remaining volume bids.
     fcas_price_bids = pd.merge(

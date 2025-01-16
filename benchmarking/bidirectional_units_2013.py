@@ -12,23 +12,23 @@ from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, constraints
 
-con = sqlite3.connect('D:/nempy_2024_07/historical_mms.db')
+con = sqlite3.connect('D:/nempy_2013/historical_mms.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
-xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2024_07/xml_cache')
+xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2013/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
-    mms_db_manager.populate(start_year=2024, start_month=7,
-                            end_year=2024, end_month=7)
+    mms_db_manager.populate(start_year=2013, start_month=1,
+                            end_year=2013, end_month=1)
 
     # This requires approximately 50 GB of storage.
-    # xml_cache_manager.populate_by_day(start_year=2024, start_month=7, start_day=1,
-    #                                   end_year=2024, end_month=8, end_day=1)
+    # xml_cache_manager.populate_by_day(start_year=2021, start_month=1, start_day=1,
+    #                                   end_year=2021, end_month=2, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
@@ -37,8 +37,8 @@ raw_inputs_loader = loaders.RawInputsLoader(
 
 # A list of intervals we want to recreate historical dispatch for.
 def get_test_intervals(number=100):
-    start_time = datetime(year=2024, month=7, day=1, hour=0, minute=0)
-    end_time = datetime(year=2024, month=8, day=1, hour=0, minute=0)
+    start_time = datetime(year=2013, month=1, day=1, hour=0, minute=0)
+    end_time = datetime(year=2013, month=1, day=31, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
@@ -235,10 +235,10 @@ print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
 print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
 print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
 
-# Summary of error in energy price volume weighted average price.
+#  Summary of error in energy price volume weighted average price.
 # Comparison is against ROP, the price prior to
 # any post dispatch adjustments, scaling, capping etc.
-# Mean price error: 0.13818277307210394
+# Mean price error: -0.32820448520327244
 # Median price error: 0.0
-# 5% percentile price error: -0.13335830516772942
-# 95% percentile price error: 0.013533539900288811
+# 5% percentile price error: -0.5389930178124978
+# 95% percentile price error: 0.13746097842649457

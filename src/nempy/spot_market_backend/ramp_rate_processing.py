@@ -112,8 +112,7 @@ def _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates, fast_s
     if not fast_start_profiles.empty:
         profiles_to_adjust = fast_start_profiles[~fast_start_profiles['time_since_end_of_mode_two'].isna()]
         profiles_to_adjust = profiles_to_adjust.loc[:, ['unit', 'min_loading', 'time_since_end_of_mode_two']]
-        profiles_to_adjust = pd.merge(ramp_rates, profiles_to_adjust, 'inner', left_on='DUID',
-                                      right_on='unit')
+        profiles_to_adjust = pd.merge(ramp_rates, profiles_to_adjust, 'inner', on='unit')
         profiles_to_adjust['ramp_mw_per_min'] = profiles_to_adjust['ramp_up_rate'] / 60
         profiles_to_adjust['ramp_max'] = profiles_to_adjust['time_since_end_of_mode_two'] * \
                                                profiles_to_adjust['ramp_mw_per_min'] + \
@@ -122,7 +121,7 @@ def _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates, fast_s
                                             profiles_to_adjust['initial_output']) * \
                                             (60 / dispatch_interval)
         profiles_to_adjust = profiles_to_adjust.drop(
-            columns=["unit", "min_loading", "time_since_end_of_mode_two", "unit", "ramp_mw_per_min",
+            columns=["min_loading", "time_since_end_of_mode_two", "ramp_mw_per_min",
                      "ramp_max"])
         ramp_rates_not_adjusted = ramp_rates[~ramp_rates['unit'].isin(profiles_to_adjust['unit'])]
         ramp_rates = pd.concat([profiles_to_adjust, ramp_rates_not_adjusted])
