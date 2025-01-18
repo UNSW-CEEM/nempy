@@ -51,7 +51,7 @@ class SpotMarket:
         dispatch_type  "load" or "generator", optional default \n
                        'generator', if provided for unit_info must also \n
                        be provided other input tables with 'unit' column \n
-                       except . . .
+                       except for uigf limits and fast start profiles.
         loss_factor    marginal, average or combined loss factors, \n
                        :download:`see AEMO doc <../../docs/pdfs/Treatment_of_Loss_Factors_in_the_NEM.pdf>`, \n
                        optional, (as `np.int64`)
@@ -135,8 +135,7 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
         schema.add_column(dv.SeriesSchema(name='loss_factor', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
+        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.validate(unit_info)
 
     def set_unit_volume_bids(self, volume_bids):
@@ -246,9 +245,10 @@ class SpotMarket:
             ColumnValues
                 If there are inf, null or negative values in the bid band columns.
         """
-
         if self.validate_inputs:
             self._validate_volume_bids(volume_bids)
+
+        self._validate_bidirectional_unit_inputs(volume_bids, "volume_bids")
 
         self._decision_variables['bids'], variable_to_unit_level_constraint_map, variable_to_regional_constraint_map, = \
             variable_ids.bids(volume_bids, self._unit_info, self._next_variable_id, self._bidirectional_units)
@@ -270,6 +270,17 @@ class SpotMarket:
             schema.add_column(dv.SeriesSchema(name=str(bid_band), data_type=np.float64, must_be_real_number=True,
                                               not_negative=True), optional=True)
         schema.validate(volume_bids)
+
+    def _validate_bidirectional_unit_inputs(self, inputs, input_name):
+        """Check that if bidirectional unit where defined in unit_info when initialising the market that the inputs
+        provided for validation entry for both the generator and the load side of each bidirectional unit.
+        """
+        if "service" in inputs.columns:
+            inputs = inputs[inputs["service"]=="energy"].copy()
+        inputs = inputs[inputs["unit"].isin(self._bidirectional_units)].copy()
+        if len(inputs['unit']) != len(set(inputs['unit'])) * 2:
+            raise ModelBuildError(f"Invalid inputs for {input_name} a generator and load input was not provided for each "
+                                  f"bidirectional unit.")
 
     def set_unit_price_bids(self, price_bids):
         """Creates the objective function costs corresponding to energy bids.
@@ -376,6 +387,7 @@ class SpotMarket:
         """
         self._check_unit_volume_bids_set()
         self._validate_price_bids(price_bids)
+        self._validate_bidirectional_unit_inputs(price_bids, "price_bids")
         energy_objective_function = objective_function.bids(self._decision_variables['bids'], price_bids)
         energy_objective_function = objective_function.scale_by_loss_factors(energy_objective_function, self._unit_info)
         self._objective_function_components['bids'] = \
@@ -400,7 +412,7 @@ class SpotMarket:
         if 'bids' not in self._decision_variables:
             raise ModelBuildError('Price bids cannot be set before setting volume bids.')
 
-    def set_unit_bid_capacity_constraints(self, unit_limits):
+    def set_unit_bid_capacity_constraints(self, unit_limits, violation_cost=None):
         """Creates constraints that limit unit output based on their bid in max capacity. If a unit bids in zero
         volume then a constraint is not created.
 
@@ -474,6 +486,9 @@ class SpotMarket:
                            by ramp rate, in MW (as `np.float64`)
             =============  ======================================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -495,15 +510,17 @@ class SpotMarket:
         """
         self._check_unit_volume_bids_set()
         self._validate_unit_limits(unit_limits)
-        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self._next_constraint_id)
-        variable_map['coefficient'] = np.where(
-            (variable_map['dispatch_type'] == 'load') & (variable_map['unit'].isin(self._bidirectional_units)),
-            -1.0,
-            1.0
+        rhs_and_type, variable_map = unit_constraints.capacity(
+            unit_limits,
+            self._next_constraint_id,
+            self._bidirectional_units
         )
         self._constraints_rhs_and_type['unit_bid_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['unit_bid_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+        if violation_cost is not None:
+            self.make_constraints_elastic('unit_bid_capacity', violation_cost)
 
     def _validate_unit_limits(self, unit_limits):
         schema = dv.DataFrameSchema(name='unit_limits', primary_keys=['unit', 'dispatch_type'])
@@ -513,7 +530,7 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='capacity', data_type=np.float64))
         schema.validate(unit_limits)
 
-    def set_unconstrained_intermittent_generation_forecast_constraint(self, unit_limits):
+    def set_unconstrained_intermittent_generation_forecast_constraint(self, unit_limits, violation_cost=None):
         """Creates constraints that limit unit output based on their forecast output.
 
         Note: All semi-scheduled units are assumed not to be bidirectional.
@@ -584,6 +601,9 @@ class SpotMarket:
                       by ramp rate, in MW (as `np.float64`)
             ========  ================================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -604,13 +624,23 @@ class SpotMarket:
                 If there are inf, null or negative values in the bid band columns.
         """
         self._check_unit_volume_bids_set()
-        self._validate_unit_limits(unit_limits)
-        rhs_and_type, variable_map = unit_constraints.capacity(unit_limits, self._next_constraint_id)
+        self._validate_uigf_limits(unit_limits)
+        rhs_and_type, variable_map = unit_constraints.uigf(unit_limits, self._next_constraint_id)
         self._constraints_rhs_and_type['uigf_capacity'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['uigf_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    def set_unit_ramp_rate_constraints(self, ramp_details, fast_start_profiles=None, run_type='no_fast_start_units'):
+        if violation_cost is not None:
+            self.make_constraints_elastic('uigf_capacity', violation_cost)
+
+    def _validate_uigf_limits(self, unit_limits):
+        schema = dv.DataFrameSchema(name='unit_limits', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='capacity', data_type=np.float64))
+        schema.validate(unit_limits)
+
+    def set_unit_ramp_rate_constraints(self, ramp_details, scada_ramp_rates=None, fast_start_profiles=None,
+                                       run_type='no_fast_start_units', violation_cost=None):
         """Creates constraints on unit output based on ramp rates.
 
         1. For bidirectional units composite ramp rates are caclauted as per :download:`see AEMO doc <../../docs/pdfs/SO_OP_3705 Dispatch.pdf>`
@@ -706,6 +736,16 @@ class SpotMarket:
                                   increase output, in MW/h, (as `np.float64`)
             ramp_down_rate        the as bid maximum rate at which the unit can \n
                                   decrease output, in MW/h, (as `np.float64`)
+
+        scada_ramp_rates : pd.DataFrame
+
+            Bidirectional units share scada ramp rates so only one set is given per unit and there is no need for the
+            dispatch_type to be specified.
+
+            ===================   ==========================================
+            Columns:              Description:
+            unit                  unique identifier of a dispatch unit, \n
+                                  (as `str`)
             scada_ramp_up_rate    the scada maximum rate at which the unit can \n
                                   increase output, in MW/h, (as `np.float64`), \n
                                   optional
@@ -713,6 +753,46 @@ class SpotMarket:
                                   decrease output, in MW/h, (as `np.float64`), \n
                                   optional.
             ====================  ==========================================
+
+
+        fast_start_profiles : pd.DataFrame
+
+            When run_type is set to 'no_fast_start_units': this table is not
+                requried.
+
+            When run_type is set to 'fast_start_first_run':
+
+            ===================   ==========================================
+            Columns:              Description:
+            unit                  unique identifier of a dispatch unit, \n
+                                  (as `str`)
+            current_mode          The fast start operating mode of the unit \n
+                                  at the start of the dispatch interval \n
+                                  (as `int`)
+            ====================  ==========================================
+
+            When run_type is set to 'fast_start_first_run':
+
+            ==========================   ==========================================
+            Columns:                    Description:
+            unit                        unique identifier of a dispatch unit, \n
+                                        (as `str`)
+            end_mode                    The fast start operating mode of the unit \n
+                                        at the end of the dispatch interval \n
+                                        (as `int`)
+            time_since_end_of_mode_two  The number of minutes since the unit was \n
+                                        operating in mode 2 in minutes, can be nan \n
+                                        if the unit (as `int`)
+            min_loading                 the fast start profile min loading in MW \n
+                                        (as `foat`)
+            ==========================  ==========================================
+
+        run_type: str specifying whever this the fist fast start run or the second, or
+            if fast start units are not being considered. One of 'no_fast_start_units',
+            'fast_start_first_run', or 'fast_start_second_run'.
+
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -732,24 +812,30 @@ class SpotMarket:
                 If there are inf, null or negative values in the bid band columns.
         """
         self._validate_ramp_rates(ramp_details)
+        self._validate_bidirectional_unit_inputs(ramp_details, "ramp_details")
+
+        if run_type != "no_fast_start_units" and fast_start_profiles is not None and self.validate_inputs:
+            self._validate_fast_start_profiles_for_ramp_rates(fast_start_profiles, run_type)
 
         if "dispatch_type" not in ramp_details.columns:
             ramp_details["dispatch_type"] = "generator"
 
         ramp_details, bidirectional_unit_ramp_details = rrp._calculate_composite_ramp_rates(
-            ramp_rates=ramp_details, dispatch_interval=self.dispatch_interval
+            ramp_rates=ramp_details,
+            dispatch_interval=self.dispatch_interval,
+            bidirectional_units=self._bidirectional_units
         )
-        ramp_details = rrp._adjust_for_scada_ramp_rates(ramp_details)
-        bidirectional_unit_ramp_details = rrp._adjust_for_scada_ramp_rates(bidirectional_unit_ramp_details)
 
-        if run_type == 'fast_start_first_run':
-            ramp_details = rrp._remove_fast_start_units_starting_in_mode_0_1_2(ramp_details, fast_start_profiles)
-        elif run_type == 'fast_start_second_run':
-            ramp_details = rrp._remove_fast_start_units_ending_in_mode_0_1_2(ramp_details, fast_start_profiles)
-            ramp_details = rrp._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(
-                ramp_details, fast_start_profiles, self.dispatch_interval)
-        elif run_type != 'no_fast_start_units':
-            raise ValueError("run_type provided not recognised.")
+        if scada_ramp_rates is not None:
+            if self.validate_inputs:
+                self._validate_scada_ramp_rates(scada_ramp_rates)
+            ramp_details = rrp._adjust_for_scada_ramp_rates(ramp_details, scada_ramp_rates)
+            bidirectional_unit_ramp_details = rrp._adjust_for_scada_ramp_rates(
+                bidirectional_unit_ramp_details, scada_ramp_rates)
+
+        ramp_details = rrp._adjust_ramp_rates_for_fast_start_profiles(
+            ramp_details, run_type, fast_start_profiles, self.dispatch_interval
+        )
 
         rhs_and_type, variable_map = unit_constraints.ramp_up(ramp_details, self._next_constraint_id,
                                                               self.dispatch_interval)
@@ -777,6 +863,15 @@ class SpotMarket:
             self._constraint_to_variable_map['unit_level']['bidirectional_ramp_down'] = variable_map
             self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        if violation_cost is not None:
+            self.make_constraints_elastic('ramp_up', violation_cost)
+            self.make_constraints_elastic('ramp_down', violation_cost)
+
+            if 'bidirectional_ramp_up' in self._constraint_to_variable_map['unit_level'].keys():
+                self.make_constraints_elastic('bidirectional_ramp_up', violation_cost)
+            if 'bidirectional_ramp_down' in self._constraint_to_variable_map['unit_level'].keys():
+                self.make_constraints_elastic('bidirectional_ramp_down', violation_cost)
+
     def _validate_ramp_rates(self, ramp_details):
         schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
@@ -791,7 +886,32 @@ class SpotMarket:
             schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']))
         schema.validate(ramp_details)
 
-    def set_fast_start_constraints(self, fast_start_profiles):
+    def _validate_scada_ramp_rates(self, ramp_details):
+        schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='scada_ramp_up_rate', data_type=np.float64),
+                          optional=True)
+        schema.add_column(dv.SeriesSchema(name='scada_ramp_down_rate', data_type=np.float64),
+                          optional=True)
+        schema.validate(ramp_details)
+
+    def _validate_fast_start_profiles_for_ramp_rates(self, fast_start_profiles, run_type):
+        schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+
+        if run_type == "fast_start_first_run":
+            schema.add_column(dv.SeriesSchema(name='current_mode', data_type=np.int64, must_be_real_number=True,
+                                              not_negative=True))
+        elif run_type == "fast_start_second_run":
+            schema.add_column(dv.SeriesSchema(name='end_mode', data_type=np.int64, must_be_real_number=True,
+                                              not_negative=True))
+            schema.add_column(dv.SeriesSchema(name='min_loading', data_type=np.float64, must_be_real_number=True,
+                                              not_negative=True))
+            schema.add_column(dv.SeriesSchema(name='time_since_end_of_mode_two', data_type=np.float64,
+                                              not_negative=True))
+        schema.validate(fast_start_profiles)
+
+    def set_fast_start_constraints(self, fast_start_profiles, violation_cost=None):
         """Create the constraints on fast start units dispatch, :download:`see AEMO doc <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`
 
         Note: All fast start type units are assumed not to be bidirectional.
@@ -870,6 +990,9 @@ class SpotMarket:
                               unit, in MW, (as `np.float64`)
             ================  ==========================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
 
@@ -895,6 +1018,8 @@ class SpotMarket:
             self._constraints_rhs_and_type['fast_start'] = rhs_and_type
             self._constraint_to_variable_map['unit_level']['fast_start'] = variable_map
             self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+            if violation_cost is not None:
+                self.make_constraints_elastic('fast_start', violation_cost)
 
     def remove_fast_start_constraints(self):
         if 'fast_start' in self._constraints_rhs_and_type:
@@ -924,7 +1049,7 @@ class SpotMarket:
                                           not_negative=True))
         schema.validate(fast_start_profiles)
 
-    def set_demand_constraints(self, demand):
+    def set_demand_constraints(self, demand, violation_cost=None):
         """Creates constraints that force supply to equal to demand.
 
         Examples
@@ -977,6 +1102,9 @@ class SpotMarket:
                       (as `np.float64`)
             ========  ================================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -1001,13 +1129,16 @@ class SpotMarket:
         self._constraint_to_variable_map['regional']['demand'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        if violation_cost is not None:
+            self.make_constraints_elastic('demand', violation_cost)
+
     def _validate_demand(self, demand):
         schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['region'])
         schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
         schema.add_column(dv.SeriesSchema(name='demand', data_type=np.float64, must_be_real_number=True))
         schema.validate(demand)
 
-    def set_fcas_requirements_constraints(self, fcas_requirements):
+    def set_fcas_requirements_constraints(self, fcas_requirements, violation_cost=None):
         """Creates constraints that force FCAS supply to equal requirements.
 
         Examples
@@ -1076,6 +1207,9 @@ class SpotMarket:
                        the column is missing (as `str`)
             ========   ===============================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -1100,6 +1234,9 @@ class SpotMarket:
         self._constraint_to_variable_map['regional']['fcas'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        if violation_cost is not None:
+            self.make_constraints_elastic('fcas', violation_cost)
+
     def _validate_fcas_requirements(self, fcas_requirements):
         schema = dv.DataFrameSchema(name='fcas_requirements', primary_keys=['set', 'region', 'service'])
         schema.add_column(dv.SeriesSchema(name='region', data_type=str, allowed_values=self._market_regions))
@@ -1110,7 +1247,7 @@ class SpotMarket:
                           optional=True)
         schema.validate(fcas_requirements)
 
-    def set_fcas_max_availability(self, fcas_max_availability):
+    def set_fcas_max_availability(self, fcas_max_availability, violation_cost=None):
         """Creates constraints to ensure fcas dispatch is limited to the availability specified in the FCAS trapezium.
 
         The constraints are described in the
@@ -1168,6 +1305,9 @@ class SpotMarket:
                                service, in MW, (as `np.float64`)
             ================   =======================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -1193,6 +1333,9 @@ class SpotMarket:
         self._constraint_to_variable_map['unit_level']['fcas_max_availability'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        if violation_cost is not None:
+            self.make_constraints_elastic('fcas_max_availability', violation_cost)
+
     def _validate_fcas_max_availability(self, fcas_max_availability):
         schema = dv.DataFrameSchema(name='fcas_max_availability', primary_keys=['unit', 'service', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
@@ -1203,7 +1346,8 @@ class SpotMarket:
                           optional=True)
         schema.validate(fcas_max_availability)
 
-    def set_joint_ramping_constraints_raise_reg(self, ramp_details):
+    def set_joint_ramping_constraints_reg(self, scada_ramp_rates, fast_start_profiles=None,
+                                          run_type='no_fast_start_units', violation_cost=None):
         """Create constraints that ensure the provision of energy and fcas raise are within unit ramping capabilities.
 
         The constraints are described in the
@@ -1232,11 +1376,12 @@ class SpotMarket:
         >>> ramp_details = pd.DataFrame({
         ...   'unit': ['A', 'B'],
         ...   'initial_output': [100.0, 80.0],
-        ...   'ramp_up_rate': [20.0, 10.0]})
+        ...   'scada_ramp_up_rate': [20.0, 10.0],
+        ...   'scada_ramp_down_rate': [20.0, 10.0]})
 
         Create the joint ramping constraints.
 
-        >>> market.set_joint_ramping_constraints_raise_reg(ramp_details)
+        >>> market.set_joint_ramping_constraints_reg(ramp_details)
 
         Now the market should have the constraints and their mapping to decision varibales.
 
@@ -1256,21 +1401,66 @@ class SpotMarket:
 
         Parameters
         ----------
-        ramp_details : pd.DataFrame
 
-            ==============   =========================================
-            Columns:         Description:
-            unit             unique identifier of a dispatch unit, \n
-                             (as `str`)
-            dispatch_type   "load" or "generator", optional default \n
-                             (as `str`)
-            initial_output   the output of the unit at the start of \n
-                             the dispatch interval, in MW, \n
-                             (as `np.float64`)
-            ramp_up_rate     the maximum rate at which the unit can \n
-                             increase output, in MW/h, \n
-                             (as `np.float64`)
-            ==============   =========================================
+        scada_ramp_rates : pd.DataFrame
+
+            Bidirectional units share scada ramp rates so only one set is given per unit and there is no need for the
+            dispatch_type to be specified.
+
+            ===================   ==========================================
+            Columns:              Description:
+            unit                  unique identifier of a dispatch unit, \n
+                                  (as `str`)
+            initial_output        the output of the unit at the start of \n
+                                  the dispatch interval, in MW, \n
+                                  (as `np.float64`)
+            scada_ramp_up_rate    the scada maximum rate at which the unit can \n
+                                  increase output, in MW/h, (as `np.float64`), \n
+                                  optional
+            scada_ramp_down_rate  the scada maximum rate at which the unit can \n
+                                  decrease output, in MW/h, (as `np.float64`), \n
+                                  optional.
+            ====================  ==========================================
+
+
+        fast_start_profiles : pd.DataFrame
+
+            When run_type is set to 'no_fast_start_units': this table is not
+                requried.
+
+            When run_type is set to 'fast_start_first_run':
+
+            ===================   ==========================================
+            Columns:              Description:
+            unit                  unique identifier of a dispatch unit, \n
+                                  (as `str`)
+            current_mode          The fast start operating mode of the unit \n
+                                  at the start of the dispatch interval \n
+                                  (as `int`)
+            ====================  ==========================================
+
+            When run_type is set to 'fast_start_first_run':
+
+            ==========================   ==========================================
+            Columns:                    Description:
+            unit                        unique identifier of a dispatch unit, \n
+                                        (as `str`)
+            end_mode                    The fast start operating mode of the unit \n
+                                        at the end of the dispatch interval \n
+                                        (as `int`)
+            time_since_end_of_mode_two  The number of minutes since the unit was \n
+                                        operating in mode 2 in minutes, can be nan \n
+                                        if the unit (as `int`)
+            min_loading                 the fast start profile min loading in MW \n
+                                        (as `foat`)
+            ==========================  ==========================================
+
+        run_type: str specifying whever this the fist fast start run or the second, or
+            if fast start units are not being considered. One of 'no_fast_start_units',
+            'fast_start_first_run', or 'fast_start_second_run'.
+
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1290,121 +1480,108 @@ class SpotMarket:
                 If there are inf, null or negative values in the columns of type `np.float64`.
         """
         if self.validate_inputs:
-            self._validate_ramp_up_rates(ramp_details)
-        ramp_details = ramp_details.rename(columns={'ramp_up_rate': 'ramp_rate'})
+            self._validate_scada_ramp_rates_for_reg(scada_ramp_rates)
+
+        if run_type != "no_fast_start_units" and fast_start_profiles is not None and self.validate_inputs:
+            self._validate_fast_start_profiles_for_ramp_rates(fast_start_profiles, run_type)
+
+        bid_variables = self._decision_variables['bids']
+
+        raise_reg_units = \
+            bid_variables[bid_variables['service'] == 'raise_reg'].loc[:,['unit', 'dispatch_type', 'service']]
+        lower_reg_units = \
+            bid_variables[bid_variables['service'] == 'lower_reg'].loc[:,['unit', 'dispatch_type', 'service']]
+
+        ramp_rates = scada_ramp_rates.rename(
+            columns={'scada_ramp_up_rate': 'ramp_up_rate',
+                     'scada_ramp_down_rate': 'ramp_down_rate'}
+        )
+
+        ramp_rates = rrp._adjust_ramp_rates_for_fast_start_profiles(
+            ramp_rates, run_type, fast_start_profiles, self.dispatch_interval
+        )
+
+        ramp_up_rates_for_raise_reg = pd.merge(
+            raise_reg_units,
+            ramp_rates,
+            on='unit'
+        )
+
+        ramp_up_rates_for_raise_reg = \
+            ramp_up_rates_for_raise_reg.loc[:, ['unit', 'dispatch_type', 'service', 'ramp_up_rate', 'initial_output']]
+        ramp_up_rates_for_raise_reg = ramp_up_rates_for_raise_reg.rename(columns={'ramp_up_rate': 'ramp_rate'})
+
+        ramp_up_rates_for_raise_reg_bdu = ramp_up_rates_for_raise_reg[
+            ramp_up_rates_for_raise_reg['unit'].isin(self._bidirectional_units)]
+        ramp_up_rates_for_raise_reg = ramp_up_rates_for_raise_reg[
+            ~ramp_up_rates_for_raise_reg['unit'].isin(self._bidirectional_units)]
+
         rhs_and_type, variable_map = \
             fcas_constraints.joint_ramping_constraints_raise_reg(
-                ramp_details, self.dispatch_interval, self._next_constraint_id)
+                ramp_up_rates_for_raise_reg, self.dispatch_interval, self._next_constraint_id)
         self._constraints_rhs_and_type['joint_ramping_raise_reg'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['joint_ramping_raise_reg'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    def _validate_ramp_up_rates(self, ramp_details):
-        schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit', 'dispatch_type'])
-        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='initial_output', data_type=np.float64, must_be_real_number=True))
-        schema.add_column(dv.SeriesSchema(name='ramp_up_rate', data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                          optional=True)
-        schema.validate(ramp_details)
+        if not ramp_up_rates_for_raise_reg_bdu.empty:
+            ramp_up_rates_for_raise_reg_bdu = \
+                ramp_up_rates_for_raise_reg_bdu[~ramp_up_rates_for_raise_reg_bdu.isna()]
+            rhs_and_type, variable_map = \
+                fcas_constraints.joint_ramping_constraints_raise_reg_bdu(
+                    ramp_up_rates_for_raise_reg_bdu, self.dispatch_interval, self._next_constraint_id)
+            self._constraints_rhs_and_type['joint_ramping_raise_reg_bdu'] = rhs_and_type
+            self._constraint_to_variable_map['unit_level']['joint_ramping_raise_reg_bdu'] = variable_map
+            self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    def set_joint_ramping_constraints_lower_reg(self, ramp_details):
-        """Create constraints that ensure the provision of energy and fcas are within unit ramping capabilities.
+        ramp_down_rates_for_lower_reg = pd.merge(
+            lower_reg_units,
+            ramp_rates,
+            on='unit'
+        )
 
-        The constraints are described in the
-        :download:`FCAS MODEL IN NEMDE documentation section 6.1  <../../docs/pdfs/FCAS Model in NEMDE.pdf>`.
+        ramp_down_rates_for_lower_reg = \
+            ramp_down_rates_for_lower_reg.loc[:, ['unit', 'dispatch_type', 'service', 'ramp_down_rate', 'initial_output']]
+        ramp_down_rates_for_lower_reg = ramp_down_rates_for_lower_reg.rename(columns={'ramp_down_rate': 'ramp_rate'})
 
-        On a unit basis for generators they take the form of:
+        ramp_down_rates_for_lower_reg_bdu = ramp_down_rates_for_lower_reg[
+            ramp_down_rates_for_lower_reg['unit'].isin(self._bidirectional_units)]
+        ramp_down_rates_for_lower_reg = ramp_down_rates_for_lower_reg[
+            ~ramp_down_rates_for_lower_reg['unit'].isin(self._bidirectional_units)]
 
-            Energy dispatch - Regulation lower target >= initial output - ramp down rate * (dispatch interval / 60)
-
-        Examples
-        --------
-        Define the unit information data set needed to initialise the market.
-
-        >>> unit_info = pd.DataFrame({
-        ...     'unit': ['A', 'B'],
-        ...     'region': ['NSW', 'NSW']})
-
-        Initialise the market instance.
-
-        >>> market = SpotMarket(market_regions=['NSW'],
-        ...                     unit_info=unit_info,
-        ...                     dispatch_interval=60)
-
-        Define unit initial outputs and ramping capabilities.
-
-        >>> ramp_details = pd.DataFrame({
-        ...   'unit': ['A', 'B'],
-        ...   'initial_output': [100.0, 80.0],
-        ...   'ramp_down_rate': [15.0, 25.0]})
-
-        Create the joint ramping constraints.
-
-        >>> market.set_joint_ramping_constraints_lower_reg(ramp_details)
-
-        Now the market should have the constraints and their mapping to decision varibales.
-
-        >>> print(market._constraints_rhs_and_type['joint_ramping_lower_reg'])
-          unit  constraint_id type   rhs
-        0    A              0   >=  85.0
-        1    B              1   >=  55.0
-
-        >>> print(market._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'])
-           constraint_id unit    service dispatch_type  coefficient
-        0              0    A  lower_reg     generator         -1.0
-        1              1    B  lower_reg     generator         -1.0
-        0              0    A     energy     generator          1.0
-        1              1    B     energy     generator          1.0
-
-        Parameters
-        ----------
-        ramp_details : pd.DataFrame
-
-            ==============  ==========================================
-            Columns:        Description:
-            unit            unique identifier of a dispatch unit, \n
-                            (as `str`)
-            dispatch_type  "load" or "generator", optional default \n
-                            (as `str`)
-            initial_output  the output of the unit at the start of, \n
-                            the dispatch interval, in MW, \n
-                            (as `np.float64`)
-            ramp_down_rate  the maximum rate at which the unit can, \n
-                            decrease output, in MW/h, \n
-                            (as `np.float64`)
-            ==============  ==========================================
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-            RepeatedRowError
-                If there is more than one row for any unit in unit_limits.
-            ColumnDataTypeError
-                If columns are not of the required type.
-            MissingColumnError
-                If the columns 'unit', 'initial_output' or 'ramp_down_rate' are missing from unit_limits.
-            UnexpectedColumn
-                If there are columns other than 'unit', 'initial_output' or 'ramp_down_rate' in unit_limits.
-            ColumnValues
-                If there are inf, null or negative values in the columns of type `np.float64`.
-        """
-
-        if self.validate_inputs:
-            self._validate_ramp_down_rates(ramp_details)
-        ramp_details = ramp_details.rename(columns={'ramp_down_rate': 'ramp_rate'})
-        rhs_and_type, variable_map = fcas_constraints.joint_ramping_constraints_lower_reg(
-            ramp_details, self.dispatch_interval, self._next_constraint_id)
-
+        rhs_and_type, variable_map = \
+            fcas_constraints.joint_ramping_constraints_lower_reg(
+                ramp_down_rates_for_lower_reg, self.dispatch_interval, self._next_constraint_id)
         self._constraints_rhs_and_type['joint_ramping_lower_reg'] = rhs_and_type
         self._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
-    def set_joint_capacity_constraints(self, contingency_trapeziums):
+        if not ramp_down_rates_for_lower_reg_bdu.empty:
+            ramp_down_rates_for_lower_reg_bdu = \
+                ramp_down_rates_for_lower_reg_bdu[~ramp_down_rates_for_lower_reg_bdu.isna()]
+            rhs_and_type, variable_map = \
+                fcas_constraints.joint_ramping_constraints_lower_reg_bdu(
+                    ramp_down_rates_for_lower_reg_bdu, self.dispatch_interval, self._next_constraint_id)
+            self._constraints_rhs_and_type['joint_ramping_lower_reg_bdu'] = rhs_and_type
+            self._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg_bdu'] = variable_map
+            self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+
+        if violation_cost is not None:
+            self.make_constraints_elastic('joint_ramping_raise_reg', violation_cost)
+            self.make_constraints_elastic('joint_ramping_lower_reg', violation_cost)
+            if 'joint_ramping_raise_reg_bdu' in self._constraint_to_variable_map['unit_level'].keys():
+                self.make_constraints_elastic('joint_ramping_raise_reg_bdu', violation_cost)
+            if 'joint_ramping_lower_reg_bdu' in self._constraint_to_variable_map['unit_level'].keys():
+                self.make_constraints_elastic('joint_ramping_lower_reg_bdu', violation_cost)
+
+    def _validate_scada_ramp_rates_for_reg(self, ramp_details):
+        schema = dv.DataFrameSchema(name='ramp_details', primary_keys=['unit'])
+        schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
+        schema.add_column(dv.SeriesSchema(name='initial_output', data_type=np.float64))
+        schema.add_column(dv.SeriesSchema(name='scada_ramp_up_rate', data_type=np.float64))
+        schema.add_column(dv.SeriesSchema(name='scada_ramp_down_rate', data_type=np.float64))
+        schema.validate(ramp_details)
+
+    def set_joint_capacity_constraints(self, contingency_trapeziums, violation_cost=None):
         """Creates constraints to ensure there is adequate capacity for contingency, regulation and energy dispatch.
 
         Create two constraints for each contingency services, one ensures operation on upper slope of the fcas
@@ -1492,6 +1669,9 @@ class SpotMarket:
                                (as `np.float64`)
             ================   =======================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -1519,6 +1699,9 @@ class SpotMarket:
         self._constraint_to_variable_map['unit_level']['joint_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        if violation_cost is not None:
+            self.make_constraints_elastic('joint_capacity', violation_cost)
+
     def _validate_contingency_trapeziums(self, contingency_trapeziums):
         schema = dv.DataFrameSchema(name='contingency_trapeziums', primary_keys=['unit', 'service', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
@@ -1534,7 +1717,7 @@ class SpotMarket:
                           optional=True)
         schema.validate(contingency_trapeziums)
 
-    def set_energy_and_regulation_capacity_constraints(self, regulation_trapeziums):
+    def set_energy_and_regulation_capacity_constraints(self, regulation_trapeziums, violation_cost=None):
         """Creates constraints to ensure there is adequate capacity for regulation and energy dispatch targets.
 
         Create two constraints for each regulation services, one ensures operation on upper slope of the fcas
@@ -1622,6 +1805,9 @@ class SpotMarket:
                                (as `np.float64`)
             ================   =======================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -1652,6 +1838,9 @@ class SpotMarket:
         self._constraint_to_variable_map['unit_level']['energy_and_regulation_capacity'] = variable_map
         self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
+        if violation_cost is not None:
+            self.make_constraints_elastic('energy_and_regulation_capacity', violation_cost)
+
     def _validate_regulation_trapeziums(self, contingency_trapeziums):
         schema = dv.DataFrameSchema(name='contingency_trapeziums', primary_keys=['unit', 'service', 'dispatch_type'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
@@ -1666,67 +1855,6 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
                           optional=True)
         schema.validate(contingency_trapeziums)
-
-    def set_bidirectional_unit_raise_regulation_ramping_constraints(self, ramp_details):
-        bdu_ramp_details = ramp_details[ramp_details['unit'].isin(self._bidirectional_units)]
-
-        if not bdu_ramp_details.empty:
-            rhs_type_raise_reg = bdu_ramp_details.drop_duplicates('unit')
-            rhs_type_raise_reg['type'] = '<='
-            rhs_type_raise_reg['rhs'] = rhs_type_raise_reg['ramp_up_rate'] * (self.dispatch_interval / 60)
-            rhs_type_raise_reg = hf.save_index(rhs_type_raise_reg, 'constraint_id', self._next_constraint_id)
-            rhs_type_raise_reg = rhs_type_raise_reg.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
-            self._next_constraint_id = max(rhs_type_raise_reg['constraint_id']) + 1
-
-            variable_map_raise_reg = bdu_ramp_details.loc[:, ['unit']]
-            variable_map_raise_reg['service'] = 'raise_reg'
-            variable_map_raise_reg['coefficient'] = 1.0
-            variable_map_raise_reg = pd.merge(
-                variable_map_raise_reg,
-                rhs_type_raise_reg.loc[:, ['unit', 'constraint_id']]
-            )
-            variable_map_raise_reg['dispatch_type'] = 'generator'
-            variable_map_raise_reg_gen = variable_map_raise_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
-                                                                        'coefficient']]
-            variable_map_raise_reg_load = variable_map_raise_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
-                                                                        'coefficient']]
-            variable_map_raise_reg_load['dispatch_type'] = 'load'
-            variable_map_raise_reg = pd.concat([variable_map_raise_reg_gen, variable_map_raise_reg_load])
-
-            self._constraints_rhs_and_type['bidirectional_unit_raise_regulation_ramping'] = rhs_type_raise_reg
-            self._constraint_to_variable_map['unit_level']['bidirectional_unit_raise_regulation_ramping'] = (
-                variable_map_raise_reg)
-
-    def set_bidirectional_unit_lower_regulation_ramping_constraints(self, ramp_details):
-        bdu_ramp_details = ramp_details[ramp_details['unit'].isin(self._bidirectional_units)]
-
-        if not bdu_ramp_details.empty:
-            rhs_type_lower_reg = bdu_ramp_details.drop_duplicates('unit')
-            rhs_type_lower_reg['type'] = '<='
-            rhs_type_lower_reg['rhs'] = rhs_type_lower_reg['ramp_down_rate'] * (self.dispatch_interval / 60)
-            rhs_type_lower_reg = hf.save_index(rhs_type_lower_reg, 'constraint_id', self._next_constraint_id)
-            rhs_type_lower_reg = rhs_type_lower_reg.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
-            self._next_constraint_id = max(rhs_type_lower_reg['constraint_id']) + 1
-
-            variable_map_lower_reg = bdu_ramp_details.loc[:, ['unit']]
-            variable_map_lower_reg['service'] = 'raise_reg'
-            variable_map_lower_reg['coefficient'] = 1.0
-            variable_map_lower_reg = pd.merge(
-                variable_map_lower_reg,
-                rhs_type_lower_reg.loc[:, ['unit', 'constraint_id']]
-            )
-
-            variable_map_lower_reg['dispatch_type'] = 'generator'
-            variable_map_lower_reg_gen = variable_map_lower_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
-                                                                        'coefficient']]
-            variable_map_lower_reg_load = variable_map_lower_reg.loc[:, ['constraint_id', 'unit', 'service' , 'dispatch_type',
-                                                                        'coefficient']]
-            variable_map_lower_reg_load['dispatch_type'] = 'load'
-            variable_map_lower_reg = pd.concat([variable_map_lower_reg_load, variable_map_lower_reg_gen])
-
-            self._constraints_rhs_and_type['bidirectional_unit_lower_regulation_ramping'] = rhs_type_lower_reg
-            self._constraint_to_variable_map['unit_level']['bidirectional_unit_lower_regulation_ramping'] = (
-                variable_map_lower_reg)
 
     def set_interconnectors(self, interconnector_directions_and_limits):
         """Create lossless links between specified regions.
@@ -2128,7 +2256,7 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='break_point', data_type=np.float64, must_be_real_number=True))
         schema.validate(interpolation_break_points)
 
-    def set_generic_constraints(self, generic_constraint_parameters):
+    def set_generic_constraints(self, generic_constraint_parameters, violation_cost=None):
         """Creates a set of generic constraints, adding the constraint type, rhs.
 
         This sets a set of arbitrary constraints, but only the type and rhs values. The lhs terms can be added to these
@@ -2178,6 +2306,9 @@ class SpotMarket:
                            (as `np.float64`)
             =============  ===========================================
 
+        violation_cost : float
+            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+
         Returns
         -------
         None
@@ -2200,6 +2331,9 @@ class SpotMarket:
         type_and_rhs = hf.save_index(generic_constraint_parameters, 'constraint_id', self._next_constraint_id)
         self._constraints_rhs_and_type['generic'] = type_and_rhs.loc[:, ['set', 'constraint_id', 'type', 'rhs']]
         self._next_constraint_id = type_and_rhs['constraint_id'].max() + 1
+
+        if violation_cost is not None:
+            self.make_constraints_elastic('generic', violation_cost)
 
     @staticmethod
     def _validate_generic_constraint_parameters(generic_constraint_parameters):

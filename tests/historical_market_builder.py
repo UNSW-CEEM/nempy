@@ -31,93 +31,66 @@ class SpotMarketBuilder:
 
     def set_unit_limit_constraints(self):
         unit_bid_limit = self.unit_inputs.get_unit_bid_availability()
-        self.market.set_unit_bid_capacity_constraints(unit_bid_limit)
         cost = self.constraint_inputs.get_constraint_violation_prices()['unit_capacity']
-        self.market.make_constraints_elastic('unit_bid_capacity', violation_cost=cost)
+        self.market.set_unit_bid_capacity_constraints(unit_bid_limit, violation_cost=cost)
         unit_uigf_limit = self.unit_inputs.get_unit_uigf_limits()
-        self.market.set_unconstrained_intermittent_generation_forecast_constraint(unit_uigf_limit)
         cost = self.constraint_inputs.get_constraint_violation_prices()['uigf']
-        self.market.make_constraints_elastic('uigf_capacity', violation_cost=cost)
+        self.market.set_unconstrained_intermittent_generation_forecast_constraint(unit_uigf_limit, violation_cost=cost)
 
     def set_ramp_rate_limits(self):
-        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+        ramp_rates = self.unit_inputs.get_bid_ramp_rates()
+        scada_ramp_rates = self.unit_inputs.get_scada_ramp_rates()
         fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch()
-        self.market.set_unit_ramp_rate_constraints(ramp_rates, fast_start_profiles, run_type="fast_start_first_run")
+        fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'current_mode']]
         cost = self.constraint_inputs.get_constraint_violation_prices()['ramp_rate']
-        self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
-        self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
-        if 'bidirectional_ramp_up' in self.market.get_constraint_set_names():
-            self.market.make_constraints_elastic('bidirectional_ramp_up', violation_cost=cost)
-            self.market.make_constraints_elastic('bidirectional_ramp_down', violation_cost=cost)
+        self.market.set_unit_ramp_rate_constraints(
+            ramp_rates, scada_ramp_rates, fast_start_profiles,
+            run_type="fast_start_first_run", violation_cost=cost
+        )
 
     def set_fast_start_constraints(self):
         self.market.dispatch()
         dispatch = self.market.get_unit_dispatch()
+        cost = self.constraint_inputs.get_constraint_violation_prices()['fast_start']
         self.fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-        self.market.set_fast_start_constraints(self.fast_start_profiles)
+        self.market.set_fast_start_constraints(self.fast_start_profiles, violation_cost=cost)
 
-        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
-        self.market.set_unit_ramp_rate_constraints(
-            ramp_rates, self.fast_start_profiles, run_type="fast_start_second_run")
+        ramp_rates = self.unit_inputs.get_bid_ramp_rates()
+        scada_ramp_rates = self.unit_inputs.get_scada_ramp_rates()
+        cols = ['unit', 'end_mode', 'time_since_end_of_mode_two', 'min_loading']
+        fast_start_profiles = self.fast_start_profiles.loc[:, cols]
         cost = self.constraint_inputs.get_constraint_violation_prices()['ramp_rate']
-        self.market.make_constraints_elastic('ramp_up', violation_cost=cost)
-        self.market.make_constraints_elastic('ramp_down', violation_cost=cost)
-        if 'bidirectional_ramp_up' in self.market.get_constraint_set_names():
-            self.market.make_constraints_elastic('bidirectional_ramp_up', violation_cost=cost)
-            self.market.make_constraints_elastic('bidirectional_ramp_down', violation_cost=cost)
-
+        self.market.set_unit_ramp_rate_constraints(
+            ramp_rates, scada_ramp_rates, fast_start_profiles,
+            run_type="fast_start_second_run", violation_cost=cost
+        )
         cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_profile']
-        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
-            run_type="fast_start_second_run")
-        self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
-        self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(
-            run_type="fast_start_second_run")
-        self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
-        self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
-
-        self.market.set_bidirectional_unit_raise_regulation_ramping_constraints(scada_ramp_up_rates)
-        self.market.set_bidirectional_unit_lower_regulation_ramping_constraints(scada_ramp_down_rates)
-        if 'bidirectional_unit_raise_regulation_ramping' in self.market.get_constraint_set_names():
-            self.market.make_constraints_elastic('bidirectional_unit_raise_regulation_ramping', cost)
-            self.market.make_constraints_elastic('bidirectional_unit_lower_regulation_ramping', cost)
-
-        if 'fast_start' in self.market.get_constraint_set_names():
-            cost = self.constraint_inputs.get_constraint_violation_prices()['fast_start']
-            self.market.make_constraints_elastic('fast_start', violation_cost=cost)
+        scada_ramp_rates = self.unit_inputs.get_scada_ramp_rates(inlude_initial_output=True)
+        self.market.set_joint_ramping_constraints_reg(
+            scada_ramp_rates, fast_start_profiles, run_type="fast_start_second_run", violation_cost=cost
+        )
 
     def set_unit_fcas_constraints(self):
         self.unit_inputs.add_fcas_trapezium_constraints()
         cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_max_avail']
         fcas_availability = self.unit_inputs.get_fcas_max_availability()
-        self.market.set_fcas_max_availability(fcas_availability)
-        self.market.make_constraints_elastic('fcas_max_availability', cost)
+        self.market.set_fcas_max_availability(fcas_availability, violation_cost=cost)
         cost = self.constraint_inputs.get_constraint_violation_prices()['fcas_profile']
         regulation_trapeziums = self.unit_inputs.get_fcas_regulation_trapeziums()
-        self.market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums)
-        self.market.make_constraints_elastic('energy_and_regulation_capacity', cost)
-        scada_ramp_down_rates = self.unit_inputs.get_scada_ramp_down_rates_of_lower_reg_units(
-            run_type="fast_start_first_run")
-        self.market.set_joint_ramping_constraints_lower_reg(scada_ramp_down_rates)
-        self.market.make_constraints_elastic('joint_ramping_lower_reg', cost)
-        scada_ramp_up_rates = self.unit_inputs.get_scada_ramp_up_rates_of_raise_reg_units(
-            run_type="fast_start_first_run")
-        self.market.set_joint_ramping_constraints_raise_reg(scada_ramp_up_rates)
-        self.market.make_constraints_elastic('joint_ramping_raise_reg', cost)
-        self.market.set_bidirectional_unit_raise_regulation_ramping_constraints(scada_ramp_up_rates)
-        self.market.set_bidirectional_unit_lower_regulation_ramping_constraints(scada_ramp_down_rates)
-        if 'bidirectional_unit_raise_regulation_ramping' in self.market.get_constraint_set_names():
-            self.market.make_constraints_elastic('bidirectional_unit_raise_regulation_ramping', cost)
-            self.market.make_constraints_elastic('bidirectional_unit_lower_regulation_ramping', cost)
+        self.market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums, violation_cost=cost)
+        fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch()
+        fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'current_mode']]
+        scada_ramp_rates = self.unit_inputs.get_scada_ramp_rates(inlude_initial_output=True)
+        self.market.set_joint_ramping_constraints_reg(
+            scada_ramp_rates, fast_start_profiles, run_type="fast_start_first_run", violation_cost=cost
+        )
         contingency_trapeziums = self.unit_inputs.get_contingency_services()
-        self.market.set_joint_capacity_constraints(contingency_trapeziums)
-        self.market.make_constraints_elastic('joint_capacity', cost)
+        self.market.set_joint_capacity_constraints(contingency_trapeziums, violation_cost=cost)
 
     def set_region_demand_constraints(self):
         regional_demand = self.regional_demand_inputs.get_operational_demand()
-        self.market.set_demand_constraints(regional_demand)
         cost = self.constraint_inputs.get_constraint_violation_prices()['regional_demand']
-        self.market.make_constraints_elastic('demand', cost)
+        self.market.set_demand_constraints(regional_demand, violation_cost=cost)
 
     def add_interconnectors_to_market(self):
         interconnectors = self.interconnector_inputs.get_interconnector_definitions()
@@ -127,22 +100,19 @@ class SpotMarketBuilder:
 
     def add_generic_constraints_with_fcas_requirements_interface(self):
         fcas_requirements = self.constraint_inputs.get_fcas_requirements()
-        self.market.set_fcas_requirements_constraints(fcas_requirements)
-        violation_costs = self.constraint_inputs.get_violation_costs()
-        self.market.make_constraints_elastic('fcas', violation_cost=violation_costs)
+        cost = self.constraint_inputs.get_violation_costs()
+        self.market.set_fcas_requirements_constraints(fcas_requirements, violation_cost=cost)
         generic_rhs = self.constraint_inputs.get_rhs_and_type_excluding_regional_fcas_constraints()
-        self.market.set_generic_constraints(generic_rhs)
-        self.market.make_constraints_elastic('generic', violation_cost=violation_costs)
+        self.market.set_generic_constraints(generic_rhs, violation_cost=cost)
         unit_generic_lhs = self.constraint_inputs.get_unit_lhs()
         self.market.link_units_to_generic_constraints(unit_generic_lhs)
         interconnector_generic_lhs = self.constraint_inputs.get_interconnector_lhs()
         self.market.link_interconnectors_to_generic_constraints(interconnector_generic_lhs)
 
     def add_generic_constraints(self):
-        violation_costs = self.constraint_inputs.get_violation_costs()
+        cost = self.constraint_inputs.get_violation_costs()
         generic_rhs = self.constraint_inputs.get_rhs_and_type()
-        self.market.set_generic_constraints(generic_rhs)
-        self.market.make_constraints_elastic('generic', violation_cost=violation_costs)
+        self.market.set_generic_constraints(generic_rhs, violation_cost=cost)
         unit_generic_lhs = self.constraint_inputs.get_unit_lhs()
         self.market.link_units_to_generic_constraints(unit_generic_lhs)
         interconnector_generic_lhs = self.constraint_inputs.get_interconnector_lhs()

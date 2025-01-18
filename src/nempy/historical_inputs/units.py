@@ -197,17 +197,8 @@ class UnitData:
         uigf = an.map_aemo_column_names_to_nempy_names(self.uigf_values)
         return uigf
 
-    def get_ramp_rates_used_for_energy_dispatch(self, run_type='no_fast_start_units'):
-        """Get ramp rates used for constraining energy dispatch.
-
-        The minimum of bid in ramp rates and scada telemetered ramp rates are used. If 'no_fast_start_units' is given as
-        the run_type then no extra process is applied to the ramp rates based on the fast start inflexibility profiles.
-        If 'fast_start_first_run' is given then the ramp rates of units starting in fast start modes 0, 1, and 2 are
-        excluded. If 'fast_start_second_run' is given then the ramp rates of units ending the interval in fast start
-        modes 0, 1, and 2 are excluded, and the ramp rates of units that started interval in mode 2 or smaller, but
-        end in mode 3 or greater, have there ramp rates adjusted to account for speeding a portion of the interval
-        constrained from ramping up by their dispatch inflexibility profile.
-
+    def get_bid_ramp_rates(self):
+        """Get bid in ramp rates
 
         Examples
         --------
@@ -216,7 +207,7 @@ class UnitData:
 
         >>> unit_data = UnitData(inputs_loader)
 
-        >>> unit_data.get_ramp_rates_used_for_energy_dispatch()
+        >>> unit_data.get_bid_ramp_rates()
                  unit  direction  initial_output  ramp_up_rate  ramp_down_rate
         0      AGLHAL  generator        0.000000    720.000000      720.000000
         1      AGLSOM  generator        0.000000    480.000000      480.000000
@@ -231,11 +222,6 @@ class UnitData:
         279     YWPS4  generator      338.782288    180.000000      180.000000
         <BLANKLINE>
         [280 rows x 5 columns]
-
-        Parameters
-        ----------
-        run_type: str specifying the run type should be one of 'no_fast_start_units', 'fast_start_first_run', or
-            'fast_start_second_run'.
 
         Returns
         -------
@@ -255,92 +241,63 @@ class UnitData:
                               (as `np.float64`)
             ================  ========================================
         """
-        # ramp_rates = self._get_minimum_of_bid_and_scada_telemetered_ramp_rates()
-        # if run_type == 'fast_start_first_run':
-        #     ramp_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(ramp_rates)
-        # elif run_type == 'fast_start_second_run':
-        #     if self.updated_fast_start_profiles is None:
-        #         raise ValueError("Can't use run type fast_start_second_run before calling "
-        #                          "get_fast_start_profiles_for_dispatch.")
-        #     ramp_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(ramp_rates)
-        #     ramp_rates = self._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates,
-        #                                                                                 self.dispatch_interval)
-        # elif run_type != 'no_fast_start_units':
-        #     raise ValueError("run_type provided not recognised.")
-        #
-        # ramp_rates = ramp_rates.loc[:, ['DUID', 'DIRECTION', 'INITIALMW', 'RAMPUPRATE', 'RAMPDOWNRATE']]
-        # ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
-        # ramp_rates = an.map_aemo_column_values_to_nempy_name(ramp_rates, 'dispatch_type')
-        # ramp_rates['initial_output'] = np.where(
-        #     ramp_rates['initial_output'].abs() < 1.0,
-        #     0.0,
-        #     ramp_rates['initial_output']
-        # )
         bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+        initial_mw = self.initial_conditions.loc[:, ['DUID', "INITIALMW"]]
+        bid_ramp_rates = pd.merge(bid_ramp_rates, initial_mw, on='DUID')
         bid_ramp_rates = self._remove_non_energy_bids(bid_ramp_rates)
-        scada_telemetered_ramp_rates = \
-            self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-        scada_telemetered_ramp_rates = scada_telemetered_ramp_rates.rename(
-            columns={'RAMPDOWNRATE': 'SCADARAMPDOWNRATE', 'RAMPUPRATE': 'SCADARAMPUPRATE'}
-        )
-        ramp_rates = pd.merge(bid_ramp_rates, scada_telemetered_ramp_rates, 'left', on='DUID')
-        ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
+        ramp_rates = an.map_aemo_column_names_to_nempy_names(bid_ramp_rates)
         ramp_rates = an.map_aemo_column_values_to_nempy_name(ramp_rates, 'dispatch_type')
         ramp_rates = ramp_rates.drop(columns='service')
-        # ramp_rates = ramp_rates.fillna(np.inf)
         return ramp_rates
 
-    def _get_minimum_of_bid_and_scada_telemetered_ramp_rates(self):
-        bid_ramp_rates = self.volume_bids.loc[:, ['DUID', 'BIDTYPE', 'DIRECTION', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-        bid_ramp_rates = bid_ramp_rates.rename(
-            columns={'RAMPDOWNRATE': 'BIDRAMPDOWNRATE', 'RAMPUPRATE': 'BIDRAMPUPRATE'}
-        )
-        bid_ramp_rates = self._remove_non_energy_bids(bid_ramp_rates)
+    def get_scada_ramp_rates(self, inlude_initial_output=False):
+        """Get scada ramp rates
 
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_scada_ramp_rates()
+                 unit  direction  initial_output  ramp_up_rate  ramp_down_rate
+        0      AGLHAL  generator        0.000000    720.000000      720.000000
+        1      AGLSOM  generator        0.000000    480.000000      480.000000
+        2     ANGAST1  generator        0.000000    840.000000      840.000000
+        3       ARWF1  generator       15.800001   1200.000000      600.000000
+        4      BALBG1  generator        0.000000   6000.000000     6000.000000
+        ..        ...        ...             ...           ...             ...
+        275  YARWUN_1  generator      157.019989      0.000000        0.000000
+        276     YWPS1  generator      383.959503    177.750006      177.750006
+        277     YWPS2  generator      180.445572    177.750006      177.750006
+        278     YWPS3  generator      353.460754    175.499997      175.499997
+        279     YWPS4  generator      338.782288    180.000000      180.000000
+        <BLANKLINE>
+        [280 rows x 5 columns]
+
+        Returns
+        -------
+        pd.DataFrame
+
+            ==================    ========================================
+            Columns:              Description:
+            unit                  unique identifier for units, (as `str`) \n
+            scada_ramp_up_rate    the ramp up rate, in MW/h, \n
+                                  (as `np.float64`)
+            scada_ramp_down_rate  the ramp down rate, in MW/h, \n
+                                  (as `np.float64`)
+            ====================  ========================================
+        """
+        cols = ['DUID', 'RAMPDOWNRATE', 'RAMPUPRATE']
+        if inlude_initial_output:
+            cols += ['INITIALMW']
         scada_telemetered_ramp_rates = \
-            self.initial_conditions.loc[:, ['DUID', 'TRADERTYPE', 'INITIALMW', 'RAMPDOWNRATE', 'RAMPUPRATE']]
+            self.initial_conditions.loc[:, cols]
         scada_telemetered_ramp_rates = scada_telemetered_ramp_rates.rename(
             columns={'RAMPDOWNRATE': 'SCADARAMPDOWNRATE', 'RAMPUPRATE': 'SCADARAMPUPRATE'}
         )
-        ramp_rates = pd.merge(bid_ramp_rates, scada_telemetered_ramp_rates, 'left', on='DUID')
-
-        ramp_rates_bidirectional_gens = ramp_rates[
-            (ramp_rates['TRADERTYPE'] == 'BIDIRECTIONAL') &
-            (ramp_rates['DIRECTION'] == 'GENERATOR')
-        ].copy()
-
-        ramp_rates_bidirectional_loads = ramp_rates[
-            (ramp_rates['TRADERTYPE'] == 'BIDIRECTIONAL') &
-            (ramp_rates['DIRECTION'] == 'LOAD')
-        ].copy()
-
-        ramp_rates = ramp_rates[
-            ~(ramp_rates['TRADERTYPE'] == 'BIDIRECTIONAL')
-        ].copy()
-
-        ramp_rates['RAMPDOWNRATE'] = np.fmin(ramp_rates['RAMPDOWNRATE_x'], ramp_rates['RAMPDOWNRATE_y'])
-        ramp_rates['RAMPUPRATE'] = np.fmin(ramp_rates['RAMPUPRATE_x'], ramp_rates['RAMPUPRATE_y'])
-
-        ramp_rates_bidirectional_gens['RAMPDOWNRATE'] = np.fmin(
-            ramp_rates_bidirectional_gens['RAMPDOWNRATE_x'], ramp_rates_bidirectional_gens['RAMPUPRATE_y'])
-        ramp_rates_bidirectional_gens['RAMPUPRATE'] = np.fmin(
-            ramp_rates_bidirectional_gens['RAMPUPRATE_x'], ramp_rates_bidirectional_gens['RAMPDOWNRATE_y'])
-
-        ramp_rates_bidirectional_gens['INITIALMW'] = np.where(
-            ramp_rates_bidirectional_gens['INITIALMW'] < 0.0, 0.0,
-            ramp_rates_bidirectional_gens['INITIALMW']
-        )
-
-        ramp_rates_bidirectional_loads['INITIALMW'] = np.where(
-            ramp_rates_bidirectional_loads['INITIALMW'] > 0.0, 0.0,
-            ramp_rates_bidirectional_loads['INITIALMW'].abs()
-        )
-
-        ramp_rates = pd.concat([
-            ramp_rates,
-            ramp_rates_bidirectional_gens
-        ])
-
+        ramp_rates = an.map_aemo_column_names_to_nempy_names(scada_telemetered_ramp_rates)
         return ramp_rates
 
     def _remove_fast_start_units_starting_in_mode_0_1_2(self, dataframe):
@@ -638,83 +595,6 @@ class UnitData:
         return fsp.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
                            'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
                            'mode_four_length', 'time_since_end_of_mode_two']]
-
-    @staticmethod
-    def _commit_fast_start_units_in_mode_zero_if_they_have_non_zero_unconstrained_dispatch(fast_start_profiles,
-                                                                                           unconstrained_dispatch):
-        if unconstrained_dispatch is not None:
-            unconstrained_dispatch = unconstrained_dispatch[unconstrained_dispatch['service'] == 'energy']
-            fast_start_profiles = pd.merge(fast_start_profiles, unconstrained_dispatch, on='unit')
-            fast_start_profiles['current_mode'] = np.where((fast_start_profiles['current_mode'] == 0) &
-                                                           (fast_start_profiles['dispatch'] > 0.0), 1,
-                                                           fast_start_profiles['current_mode'])
-        return fast_start_profiles
-
-    @staticmethod
-    def _fast_start_calc_end_interval_state(fast_start_profile, dispatch_interval):
-
-        def clac_mode_length(data):
-            if data['previous_mode'] == 1:
-                return data['mode_one_length']
-            elif data['previous_mode'] == 2:
-                return data['mode_two_length']
-            elif data['previous_mode'] == 3:
-                return data['mode_three_length']
-            elif data['previous_mode'] == 4:
-                return data['mode_four_length']
-            else:
-                return np.inf
-
-        fast_start_profile['previous_mode'] = fast_start_profile['current_mode']
-
-        fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
-
-        fast_start_profile['time_in_current_mode_at_end'] = \
-            fast_start_profile['time_in_current_mode'] + dispatch_interval
-
-        fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_current_mode_at_end'] >
-                                                  fast_start_profile['current_mode_length'],
-                                                  fast_start_profile['current_mode'] + 1,
-                                                  fast_start_profile['current_mode'])
-
-        fast_start_profile['time_in_end_mode'] = np.where(
-            fast_start_profile['end_mode'] != fast_start_profile['current_mode'],
-            fast_start_profile['time_in_current_mode_at_end'] -
-            fast_start_profile['current_mode_length'],
-            fast_start_profile['time_in_current_mode_at_end'])
-
-        fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
-                                                             (fast_start_profile['end_mode'] == 3),
-                                                             fast_start_profile['time_in_end_mode'],
-                                                             np.NAN)
-
-        for i in range(1, 10):
-            fast_start_profile['previous_mode'] = fast_start_profile['end_mode']
-
-            fast_start_profile['current_mode_length'] = fast_start_profile.apply(lambda x: clac_mode_length(x), axis=1)
-
-            fast_start_profile['end_mode'] = np.where(fast_start_profile['time_in_end_mode'] >
-                                                      fast_start_profile['current_mode_length'],
-                                                      fast_start_profile['previous_mode'] + 1,
-                                                      fast_start_profile['previous_mode'])
-
-            fast_start_profile['time_in_end_mode'] = np.where(fast_start_profile['end_mode'] !=
-                                                              fast_start_profile['previous_mode'],
-                                                              fast_start_profile['time_in_end_mode'] -
-                                                              fast_start_profile['current_mode_length'],
-                                                              fast_start_profile['time_in_end_mode'])
-
-            fast_start_profile['time_after_mode_two'] = np.where((fast_start_profile['current_mode'] == 2) &
-                                                                 (fast_start_profile['end_mode'] == 3),
-                                                                 fast_start_profile['time_in_end_mode'],
-                                                                 fast_start_profile['time_after_mode_two'])
-
-        fast_start_profile['mode_two_length'] = fast_start_profile['mode_two_length'].astype(np.float64)
-        fast_start_profile['mode_four_length'] = fast_start_profile['mode_four_length'].astype(np.float64)
-        fast_start_profile['min_loading'] = fast_start_profile['min_loading'].astype(np.float64)
-        return fast_start_profile.loc[:, ['unit', 'min_loading', 'current_mode', 'end_mode', 'time_in_current_mode',
-                                          'time_in_end_mode', 'mode_one_length', 'mode_two_length', 'mode_three_length',
-                                          'mode_four_length', 'time_after_mode_two']]
 
     def get_unit_info(self):
         """Get unit information.
@@ -1105,163 +985,6 @@ class UnitData:
         if self.fcas_trapeziums is None:
             raise MethodCallOrderError('Call add_fcas_trapezium_constraints before get_fcas_max_availability.')
         return self.fcas_trapeziums[self.fcas_trapeziums['service'].isin(['raise_reg', 'lower_reg'])]
-
-    def _get_scada_ramp_up_rates(self):
-        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPUPRATE']]
-        units_with_scada_ramp_rates = list(
-            initial_cons[(~initial_cons['RAMPUPRATE'].isna()) & initial_cons['RAMPUPRATE'] != 0]['DUID'])
-        initial_cons = initial_cons[initial_cons['DUID'].isin(units_with_scada_ramp_rates)]
-        return initial_cons
-
-    def _get_scada_ramp_down_rates(self):
-        initial_cons = self.initial_conditions.loc[:, ['DUID', 'INITIALMW', 'RAMPDOWNRATE']]
-        units_with_scada_ramp_rates = list(
-            initial_cons[(~initial_cons['RAMPDOWNRATE'].isna()) & initial_cons['RAMPDOWNRATE'] != 0]['DUID'])
-        initial_cons = initial_cons[initial_cons['DUID'].isin(units_with_scada_ramp_rates)]
-        return initial_cons
-
-    def _get_raise_reg_units_with_scada_ramp_rates(self):
-        reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
-        scada_ramp_up_rates =  an.map_aemo_column_names_to_nempy_names(self._get_scada_ramp_up_rates())
-        reg_units = pd.merge(scada_ramp_up_rates, reg_units, 'inner', on='unit')
-        reg_units = reg_units[(reg_units['service'] == 'raise_reg') & (~reg_units['ramp_up_rate'].isna())]
-        reg_units = reg_units.loc[:, ['unit', 'service']]
-        return reg_units
-
-    def _get_lower_reg_units_with_scada_ramp_rates(self):
-        reg_units = self.get_fcas_regulation_trapeziums().loc[:, ['unit', 'service']]
-        scada_ramp_down_rates =  an.map_aemo_column_names_to_nempy_names(self._get_scada_ramp_down_rates())
-        reg_units = pd.merge(scada_ramp_down_rates, reg_units, 'inner', on='unit')
-        reg_units = reg_units[(reg_units['service'] == 'lower_reg') & (~reg_units['ramp_down_rate'].isna())]
-        reg_units = reg_units.loc[:, ['unit', 'service']]
-        return reg_units
-
-    def get_scada_ramp_down_rates_of_lower_reg_units(self, run_type='no_fast_start_units'):
-        """Get the scada ramp down rates for unit with a lower regulation bid.
-
-        Only units with scada ramp rates and a lower regulation bid that passes enablement criteria are returned.
-
-        Examples
-        --------
-
-        >>> inputs_loader = _test_setup()
-        >>> unit_data = UnitData(inputs_loader)
-
-        Required calls before calling get_scada_ramp_down_rates_of_lower_reg_units.
-
-        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
-        >>> unit_data.add_fcas_trapezium_constraints()
-
-        Now the method can be called.
-
-        >>> unit_data.get_scada_ramp_down_rates_of_lower_reg_units().head()
-                unit  initial_output  ramp_down_rate
-        36      BW01      425.125000      420.187683
-        40  CALL_B_1      219.699997      240.000000
-        74      ER01      636.000000      298.875275
-        76      ER03      678.925049      297.187500
-        77      ER04      518.550049      298.312225
-
-        Returns
-        -------
-        pd.DataFrame
-
-            ================  ========================================
-            Columns:          Description:
-            unit              unique identifier for units, (as `str`) \n
-            initial_output    the output/consumption of the unit at \n
-                              the start of the dispatch interval, \n
-                              in MW, (as `np.float64`)
-            ramp_down_rate    the ramp down rate, in MW/h, \n
-                              (as `np.float64`)
-            ================  ========================================
-
-        Raises
-        ------
-        MethodCallOrderError
-            if the method is called before add_fcas_trapezium_constraints.
-        """
-        if self.fcas_trapeziums is None:
-            raise MethodCallOrderError(
-                'Call add_fcas_trapezium_constraints before get_scada_ramp_down_rates_of_lower_reg_units.')
-        lower_reg_units = self._get_lower_reg_units_with_scada_ramp_rates()
-        scada_ramp_down_rates = self._get_scada_ramp_down_rates()
-        scada_ramp_down_rates = scada_ramp_down_rates[scada_ramp_down_rates['DUID'].isin(lower_reg_units['unit'])]
-        if run_type == 'fast_start_first_run':
-            scada_ramp_down_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(scada_ramp_down_rates)
-        elif run_type == 'fast_start_second_run':
-            if self.updated_fast_start_profiles is None:
-                raise ValueError("Can't use run type fast_start_second_run before calling "
-                                 "get_fast_start_profiles_for_dispatch.")
-            scada_ramp_down_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(scada_ramp_down_rates)
-        elif run_type != 'no_fast_start_units':
-            raise ValueError("run_type provided not recognised.")
-        return an.map_aemo_column_names_to_nempy_names(scada_ramp_down_rates)
-
-    def get_scada_ramp_up_rates_of_raise_reg_units(self, run_type='no_fast_start_units'):
-        """Get the scada ramp up rates for unit with a raise regulation bid.
-
-        Only units with scada ramp rates and a raise regulation bid that passes enablement criteria are returned.
-
-        Examples
-        --------
-
-        >>> inputs_loader = _test_setup()
-        >>> unit_data = UnitData(inputs_loader)
-
-        Required calls before calling get_scada_ramp_up_rates_of_raise_reg_units.
-
-        >>> volume_bids, price_bids =  unit_data.get_processed_bids()
-        >>> unit_data.add_fcas_trapezium_constraints()
-
-        Now the method can be called.
-
-        >>> unit_data.get_scada_ramp_up_rates_of_raise_reg_units().head()
-                unit  initial_output  ramp_up_rate
-        36      BW01      425.125000    420.187683
-        40  CALL_B_1      219.699997    240.000000
-        74      ER01      636.000000    299.999542
-        76      ER03      678.925049    297.750092
-        77      ER04      518.550049    298.875275
-
-        Returns
-        -------
-        pd.DataFrame
-
-            ================  ========================================
-            Columns:          Description:
-            unit              unique identifier for units, (as `str`) \n
-            initial_output    the output/consumption of the unit at \n
-                              the start of the dispatch interval, \n
-                              in MW, (as `np.float64`)
-            ramp_up_rate      the ramp up rate, in MW/h, \n
-                              (as `np.float64`)
-            ================  ========================================
-
-        Raises
-        ------
-        MethodCallOrderError
-            if the method is called before add_fcas_trapezium_constraints.
-        """
-        if self.fcas_trapeziums is None:
-            raise MethodCallOrderError(
-                'Call add_fcas_trapezium_constraints before get_scada_ramp_up_rates_of_raise_reg_units.')
-        scada_ramp_up_rates = self._get_scada_ramp_up_rates()
-        raise_reg_units = self._get_raise_reg_units_with_scada_ramp_rates()
-        scada_ramp_up_rates = scada_ramp_up_rates[scada_ramp_up_rates['DUID'].isin(raise_reg_units['unit'])]
-        if run_type == 'fast_start_first_run':
-            scada_ramp_up_rates = self._remove_fast_start_units_starting_in_mode_0_1_2(scada_ramp_up_rates)
-        elif run_type == 'fast_start_second_run':
-            if self.updated_fast_start_profiles is None:
-                raise ValueError("Can't use run type fast_start_second_run before calling "
-                                 "get_fast_start_profiles_for_dispatch.")
-            scada_ramp_up_rates = self._remove_fast_start_units_ending_in_mode_0_1_2(scada_ramp_up_rates)
-            scada_ramp_up_rates = (
-                self._adjust_ramp_rates_of_units_ending_in_mode_three_and_four(scada_ramp_up_rates,
-                                                                               self.dispatch_interval))
-        elif run_type != 'no_fast_start_units':
-            raise ValueError("run_type provided not recognised.")
-        return an.map_aemo_column_names_to_nempy_names(scada_ramp_up_rates)
 
     def get_contingency_services(self):
         """Get the unit bid FCAS trapeziums for contingency services.

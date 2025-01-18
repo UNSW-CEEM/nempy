@@ -1090,8 +1090,6 @@ class InputsStartAndEnd(_SingleDataSource):
         """
 
         query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE >= '{datetime}'"
-        # date_time = datetime.strptime(date_time, '%Y/%m/%d %H:%M:%S') - timedelta(hours=4, minutes=5)
-        # date_time = date_time.strftime('%Y/%m/%d %H:%M:%S')
         query = query.format(table=self.table_name, datetime=date_time)
         data = pd.read_sql_query(query, con=self.con)
         data = data.sort_values('START_DATE')

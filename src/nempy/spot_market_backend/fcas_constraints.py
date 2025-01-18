@@ -3,10 +3,47 @@ import numpy as np
 from nempy.help_functions import helper_functions as hf
 
 
-def joint_ramping_constraints_raise_reg(unit_limits, dispatch_interval, next_constraint_id):
+def joint_ramping_constraints_raise_reg_bdu(unit_limits, dispatch_interval, next_constraint_id):
+    constraints = unit_limits.drop_duplicates(["unit"]).loc[:, ['unit', 'initial_output', 'ramp_rate']]
+    constraints = hf.save_index(constraints, 'constraint_id', next_constraint_id)
+    constraints['rhs'] = constraints['initial_output'] + (constraints['ramp_rate'] * dispatch_interval / 60)
+    constraints['type'] = "<="
+    rhs_and_type = constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+    variable_mapping_reg = unit_limits.loc[:, ['unit', 'service', 'dispatch_type']]
+    variable_mapping_reg = pd.merge(
+        rhs_and_type.loc[:, ['constraint_id', 'unit']],
+        variable_mapping_reg,
+        on="unit"
+    )
+    variable_mapping_reg['coefficient'] = 1.0
+    variable_mapping_energy = variable_mapping_reg.copy()
+    variable_mapping_energy['service'] = 'energy'
+    variable_mapping_energy['coefficient'] = 1.0
+    variable_mapping = pd.concat([variable_mapping_reg, variable_mapping_energy])
+    return rhs_and_type, variable_mapping
 
-    if 'dispatch_type' not in unit_limits.columns:
-        unit_limits['dispatch_type'] = 'generator'
+
+def joint_ramping_constraints_lower_reg_bdu(unit_limits, dispatch_interval, next_constraint_id):
+    constraints = unit_limits.drop_duplicates(["unit"]).loc[:, ['unit', 'initial_output', 'ramp_rate']]
+    constraints = hf.save_index(constraints, 'constraint_id', next_constraint_id)
+    constraints['rhs'] = constraints['initial_output'] - (constraints['ramp_rate'] * dispatch_interval / 60)
+    constraints['type'] = ">="
+    rhs_and_type = constraints.loc[:, ['unit', 'constraint_id', 'type', 'rhs']]
+    variable_mapping_reg = unit_limits.loc[:, ['unit', 'service', 'dispatch_type']]
+    variable_mapping_reg = pd.merge(
+        rhs_and_type.loc[:, ['constraint_id', 'unit']],
+        variable_mapping_reg,
+        on="unit"
+    )
+    variable_mapping_reg['coefficient'] = -1.0
+    variable_mapping_energy = variable_mapping_reg.copy()
+    variable_mapping_energy['service'] = 'energy'
+    variable_mapping_energy['coefficient'] = 1.0
+    variable_mapping = pd.concat([variable_mapping_reg, variable_mapping_energy])
+    return rhs_and_type, variable_mapping
+
+
+def joint_ramping_constraints_raise_reg(unit_limits, dispatch_interval, next_constraint_id):
 
     constraint_settings = {'generator': {'type': '<=',
                                          'reg_lhs_coefficient': 1.0,
@@ -24,9 +61,6 @@ def joint_ramping_constraints_raise_reg(unit_limits, dispatch_interval, next_con
 
 
 def joint_ramping_constraints_lower_reg(unit_limits, dispatch_interval, next_constraint_id):
-
-    if 'dispatch_type' not in unit_limits.columns:
-        unit_limits['dispatch_type'] = 'generator'
 
     constraint_settings = {'generator': {'type': '>=',
                                          'reg_lhs_coefficient': -1.0,

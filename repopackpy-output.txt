@@ -840,7 +840,7 @@ for interval in get_test_intervals(number=100):
 
     def set_ramp_rates(run_type):
 
-        ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch(run_type=run_type)
+        ramp_rates = unit_inputs.get_bid_ramp_rates(run_type=run_type)
 
         market.set_unit_ramp_up_constraints(
 
@@ -17320,7 +17320,7 @@ for interval in get_test_intervals(number=1000):
 
     # Set unit ramp rates.
 
-    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+    ramp_rates = unit_inputs.get_bid_ramp_rates()
 
     market.set_unit_ramp_up_constraints(
 
@@ -17719,7 +17719,7 @@ for interval in get_test_intervals(number=1000):
 
     # Set unit ramp rates.
 
-    ramp_rates = unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+    ramp_rates = unit_inputs.get_bid_ramp_rates()
 
     market.set_unit_ramp_up_constraints(
 
@@ -17988,7 +17988,7 @@ class SpotMarketBuilder:
 
     def set_ramp_rate_limits(self):
 
-        ramp_rates = self.unit_inputs.get_ramp_rates_used_for_energy_dispatch()
+        ramp_rates = self.unit_inputs.get_bid_ramp_rates()
 
         self.market.set_unit_ramp_up_constraints(
 

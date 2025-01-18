@@ -19,7 +19,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = True
+download_inputs = False
 
 if download_inputs:
     # This requires approximately 5 GB of storage.

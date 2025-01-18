@@ -4,9 +4,8 @@ import numpy as np
 from nempy.help_functions import helper_functions as hf
 
 
-def _calculate_composite_ramp_rates(ramp_rates, dispatch_interval):
+def _calculate_composite_ramp_rates(ramp_rates, dispatch_interval, bidirectional_units):
     duplicates = ramp_rates['unit'].value_counts()
-    bidirectional_units = duplicates[duplicates == 2].index.tolist()
     not_bidirectional_units = ramp_rates[~(ramp_rates['unit'].isin(bidirectional_units))].copy()
     bidirectional_units = ramp_rates[ramp_rates['unit'].isin(bidirectional_units)].copy()
 
@@ -55,34 +54,29 @@ def _calculate_composite_ramp_rates(ramp_rates, dispatch_interval):
     bidirectional_ramp_down['ramp_down_rate'] = bidirectional_ramp_down.apply(
         lambda row: calc_composite_ramp_down_rate(row.to_dict()), axis=1)
 
-    optional_columns = []
-    if 'scada_ramp_up_rate' in bidirectional_units.columns:
-        optional_columns += ['scada_ramp_up_rate']
-    if 'scada_ramp_down_rate' in bidirectional_units.columns:
-        optional_columns += ['scada_ramp_down_rate']
-
-    bidirectional_units = pd.merge(
-        bidirectional_units.loc[:, ['unit', 'dispatch_type', 'initial_output'] + optional_columns],
-        bidirectional_ramp_up.loc[:, ['unit', 'ramp_up_rate']],
-        on='unit'
-    )
-
-    bidirectional_units = pd.merge(
-        bidirectional_units,
-        bidirectional_ramp_down.loc[:, ['unit', 'ramp_down_rate']],
-        on='unit'
-    )
-
     return not_bidirectional_units, bidirectional_units
 
 
-def _adjust_for_scada_ramp_rates(ramp_rates):
+def _adjust_ramp_rates_for_fast_start_profiles(ramp_rates, run_type, fast_start_profiles, dispatch_interval):
+    if run_type == 'fast_start_first_run':
+        ramp_rates = _remove_fast_start_units_starting_in_mode_0_1_2(ramp_rates, fast_start_profiles)
+    elif run_type == 'fast_start_second_run':
+        ramp_rates = _remove_fast_start_units_ending_in_mode_0_1_2(ramp_rates, fast_start_profiles)
+        ramp_rates = _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(
+            ramp_rates, fast_start_profiles, dispatch_interval)
+    elif run_type != 'no_fast_start_units':
+        raise ValueError("run_type provided not recognised.")
+    return ramp_rates
+
+
+def _adjust_for_scada_ramp_rates(ramp_rates, scada_ramp_rates):
+    ramp_rates = pd.merge(ramp_rates, scada_ramp_rates, on='unit')
     if "scada_ramp_down_rate" in ramp_rates.columns:
         ramp_rates['ramp_down_rate'] = np.fmin(ramp_rates['ramp_down_rate'], ramp_rates['scada_ramp_down_rate'])
         ramp_rates = ramp_rates.drop(columns=['scada_ramp_down_rate'])
     if "scada_ramp_up_rate" in ramp_rates.columns:
         ramp_rates['ramp_up_rate'] = np.fmin(ramp_rates['ramp_up_rate'], ramp_rates['scada_ramp_up_rate'])
-        ramp_rates = ramp_rates.drop(columns=['scada_ramp_down_rate'])
+        ramp_rates = ramp_rates.drop(columns=['scada_ramp_up_rate'])
     return ramp_rates
 
 
@@ -98,12 +92,6 @@ def _remove_fast_start_units_ending_in_mode_0_1_2(ramp_rates, fast_start_profile
         fast_start_profiles[fast_start_profiles['end_mode'].isin([0, 1, 2])]['unit'].unique())
     ramp_rates = ramp_rates[~ramp_rates['unit'].isin(units_starting_in_mode_0_1_2)]
     return ramp_rates
-
-
-def _remove_fast_start_units_ending_dispatch_interval_in_mode_two(ramp_rates, fast_start_profiles):
-    units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
-    dataframe = ramp_rates[~ramp_rates['unit'].isin(units_ending_in_mode_two)]
-    return dataframe
 
 
 def _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(ramp_rates, fast_start_profiles, dispatch_interval):

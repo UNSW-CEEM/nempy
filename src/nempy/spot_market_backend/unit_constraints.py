@@ -1,8 +1,10 @@
 import pandas as pd
+import numpy as np
+
 from nempy.help_functions import helper_functions as hf
 
 
-def capacity(unit_limits, next_constraint_id):
+def capacity(unit_limits, next_constraint_id, bidirectional_units):
     """Create the constraints that ensure the dispatch of a unit is capped by its capacity.
 
     A constraint of the following form will be created for each unit:
@@ -22,19 +24,24 @@ def capacity(unit_limits, next_constraint_id):
 
     >>> next_constraint_id = 0
 
+    >>> bidirectional_units = []
+
     Create the constraint information.
 
-    >>> type_and_rhs, variable_map = capacity(unit_limits, next_constraint_id)
+    >>> type_and_rhs, variable_map = capacity(
+    ... unit_limits,
+    ... next_constraint_id,
+    ... bidirectional_units)
 
     >>> print(type_and_rhs)
-      unit service  constraint_id type    rhs
-    0    A  energy              0   <=  100.0
-    1    B  energy              1   <=  200.0
+      unit service dispatch_type  constraint_id type    rhs
+    0    A  energy     generator              0   <=  100.0
+    1    B  energy     generator              1   <=  200.0
 
     >>> print(variable_map)
-       constraint_id unit service  coefficient
-    0              0    A  energy          1.0
-    1              1    B  energy          1.0
+       constraint_id unit service dispatch_type  coefficient
+    0              0    A  energy     generator          1.0
+    1              1    B  energy     generator          1.0
 
     Parameters
     ----------
@@ -50,6 +57,100 @@ def capacity(unit_limits, next_constraint_id):
 
     next_constraint_id : int
         The next integer to start using for constraint ids.
+
+
+    bidirectional_units: list[str]
+        List of bidriectional units so the coefficients of bidirectional loads can be adjusted.
+
+    Returns
+    -------
+    type_and_rhs : pd.DataFrame
+        The type and rhs of each constraint.
+
+        =============  ===============================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`)
+        dispatch_type  "load" or "generator", optional default 'generator', (as `str`) \n
+        constraint_id  the id of the variable (as `int`)
+        type           the type of the constraint, e.g. "=" (as `str`)
+        rhs            the rhs of the constraint (as `np.float64`)
+        =============  ===============================================================
+
+    variable_map : pd.DataFrame
+        The type of variables that should appear on the lhs of the constraint.
+
+        =============  ==========================================================================
+        Columns:       Description:
+        constraint_id  the id of the constraint (as `np.int64`)
+        unit           the unit variables the constraint should map too (as `str`)
+        service        the service type of the variables the constraint should map to (as `str`)
+        dispatch_type  "load" or "generator", optional default 'generator', (as `str`) \n
+        coefficient    the constraint factor in the lhs coefficient (as `np.float64`)
+        =============  ==========================================================================
+    """
+    type_and_rhs, variable_map = create_constraints(unit_limits, next_constraint_id, 'capacity', '<=')
+    variable_map['coefficient'] = np.where(
+        (variable_map['dispatch_type'] == 'load') & (
+            variable_map['unit'].isin(bidirectional_units)),
+        -1.0,
+        1.0
+    )
+    return type_and_rhs, variable_map
+
+
+def uigf(unit_limits, next_constraint_id):
+    """Create the constraints that ensure the dispatch of a unit is capped by its capacity.
+
+    A constraint of the following form will be created for each unit:
+
+        bid 1 dispatched + bid 2 dispatched +. . .+ bid n dispatched <= capacity
+
+    Examples
+    --------
+
+    >>> import pandas
+
+    Defined the unit capacities.
+
+    >>> unit_limits = pd.DataFrame({
+    ...   'unit': ['A', 'B'],
+    ...   'capacity': [100.0, 200.0]})
+
+    >>> next_constraint_id = 0
+
+    >>> bidirectional_units = []
+
+    Create the constraint information.
+
+    >>> type_and_rhs, variable_map = capacity(
+    ... unit_limits,
+    ... next_constraint_id)
+
+    >>> print(type_and_rhs)
+      unit service dispatch_type  constraint_id type    rhs
+    0    A  energy     generator              0   <=  100.0
+    1    B  energy     generator              1   <=  200.0
+
+    >>> print(variable_map)
+       constraint_id unit service dispatch_type  coefficient
+    0              0    A  energy     generator          1.0
+    1              1    B  energy     generator          1.0
+
+    Parameters
+    ----------
+    unit_limits : pd.DataFrame
+        Capacity by unit.
+
+        =============  =====================================================================================
+        Columns:       Description:
+        unit           unique identifier of a dispatch unit (as `str`) \n
+        dispatch_type  "load" or "generator", optional default 'generator', (as `str`) \n
+        capacity       The maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
+        =============  =====================================================================================
+
+    next_constraint_id : int
+        The next integer to start using for constraint ids.
+
 
     Returns
     -------

@@ -46,10 +46,8 @@ market.set_unit_volume_bids(volume_bids)
 market.set_unit_price_bids(price_bids)
 market.set_unit_bid_capacity_constraints(
     unit_limits.loc[:, ['unit', 'capacity']])
-market.set_unit_ramp_up_constraints(
-    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-market.set_unit_ramp_down_constraints(
-    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
+market.set_unit_ramp_rate_constraints(
+    unit_limits.loc[:, ['unit', 'initial_output', 'ramp_up_rate', 'ramp_down_rate']])
 market.set_demand_constraints(demand)
 
 # Calculate dispatch and pricing
