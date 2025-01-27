@@ -141,18 +141,20 @@ def joint_capacity_constraints(contingency_trapeziums, bidirectional_units, next
     ...                                                             next_constraint_id)
 
     >>> print(type_and_rhs)
-      unit   service  constraint_id type   rhs
-    0    A  raise_6s              1   <=  80.0
-    0    A  raise_6s              2   >=  20.0
+      unit   service dispatch_type  constraint_id type   rhs
+    0    A  raise_6s     generator              1   <=  80.0
+    0    A  raise_6s     generator              2   >=  20.0
+
 
     >>> print(variable_mapping)
-       constraint_id unit    service  coefficient
-    0              1    A     energy     1.000000
-    0              1    A   raise_6s     0.333333
-    0              1    A  raise_reg     1.000000
-    0              2    A     energy     1.000000
-    0              2    A   raise_6s    -0.333333
-    0              2    A  lower_reg    -1.000000
+       constraint_id unit dispatch_type    service  coefficient
+    0              1    A     generator     energy     1.000000
+    0              1    A     generator   raise_6s     0.333333
+    0              1    A     generator  raise_reg     1.000000
+    0              2    A     generator     energy     1.000000
+    0              2    A     generator   raise_6s    -0.333333
+    0              2    A     generator  lower_reg    -1.000000
+
 
     Parameters
     ----------
@@ -339,17 +341,18 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     ...                                                                             next_constraint_id)
 
     >>> print(type_and_rhs)
-      unit    service  constraint_id type   rhs
-    0    A  raise_reg              1   <=  80.0
-    0    A  raise_reg              2   >=  20.0
+      unit    service dispatch_type  constraint_id type   rhs
+    0    A  raise_reg     generator              1   <=  80.0
+    0    A  raise_reg     generator              2   >=  20.0
+
 
     >>> print(variable_mapping)
-      unit dispatch_type    service  dispatch
-    0    A     generator     energy     100.0
-    1    A     generator   raise_6s       5.0
-    2    B     generator     energy      95.0
-    3    B     generator   raise_6s       5.0
-    4    B     generator  raise_reg      10.0
+       constraint_id unit dispatch_type    service  coefficient
+    0              1    A     generator     energy     1.000000
+    0              1    A     generator  raise_reg     0.333333
+    0              2    A     generator     energy     1.000000
+    0              2    A     generator  raise_reg    -0.333333
+
 
     Parameters
     ----------

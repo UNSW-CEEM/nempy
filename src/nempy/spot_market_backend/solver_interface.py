@@ -651,7 +651,8 @@ def create_unit_level_generic_constraint_lhs(generic_constraint_units, generic_c
     >>> unit_bids_to_constraint_map = pd.DataFrame({
     ...   'variable_id': [0, 1],
     ...   'unit': ['X', 'Y'],
-    ...   'service': ['energy', 'energy']})
+    ...   'service': ['energy', 'energy'],
+    ...   'coefficient': [1.0, 1.0]})
 
     >>> lhs = create_unit_level_generic_constraint_lhs(generic_constraint_units, generic_constraint_ids,
     ...   unit_bids_to_constraint_map)

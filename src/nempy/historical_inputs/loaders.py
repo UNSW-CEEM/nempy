@@ -28,20 +28,21 @@ class RawInputsLoader:
     And then we can load some inputs.
 
     >>> inputs_loader.get_unit_volume_bids()
-             DUID     BIDTYPE  MAXAVAIL  ENABLEMENTMIN  ENABLEMENTMAX  LOWBREAKPOINT  HIGHBREAKPOINT  BANDAVAIL1  BANDAVAIL2  BANDAVAIL3  BANDAVAIL4  BANDAVAIL5  BANDAVAIL6  BANDAVAIL7  BANDAVAIL8  BANDAVAIL9  BANDAVAIL10  RAMPDOWNRATE  RAMPUPRATE
-    0      AGLHAL      ENERGY     173.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0        60.0         0.0         0.0        160.0         720.0       720.0
-    1      AGLSOM      ENERGY     160.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        170.0         480.0       480.0
-    2     ANGAST1      ENERGY      43.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0        50.0         0.0         0.0         0.0         50.0         840.0       840.0
-    3       APD01   LOWER5MIN       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0           0.0         0.0
-    4       APD01  LOWER60SEC       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0           0.0         0.0
-    ...       ...         ...       ...            ...            ...            ...             ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...           ...         ...
-    1021    YWPS4   LOWER6SEC      25.0          250.0          385.0          275.0           385.0        15.0        10.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
-    1022    YWPS4   RAISE5MIN       0.0          250.0          390.0          250.0           380.0         0.0         0.0         0.0         0.0         5.0         0.0         0.0         5.0         0.0         10.0           0.0         0.0
-    1023    YWPS4    RAISEREG      15.0          250.0          385.0          250.0           370.0         0.0         0.0         0.0         0.0         0.0         0.0         5.0        10.0         0.0          5.0           0.0         0.0
-    1024    YWPS4  RAISE60SEC      10.0          220.0          400.0          220.0           390.0         0.0         0.0         0.0         0.0         0.0         5.0         5.0         0.0         0.0         10.0           0.0         0.0
-    1025    YWPS4   RAISE6SEC      15.0          220.0          405.0          220.0           390.0         0.0         0.0         0.0        10.0         5.0         0.0         0.0         0.0         0.0         10.0           0.0         0.0
+             DUID     BIDTYPE DIRECTION  MAXAVAIL  ENABLEMENTMIN  ENABLEMENTMAX  LOWBREAKPOINT  HIGHBREAKPOINT  BANDAVAIL1  BANDAVAIL2  BANDAVAIL3  BANDAVAIL4  BANDAVAIL5  BANDAVAIL6  BANDAVAIL7  BANDAVAIL8  BANDAVAIL9  BANDAVAIL10  RAMPDOWNRATE  RAMPUPRATE
+    0      AGLHAL      ENERGY      None     173.0          173.0          173.0          173.0           173.0         0.0         0.0         0.0         0.0         0.0         0.0        60.0         0.0         0.0        160.0         720.0       720.0
+    1      AGLSOM      ENERGY      None     160.0          160.0          160.0          160.0           160.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        170.0         480.0       480.0
+    2     ANGAST1      ENERGY      None      43.0           43.0           43.0           43.0            43.0         0.0         0.0         0.0         0.0         0.0        50.0         0.0         0.0         0.0         50.0         840.0       840.0
+    3       APD01   LOWER5MIN      None       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0         300.0       300.0
+    4       APD01  LOWER60SEC      None       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0         300.0       300.0
+    ...       ...         ...       ...       ...            ...            ...            ...             ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...           ...         ...
+    1021    YWPS4   LOWER6SEC      None      25.0          250.0          385.0          275.0           385.0        15.0        10.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
+    1022    YWPS4   RAISE5MIN      None       0.0          250.0          390.0          250.0           380.0         0.0         0.0         0.0         0.0         5.0         0.0         0.0         5.0         0.0         10.0          10.0        10.0
+    1023    YWPS4    RAISEREG      None      15.0          250.0          385.0          250.0           370.0         0.0         0.0         0.0         0.0         0.0         0.0         5.0        10.0         0.0          5.0           5.0         5.0
+    1024    YWPS4  RAISE60SEC      None      10.0          220.0          400.0          220.0           390.0         0.0         0.0         0.0         0.0         0.0         5.0         5.0         0.0         0.0         10.0          10.0        10.0
+    1025    YWPS4   RAISE6SEC      None      15.0          220.0          405.0          220.0           390.0         0.0         0.0         0.0        10.0         5.0         0.0         0.0         0.0         0.0         10.0          10.0        10.0
     <BLANKLINE>
-    [1026 rows x 19 columns]
+    [1026 rows x 20 columns]
+
 
     """
     def __init__(self, nemde_xml_cache_manager, market_management_system_database):

@@ -122,7 +122,7 @@ def uigf(unit_limits, next_constraint_id):
 
     Create the constraint information.
 
-    >>> type_and_rhs, variable_map = capacity(
+    >>> type_and_rhs, variable_map = uigf(
     ... unit_limits,
     ... next_constraint_id)
 
@@ -383,14 +383,16 @@ def fcas_max_availability(fcas_availability, next_constraint_id):
     >>> type_and_rhs, variable_map = fcas_max_availability(fcas_availability, next_constraint_id)
 
     >>> print(type_and_rhs)
-      unit    service  constraint_id type    rhs
-    0    A  raise_reg              0   <=  100.0
-    1    B   lower_6s              1   <=  200.0
+      unit    service dispatch_type  constraint_id type    rhs
+    0    A  raise_reg     generator              0   <=  100.0
+    1    B   lower_6s     generator              1   <=  200.0
+
 
     >>> print(variable_map)
-       constraint_id unit    service  coefficient
-    0              0    A  raise_reg          1.0
-    1              1    B   lower_6s          1.0
+       constraint_id unit    service dispatch_type  coefficient
+    0              0    A  raise_reg     generator          1.0
+    1              1    B   lower_6s     generator          1.0
+
 
     Parameters
     ----------

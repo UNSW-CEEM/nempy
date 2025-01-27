@@ -28,24 +28,25 @@ def bids(volume_bids, unit_info, next_variable_id, bidirectional_units):
 
     >>> unit_info = pd.DataFrame({
     ...   'unit': ['A', 'B'],
-    ...   'region': ['NSW', 'X']
+    ...   'dispatch_type': ['generator', 'load'],
+    ...   'region': ['X', 'Y']
     ... })
 
     >>> next_variable_id = 0
 
+    >>> bidirectional_units = []
+
     Create the decision variables and their mapping into constraints.
 
     >>> decision_variables, unit_level_constraint_map, regional_constraint_map = bids(
-    ...   volume_bids, unit_info, next_variable_id)
+    ...   volume_bids, unit_info, next_variable_id, bidirectional_units)
 
     >>> print(decision_variables)
-      unit capacity_band service  ... lower_bound  upper_bound        type
-    0    A             1  energy  ...         0.0         10.0  continuous
-    1    A             2  energy  ...         0.0         20.0  continuous
-    2    B             1  energy  ...         0.0         50.0  continuous
-    3    B             2  energy  ...         0.0         30.0  continuous
-    <BLANKLINE>
-    [4 rows x 8 columns]
+      unit capacity_band service dispatch_type  variable_id  lower_bound  upper_bound        type
+    0    A             1  energy     generator            0          0.0         10.0  continuous
+    1    A             2  energy     generator            1          0.0         20.0  continuous
+    2    B             1  energy          load            2          0.0         50.0  continuous
+    3    B             2  energy          load            3          0.0         30.0  continuous
 
     >>> print(unit_level_constraint_map)
        variable_id unit service dispatch_type  coefficient
@@ -56,10 +57,11 @@ def bids(volume_bids, unit_info, next_variable_id, bidirectional_units):
 
     >>> print(regional_constraint_map)
        variable_id region service dispatch_type  coefficient
-    0            0    NSW  energy     generator          1.0
-    1            1    NSW  energy     generator          1.0
-    2            2      X  energy          load         -1.0
-    3            3      X  energy          load         -1.0
+    0            0      X  energy     generator          1.0
+    1            1      X  energy     generator          1.0
+    2            2      Y  energy          load         -1.0
+    3            3      Y  energy          load         -1.0
+
 
     Parameters
     ----------

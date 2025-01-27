@@ -1037,7 +1037,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
         Create the table object.
 
-        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['START_DATE', 'END_DATE', 'INITIALMW'],
+        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['DUID', 'START_DATE', 'END_DATE', 'INITIALMW'],
         ...                           table_primary_keys=['START_DATE'], con=con)
 
         Create the table in the database.
@@ -1048,6 +1048,7 @@ class InputsStartAndEnd(_SingleDataSource):
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
+        ...   'DUID': ['A', 'A'],
         ...   'START_DATE': ['2019/01/01 00:00:00', '2019/01/02 00:00:00'],
         ...   'END_DATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00'],
         ...   'INITIALMW': [1.0, 2.0]})
@@ -1057,20 +1058,21 @@ class InputsStartAndEnd(_SingleDataSource):
         When we call get_data the output is filtered by START_DATE and END_DATE.
 
         >>> print(table.get_data(date_time='2019/01/01 00:00:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        0    A  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
+
 
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        0    A  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
 
         >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        1    A  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         >>> print(table.get_data(date_time='2019/01/02 00:12:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        0    A  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 

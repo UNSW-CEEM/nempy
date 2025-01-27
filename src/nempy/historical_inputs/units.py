@@ -274,7 +274,7 @@ class UnitData:
         495     YWPS3            181.124997          181.124997       371.52658
         496     YWPS4            180.000000          180.000000       337.93546
         <BLANKLINE>
-        [191 rows x 4 columns]
+        [192 rows x 4 columns]
 
 
         Args:
@@ -991,10 +991,8 @@ def _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping):
     >>> fcas_trapeziums = _format_fcas_trapezium_constraints(BIDPEROFFER_D, service_name_mapping)
 
     >>> print(fcas_trapeziums)
-      unit    service  ... high_break_point  enablement_max
-    0    A  raise_60s  ...             60.0            80.0
-    <BLANKLINE>
-    [1 rows x 8 columns]
+      unit    service dispatch_type  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
+    0    A  raise_60s     generator              60.0            20.0             40.0              60.0            80.0
 
     """
     BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] != 'ENERGY']
@@ -1033,11 +1031,10 @@ def _format_volume_bids(BIDPEROFFER_D, service_name_mapping):
     >>> volume_bids = _format_volume_bids(BIDPEROFFER_D, service_name_mapping)
 
     >>> print(volume_bids)
-      unit    service dispatch_type      1     2  ...     6     7    8    9   10
-    0    A     energy     generator  100.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
-    1    B  raise_reg          load   50.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
-    <BLANKLINE>
-    [2 rows x 13 columns]
+      unit    service dispatch_type      1     2    3     4     5     6     7    8    9   10
+    0    A     energy     generator  100.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+    1    B  raise_reg          load   50.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+
 
     Parameters
     ----------
@@ -1106,11 +1103,9 @@ def _format_price_bids(BIDDAYOFFER_D, service_name_mapping):
     >>> price_bids = _format_price_bids(BIDDAYOFFER_D, service_name_mapping)
 
     >>> print(price_bids)
-      unit    service dispatch_type      1     2  ...     6     7    8    9   10
-    0    A     energy     generator  100.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
-    1    B  raise_reg          load   50.0  10.0  ...  10.0  10.0  0.0  0.0  0.0
-    <BLANKLINE>
-    [2 rows x 13 columns]
+      unit    service dispatch_type      1     2    3     4     5     6     7    8    9   10
+    0    A     energy     generator  100.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
+    1    B  raise_reg          load   50.0  10.0  0.0  10.0  10.0  10.0  10.0  0.0  0.0  0.0
 
     Parameters
     ----------
@@ -1598,10 +1593,10 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
-    1    C  GENERATOR  RAISEREG        50.0         0.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
+    1    C  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0         0.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1621,9 +1616,10 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
+
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1643,9 +1639,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1665,9 +1661,10 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
+
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1694,10 +1691,10 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
-    1    C  GENERATOR  RAISEREG        50.0         0.0     100.0            0.0           50.0            70.0            0.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
+    1    C  GENERATOR  RAISEREG     100.0            0.0           50.0            70.0            0.0        50.0         0.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1717,9 +1714,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
@@ -1738,9 +1735,9 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX  BANDAVAIL1  BANDAVAIL2
+    0    A  GENERATOR    ENERGY       0.0            0.0            0.0             0.0            0.0       100.0        10.0
+    0    B  GENERATOR  RAISEREG     100.0           20.0           50.0            70.0          100.0        50.0        10.0
 
     >>> print(BIDDAYOFFER_D_out)
       DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
