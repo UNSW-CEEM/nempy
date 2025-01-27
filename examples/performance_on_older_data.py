@@ -27,8 +27,8 @@ if download_inputs:
                             end_year=2013, end_month=1)
 
     # This requires approximately 50 GB of storage.
-    # xml_cache_manager.populate_by_day(start_year=2021, start_month=1, start_day=1,
-    #                                   end_year=2021, end_month=2, end_day=1)
+    xml_cache_manager.populate_by_day(start_year=2013, start_month=1, start_day=1,
+                                      end_year=2013, end_month=2, end_day=1)
 
 raw_inputs_loader = loaders.RawInputsLoader(
     nemde_xml_cache_manager=xml_cache_manager,
@@ -53,9 +53,6 @@ outputs = []
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
 for interval in get_test_intervals(number=100):
-
-    # if interval != '2024/07/02 14:45:00':
-    #     continue
 
     c += 1
     print(str(c) + ' ' + str(interval))

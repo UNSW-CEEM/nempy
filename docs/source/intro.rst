@@ -3,7 +3,7 @@ Introduction
 Nempy is an open-source python package that can be used to model the dispatch procedure of the Australian National
 Electricity Market (NEM). The dispatch process is at the core of many market modelling studies. Nempy allows users to
 easily configure a dispatch model to fit the relevant research question. Furthermore, if extra functionality is needed,
-the python implementation and open-source licencings allow the user to make modifications. Nempy is feature rich,
+the python implementation and open-source licencing allow the user to make modifications. Nempy is feature rich,
 flexible, can recreate historical dispatch with a high degree of accuracy, runs fast, and has detailed documentation.
 
 The Nempy source code is on GitHub: https://github.com/UNSW-CEEM/nempy.
@@ -12,7 +12,7 @@ A brief introduction to the NEM can be found here: https://aemo.com.au/-/media/F
 
 Author
 -------
-Nempy's development is being led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
+Nempy's development was led by Nick Gorman as part of his PhD candidature at the Collaboration on Energy and Environmental
 Markets at the University of New South Wales' School of Photovoltaics and Renewable Energy Engineering. (https://www.ceem.unsw.edu.au/). 
 
 Support
@@ -22,8 +22,8 @@ checking the issues register (https://github.com/UNSW-CEEM/nempy/issues), or by 
 
 Future support and maintenance
 -----------------------------
-Planning to continue support and maintenance for Nempy after the PhD project is complete is currently underway. If Nempy is useful 
-to your work, research, or business, please reach out and inform us so we can consider your use case and needs.
+CEEM continues to support and maintain Nempy! If Nempy is useful to your work, research,
+or business, please reach out and inform us so we can consider your use case and needs.
 
 Example use cases
 -----------------

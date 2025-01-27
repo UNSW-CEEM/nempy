@@ -19,7 +19,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2024_07/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
@@ -53,9 +53,6 @@ outputs = []
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
 for interval in get_test_intervals(number=100):
-
-    # if interval != '2024/07/02 14:45:00':
-    #     continue
 
     c += 1
     print(str(c) + ' ' + str(interval))

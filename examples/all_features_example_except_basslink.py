@@ -19,7 +19,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2024_07/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
@@ -53,9 +53,6 @@ outputs = []
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
 for interval in get_test_intervals(number=100):
-
-    # if interval != '2024/07/02 14:45:00':
-    #     continue
 
     c += 1
     print(str(c) + ' ' + str(interval))
@@ -92,7 +89,6 @@ for interval in get_test_intervals(number=100):
     ramp_rates = unit_inputs.get_bid_ramp_rates()
     scada_ramp_rates = unit_inputs.get_scada_ramp_rates()
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch()
-    fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'current_mode']]
     cost = constraint_inputs.get_constraint_violation_prices()['ramp_rate']
     market.set_unit_ramp_rate_constraints(
         ramp_rates, scada_ramp_rates, fast_start_profiles,
@@ -106,16 +102,16 @@ for interval in get_test_intervals(number=100):
     market.set_fcas_max_availability(fcas_availability, violation_cost=cost)
     cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
     regulation_trapeziums = unit_inputs.get_fcas_regulation_trapeziums()
-    market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums, violation_cost=cost)
-    fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch()
-    fast_start_profiles = fast_start_profiles.loc[:, ['unit', 'current_mode']]
+    market.set_energy_and_regulation_capacity_constraints(regulation_trapeziums,
+                                                          violation_cost=cost)
     scada_ramp_rates = unit_inputs.get_scada_ramp_rates(inlude_initial_output=True)
     market.set_joint_ramping_constraints_reg(
-        scada_ramp_rates, fast_start_profiles, run_type="fast_start_first_run", violation_cost=cost
+        scada_ramp_rates, fast_start_profiles, run_type="fast_start_first_run",
+        violation_cost=cost
     )
     contingency_trapeziums = unit_inputs.get_contingency_services()
     market.set_joint_capacity_constraints(contingency_trapeziums, violation_cost=cost)
-    
+
     # Set interconnector definitions, limits and loss models.
     interconnectors_definitions = \
         interconnector_inputs.get_interconnector_definitions()
@@ -152,21 +148,24 @@ for interval in get_test_intervals(number=100):
 
     cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-    market.set_fast_start_constraints(fast_start_profiles, violation_cost=cost)
+    cols = ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+            'mode_four_length', 'min_loading']
+    fsp = fast_start_profiles.loc[:, cols]
+    market.set_fast_start_constraints(fsp, violation_cost=cost)
 
     ramp_rates = unit_inputs.get_bid_ramp_rates()
     scada_ramp_rates = unit_inputs.get_scada_ramp_rates()
     cols = ['unit', 'end_mode', 'time_since_end_of_mode_two', 'min_loading']
-    fast_start_profiles = fast_start_profiles.loc[:, cols]
+    fsp = fast_start_profiles.loc[:, cols]
     cost = constraint_inputs.get_constraint_violation_prices()['ramp_rate']
     market.set_unit_ramp_rate_constraints(
-        ramp_rates, scada_ramp_rates, fast_start_profiles,
+        ramp_rates, scada_ramp_rates, fsp,
         run_type="fast_start_second_run", violation_cost=cost
     )
     cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
     scada_ramp_rates = unit_inputs.get_scada_ramp_rates(inlude_initial_output=True)
     market.set_joint_ramping_constraints_reg(
-        scada_ramp_rates, fast_start_profiles, run_type="fast_start_second_run", violation_cost=cost
+        scada_ramp_rates, fsp, run_type="fast_start_second_run", violation_cost=cost
     )
 
     # If AEMO historically used the over constrained dispatch rerun
@@ -205,6 +204,8 @@ con.close()
 outputs = pd.concat(outputs)
 
 outputs['error'] = outputs['price'] - outputs['ROP']
+
+outputs.to_csv("bdu_prices.csv")
 
 print('\n Summary of error in energy price volume weighted average price. \n'
       'Comparison is against ROP, the price prior to \n'
