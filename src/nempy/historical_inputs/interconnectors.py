@@ -13,7 +13,7 @@ def _test_setup():
     mms_db_manager = mms_db.DBManager(connection=con)
     xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    inputs_loader.set_interval('2019/01/10 12:05:00')
+    inputs_loader.set_interval('2024/07/10 12:05:00')
     return inputs_loader
 
 
@@ -37,7 +37,7 @@ class InterconnectorData:
     >>> mms_db_manager = mms_db.DBManager(connection=con)
     >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     >>> inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    >>> inputs_loader.set_interval('2019/01/10 12:05:00')
+    >>> inputs_loader.set_interval('2024/07/10 12:05:00')
 
     Create a InterconnectorData instance.
 
@@ -45,13 +45,13 @@ class InterconnectorData:
 
     >>> interconnector_data.get_interconnector_definitions()
       interconnector from_region to_region     min     max       link  from_region_loss_factor  to_region_loss_factor  generic_constraint_factor
-    0           V-SA        VIC1       SA1  -850.0   950.0       V-SA                   1.0000                 1.0000                          1
-    1      N-Q-MNSP1        NSW1      QLD1  -264.0   264.0  N-Q-MNSP1                   1.0000                 1.0000                          1
-    2      NSW1-QLD1        NSW1      QLD1 -1659.0  1229.0  NSW1-QLD1                   1.0000                 1.0000                          1
+    0      N-Q-MNSP1        NSW1      QLD1  -264.0   264.0  N-Q-MNSP1                   1.0000                 1.0000                          1
+    1      NSW1-QLD1        NSW1      QLD1 -2478.0  2204.0  NSW1-QLD1                   1.0000                 1.0000                          1
     3      V-S-MNSP1        VIC1       SA1  -270.0   270.0  V-S-MNSP1                   1.0000                 1.0000                          1
+    4           V-SA        VIC1       SA1  -850.0   950.0       V-SA                   1.0000                 1.0000                          1
     5      VIC1-NSW1        VIC1      NSW1 -2299.0  2399.0  VIC1-NSW1                   1.0000                 1.0000                          1
-    0      T-V-MNSP1        TAS1      VIC1     0.0   478.0    BLNKTAS                   1.0000                 0.9839                          1
-    1      T-V-MNSP1        VIC1      TAS1     0.0   478.0    BLNKVIC                   0.9839                 1.0000                         -1
+    0      T-V-MNSP1        TAS1      VIC1     0.0   594.0    BLNKTAS                   1.0000                 0.9777                          1
+    1      T-V-MNSP1        VIC1      TAS1     0.0   478.0    BLNKVIC                   0.9852                 1.0000                         -1
 
     Parameters
     ----------
@@ -87,29 +87,29 @@ class InterconnectorData:
 
         >>> print(loss_function)
           interconnector       link                                      loss_function  from_region_loss_share
-        0           V-SA       V-SA  <function InterconnectorData.get_interconnecto...                    0.78
-        1      N-Q-MNSP1  N-Q-MNSP1  <function InterconnectorData.get_interconnecto...                    0.66
-        2      NSW1-QLD1  NSW1-QLD1  <function InterconnectorData.get_interconnecto...                    0.68
-        3      V-S-MNSP1  V-S-MNSP1  <function InterconnectorData.get_interconnecto...                    0.67
-        4      VIC1-NSW1  VIC1-NSW1  <function InterconnectorData.get_interconnecto...                    0.32
+        0      N-Q-MNSP1  N-Q-MNSP1  <function InterconnectorData.get_interconnecto...                    0.70
+        1      NSW1-QLD1  NSW1-QLD1  <function InterconnectorData.get_interconnecto...                    0.63
+        2      V-S-MNSP1  V-S-MNSP1  <function InterconnectorData.get_interconnecto...                    0.70
+        3           V-SA       V-SA  <function InterconnectorData.get_interconnecto...                    0.67
+        4      VIC1-NSW1  VIC1-NSW1  <function InterconnectorData.get_interconnecto...                    0.36
         5      T-V-MNSP1    BLNKTAS  <function InterconnectorData.get_interconnecto...                    1.00
         6      T-V-MNSP1    BLNKVIC  <function InterconnectorData.get_interconnecto...                    1.00
 
         >>> print(interpolation_break_points)
-            interconnector     link  loss_segment  break_point
-        0             V-SA     V-SA             1       -851.0
-        1             V-SA     V-SA             2       -835.0
-        2             V-SA     V-SA             3       -820.0
-        3             V-SA     V-SA             4       -805.0
-        4             V-SA     V-SA             5       -790.0
-        ..             ...      ...           ...          ...
-        599      T-V-MNSP1  BLNKVIC           -80       -546.0
-        600      T-V-MNSP1  BLNKVIC           -81       -559.0
-        601      T-V-MNSP1  BLNKVIC           -82       -571.0
-        602      T-V-MNSP1  BLNKVIC           -83       -583.0
-        603      T-V-MNSP1  BLNKVIC           -84       -595.0
+            interconnector       link  loss_segment  break_point
+        0        N-Q-MNSP1  N-Q-MNSP1             1       -265.0
+        1        N-Q-MNSP1  N-Q-MNSP1             2       -257.0
+        2        N-Q-MNSP1  N-Q-MNSP1             3       -249.0
+        3        N-Q-MNSP1  N-Q-MNSP1             4       -241.0
+        4        N-Q-MNSP1  N-Q-MNSP1             5       -233.0
+        ..             ...        ...           ...          ...
+        611      T-V-MNSP1    BLNKVIC           -80       -546.0
+        612      T-V-MNSP1    BLNKVIC           -81       -559.0
+        613      T-V-MNSP1    BLNKVIC           -82       -571.0
+        614      T-V-MNSP1    BLNKVIC           -83       -583.0
+        615      T-V-MNSP1    BLNKVIC           -84       -595.0
         <BLANKLINE>
-        [604 rows x 4 columns]
+        [616 rows x 4 columns]
 
         Multiple Returns
         ----------------
@@ -211,13 +211,13 @@ class InterconnectorData:
 
         >>> interconnector_data.get_interconnector_definitions()
           interconnector from_region to_region     min     max       link  from_region_loss_factor  to_region_loss_factor  generic_constraint_factor
-        0           V-SA        VIC1       SA1  -850.0   950.0       V-SA                   1.0000                 1.0000                          1
-        1      N-Q-MNSP1        NSW1      QLD1  -264.0   264.0  N-Q-MNSP1                   1.0000                 1.0000                          1
-        2      NSW1-QLD1        NSW1      QLD1 -1659.0  1229.0  NSW1-QLD1                   1.0000                 1.0000                          1
+        0      N-Q-MNSP1        NSW1      QLD1  -264.0   264.0  N-Q-MNSP1                   1.0000                 1.0000                          1
+        1      NSW1-QLD1        NSW1      QLD1 -2478.0  2204.0  NSW1-QLD1                   1.0000                 1.0000                          1
         3      V-S-MNSP1        VIC1       SA1  -270.0   270.0  V-S-MNSP1                   1.0000                 1.0000                          1
+        4           V-SA        VIC1       SA1  -850.0   950.0       V-SA                   1.0000                 1.0000                          1
         5      VIC1-NSW1        VIC1      NSW1 -2299.0  2399.0  VIC1-NSW1                   1.0000                 1.0000                          1
-        0      T-V-MNSP1        TAS1      VIC1     0.0   478.0    BLNKTAS                   1.0000                 0.9839                          1
-        1      T-V-MNSP1        VIC1      TAS1     0.0   478.0    BLNKVIC                   0.9839                 1.0000                         -1
+        0      T-V-MNSP1        TAS1      VIC1     0.0   594.0    BLNKTAS                   1.0000                 0.9777                          1
+        1      T-V-MNSP1        VIC1      TAS1     0.0   478.0    BLNKVIC                   0.9852                 1.0000                         -1
 
         Returns
         -------

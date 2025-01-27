@@ -72,14 +72,13 @@ for interval in dispatch_intervals:
     violation_cost = \
         constraint_inputs.get_constraint_violation_prices()['unit_capacity']
     unit_bid_limit = unit_inputs.get_unit_bid_availability()
-    market.set_unit_bid_capacity_constraints(unit_bid_limit)
-    market.make_constraints_elastic('unit_bid_capacity', violation_cost)
+    market.set_unit_bid_capacity_constraints(unit_bid_limit, violation_cost)
 
     unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
-    market.set_unconstrained_intermitent_generation_forecast_constraint(
-        unit_uigf_limit)
+    market.set_unconstrained_intermittent_generation_forecast_constraint(
+        unit_uigf_limit, violation_cost)
 
-    ramp_rates = unit_inputs.get_as_bid_ramp_rates()
+    ramp_rates = unit_inputs.get_bid_ramp_rates()
 
     # This is the part that makes it time sequential.
     if unit_dispatch is None:
@@ -94,14 +93,7 @@ for interval in dispatch_intervals:
         ramp_rates = time_sequential.construct_ramp_rate_parameters(
             unit_dispatch, ramp_rates)
 
-    violation_cost = \
-        constraint_inputs.get_constraint_violation_prices()['ramp_rate']
-    market.set_unit_ramp_up_constraints(
-        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_up_rate']])
-    market.make_constraints_elastic('ramp_up', violation_cost)
-    market.set_unit_ramp_down_constraints(
-        ramp_rates.loc[:, ['unit', 'initial_output', 'ramp_down_rate']])
-    market.make_constraints_elastic('ramp_down', violation_cost)
+    market.set_unit_ramp_rate_constraints(ramp_rates, violation_cost)
 
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
@@ -121,6 +113,7 @@ for interval in dispatch_intervals:
     outputs.append(prices.loc[:, ['time', 'region', 'price']])
 
     unit_dispatch = market.get_unit_dispatch()
+
 print("Run time per interval {}".format((time()-t0)/len(dispatch_intervals)))
 con.close()
 print(pd.concat(outputs))

@@ -165,8 +165,13 @@ scatch.py
 #*.loaded
 #*.svg
 #*.lock
-#*.png
-#*.db
+##*.png
+##*.db
 #/benchmarking/*
 #/examples/*
-#nempy/historical_inputs/*
+##nempy/historical_inputs/*
+#scratch2.py
+#docs/pdfs/*
+#tests/*
+*.json
+repopackpy-output.txt

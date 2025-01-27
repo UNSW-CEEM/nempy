@@ -71,7 +71,7 @@ class XMLCacheManager:
 
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         Parameters
         ----------
@@ -102,7 +102,7 @@ class XMLCacheManager:
 
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.interval_inputs_in_cache()
         True
@@ -120,7 +120,7 @@ class XMLCacheManager:
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_file_path() # doctest: +SKIP
         PosixPath('test_nemde_cache/NEMSPDOutputs_2018123124000.loaded')
@@ -128,7 +128,7 @@ class XMLCacheManager:
         So the doctest runs on all Operating systems lets also look at the parts of the path.
 
         >>> manager.get_file_path().parts
-        ('test_nemde_cache', 'NEMSPDOutputs_2018123124000.loaded')
+        ('test_nemde_cache', 'NEMSPDOutputs_2024071009700.loaded')
         """
         return Path(self.cache_folder) / self.get_file_name()
 
@@ -139,10 +139,10 @@ class XMLCacheManager:
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_file_name()
-        'NEMSPDOutputs_2018123124000.loaded'
+        'NEMSPDOutputs_2024071009700.loaded'
         """
         year, month, day = self._get_market_year_month_day_as_str()
         interval_number = self._get_interval_number_as_str()
@@ -215,23 +215,23 @@ class XMLCacheManager:
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_unit_initial_conditions()
-                 DUID   INITIALMW  RAMPUPRATE  RAMPDOWNRATE  AGCSTATUS
-        0      AGLHAL    0.000000         NaN           NaN        0.0
-        1      AGLSOM    0.000000         NaN           NaN        0.0
-        2     ANGAST1    0.000000         NaN           NaN        0.0
-        3       APD01    0.000000         NaN           NaN        0.0
-        4       ARWF1   54.500000         NaN           NaN        0.0
-        ..        ...         ...         ...           ...        ...
-        283  YARWUN_1  140.360001         NaN           NaN        0.0
-        284     YWPS1  366.665833  177.750006    177.750006        1.0
-        285     YWPS2  374.686066  190.125003    190.125003        1.0
-        286     YWPS3    0.000000  300.374994    300.374994        0.0
-        287     YWPS4  368.139252  182.249994    182.249994        1.0
+                DUID TRADERTYPE  INITIALMW  RAMPUPRATE  RAMPDOWNRATE  AGCSTATUS
+        0    ADPBA1G  GENERATOR    0.00000   93.119938     93.119938        1.0
+        1    ADPBA1L       LOAD    1.40400   93.119938     93.119938        1.0
+        2     ADPPV1  GENERATOR   10.90800  298.499937    298.499937        0.0
+        3     AGLHAL  GENERATOR    0.00000         NaN           NaN        0.0
+        4     AGLSOM  GENERATOR   60.00000         NaN           NaN        0.0
+        ..       ...        ...        ...         ...           ...        ...
+        492  YENDWF1  GENERATOR    6.75000         NaN           NaN        0.0
+        493    YWPS1  GENERATOR    0.00000  180.000000    180.000000        0.0
+        494    YWPS2  GENERATOR  358.89621  176.624994    176.624994        1.0
+        495    YWPS3  GENERATOR  371.52658  181.124997    181.124997        1.0
+        496    YWPS4  GENERATOR  337.93546  180.000000    180.000000        1.0
         <BLANKLINE>
-        [288 rows x 5 columns]
+        [497 rows x 6 columns]
 
         Returns
         -------
@@ -258,7 +258,7 @@ class XMLCacheManager:
 
         """
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
-        initial_conditions = dict(DUID=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[], AGCSTATUS=[])
+        initial_conditions = dict(DUID=[], TRADERTYPE=[], INITIALMW=[], RAMPUPRATE=[], RAMPDOWNRATE=[], AGCSTATUS=[])
         if self.is_intervention_period():
             INITIALMW_name = 'WhatIfInitialMW'
         else:
@@ -267,6 +267,7 @@ class XMLCacheManager:
                         AGCSTATUS='AGCStatus')
         for trader in traders:
             initial_conditions['DUID'].append(trader['@TraderID'])
+            initial_conditions['TRADERTYPE'].append(trader['@TraderType'])
             initial_cons = trader['TraderInitialConditionCollection']['TraderInitialCondition']
             for our_name, aemo_name in name_map.items():
                 for con in initial_cons:
@@ -286,23 +287,23 @@ class XMLCacheManager:
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_unit_fast_start_parameters()
                 DUID  MinLoadingMW  CurrentMode  CurrentModeTime  T1  T2  T3  T4
         0     AGLHAL             2            0                0  10   3  10   2
-        1     AGLSOM            16            0                0  20   2  35   2
-        2   BARCALDN            12            0                0  14   4   1   4
-        3   BARRON-1             5            4                1  11   3   1   1
-        4   BARRON-2             5            4                1  11   3   1   1
+        1     AGLSOM            12            4                2  20   2  35   2
+        2   BARRON-1             5            4                1  12   3  10   1
+        3   BARRON-2             5            0                0  12   3  10   1
+        4   BBTHREE1            17            0                0   8   4   1   1
         ..       ...           ...          ...              ...  ..  ..  ..  ..
-        69     VPGS5            48            0                0   5   3  15   0
-        70     VPGS6            48            0                0   5   3  15   0
-        71   W/HOE#1           160            0                0   3   0   0   0
-        72   W/HOE#2           160            0                0   3   0   0   0
-        73    YABULU            83            0                0   5   6  42   6
+        68     VPGS4            50            0                0   5   8  15   0
+        69     VPGS5            50            0                0   5   3  15   0
+        70     VPGS6            50            0                0   5   8  15   0
+        71   W/HOE#1            40            0                0   4   2  15   0
+        72   W/HOE#2            40            0                0   4   1  15   0
         <BLANKLINE>
-        [74 rows x 8 columns]
+        [73 rows x 8 columns]
 
         Returns
         --------
@@ -361,23 +362,25 @@ class XMLCacheManager:
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
+
+        # >>> manager.load_interval('2024/08/01 02:15:00')
 
         >>> manager.get_unit_volume_bids()
-                 DUID     BIDTYPE  MAXAVAIL  ENABLEMENTMIN  ENABLEMENTMAX  LOWBREAKPOINT  HIGHBREAKPOINT  BANDAVAIL1  BANDAVAIL2  BANDAVAIL3  BANDAVAIL4  BANDAVAIL5  BANDAVAIL6  BANDAVAIL7  BANDAVAIL8  BANDAVAIL9  BANDAVAIL10  RAMPDOWNRATE  RAMPUPRATE
-        0      AGLHAL      ENERGY     173.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0        60.0         0.0         0.0        160.0         720.0       720.0
-        1      AGLSOM      ENERGY     160.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        170.0         480.0       480.0
-        2     ANGAST1      ENERGY      43.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0        50.0         0.0         0.0         0.0         50.0         840.0       840.0
-        3       APD01   LOWER5MIN       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0           0.0         0.0
-        4       APD01  LOWER60SEC       0.0            0.0            0.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0        300.0           0.0         0.0
-        ...       ...         ...       ...            ...            ...            ...             ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...           ...         ...
-        1021    YWPS4   LOWER6SEC      25.0          250.0          385.0          275.0           385.0        15.0        10.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
-        1022    YWPS4   RAISE5MIN       0.0          250.0          390.0          250.0           380.0         0.0         0.0         0.0         0.0         5.0         0.0         0.0         5.0         0.0         10.0           0.0         0.0
-        1023    YWPS4    RAISEREG      15.0          250.0          385.0          250.0           370.0         0.0         0.0         0.0         0.0         0.0         0.0         5.0        10.0         0.0          5.0           0.0         0.0
-        1024    YWPS4  RAISE60SEC      10.0          220.0          400.0          220.0           390.0         0.0         0.0         0.0         0.0         0.0         5.0         5.0         0.0         0.0         10.0           0.0         0.0
-        1025    YWPS4   RAISE6SEC      15.0          220.0          405.0          220.0           390.0         0.0         0.0         0.0        10.0         5.0         0.0         0.0         0.0         0.0         10.0           0.0         0.0
+                 DUID     BIDTYPE DIRECTION  MAXAVAIL  ENABLEMENTMIN  ENABLEMENTMAX  LOWBREAKPOINT  HIGHBREAKPOINT  BANDAVAIL1  BANDAVAIL2  BANDAVAIL3  BANDAVAIL4  BANDAVAIL5  BANDAVAIL6  BANDAVAIL7  BANDAVAIL8  BANDAVAIL9  BANDAVAIL10  RAMPDOWNRATE  RAMPUPRATE
+        0     ADPBA1G      ENERGY      None       6.0            6.0            6.0            6.0             6.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         6.0         0.0          0.0         120.0       120.0
+        1     ADPBA1G    LOWERREG      None       6.0            0.0            6.0            6.0             6.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         6.0         0.0          0.0           0.0         0.0
+        2     ADPBA1G   RAISE5MIN      None       3.0            0.0            6.0            0.0             3.0         3.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
+        3     ADPBA1G    RAISEREG      None       6.0            0.0            6.0            0.0             0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         6.0         0.0          0.0           0.0         0.0
+        4     ADPBA1G  RAISE60SEC      None       3.0            0.0            6.0            0.0             3.0         3.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
+        ...       ...         ...       ...       ...            ...            ...            ...             ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...           ...         ...
+        1725    YWPS4   LOWER6SEC      None       0.0          250.0          385.0          275.0           385.0        15.0        10.0         0.0         0.0         0.0         0.0         0.0         0.0         0.0          0.0           0.0         0.0
+        1726    YWPS4   RAISE5MIN      None       0.0          250.0          390.0          250.0           380.0         0.0         0.0         0.0         0.0         5.0         0.0         0.0         5.0         0.0         10.0          10.0        10.0
+        1727    YWPS4    RAISEREG      None       0.0          250.0          385.0          250.0           370.0         0.0         0.0         0.0         0.0         0.0         0.0         5.0        10.0         0.0          5.0           5.0         5.0
+        1728    YWPS4  RAISE60SEC      None       0.0          220.0          400.0          220.0           390.0         0.0         0.0         0.0         0.0         0.0         5.0         5.0         0.0         0.0         10.0          10.0        10.0
+        1729    YWPS4   RAISE6SEC      None       0.0          220.0          405.0          220.0           390.0         0.0         0.0         0.0         5.0         5.0         5.0         5.0         0.0         0.0          5.0           5.0         5.0
         <BLANKLINE>
-        [1026 rows x 19 columns]
+        [1730 rows x 20 columns]
 
         Returns
         --------
@@ -387,6 +390,7 @@ class XMLCacheManager:
             Columns:          Description:
             DUID              unique identifier of a dispatch unit, \n
                               (as `str`)
+            DIRECTION         "LOAD" or "GENERATOR", (as `str`) \n
             BIDTYPE           the service the bid applies to, \n
                               (as `str`)
             MAXAVAIL          the bid in unit availablity, in MW,
@@ -414,48 +418,48 @@ class XMLCacheManager:
         """
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['TraderPeriodCollection'][
             'TraderPeriod']
-        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], MAXAVAIL=[], ENABLEMENTMIN=[], ENABLEMENTMAX=[],
+        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], DIRECTION=[], MAXAVAIL=[], ENABLEMENTMIN=[], ENABLEMENTMAX=[],
                                        LOWBREAKPOINT=[], HIGHBREAKPOINT=[], BANDAVAIL1=[], BANDAVAIL2=[],
                                        BANDAVAIL3=[], BANDAVAIL4=[], BANDAVAIL5=[], BANDAVAIL6=[], BANDAVAIL7=[],
                                        BANDAVAIL8=[], BANDAVAIL9=[], BANDAVAIL10=[], RAMPDOWNRATE=[], RAMPUPRATE=[])
-        name_map = dict(BIDTYPE='@TradeType', MAXAVAIL='@MaxAvail', ENABLEMENTMIN='@EnablementMin',
+        name_map = dict(BIDTYPE='@TradeType', DIRECTION='@Direction', MAXAVAIL='@MaxAvail', ENABLEMENTMIN='@EnablementMin',
                         ENABLEMENTMAX='@EnablementMax', LOWBREAKPOINT='@LowBreakpoint',
                         HIGHBREAKPOINT='@HighBreakpoint', BANDAVAIL1='@BandAvail1', BANDAVAIL2='@BandAvail2',
                         BANDAVAIL3='@BandAvail3', BANDAVAIL4='@BandAvail4', BANDAVAIL5='@BandAvail5',
                         BANDAVAIL6='@BandAvail6', BANDAVAIL7='@BandAvail7', BANDAVAIL8='@BandAvail8',
                         BANDAVAIL9='@BandAvail9', BANDAVAIL10='@BandAvail10', RAMPDOWNRATE='@RampDnRate',
                         RAMPUPRATE='@RampUpRate')
+
+        def append_values(trade, trades_by_unit_and_type):
+            trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
+            for our_name, aemo_name in name_map.items():
+                if aemo_name in trade:
+                    if aemo_name in ['@TradeType', '@Direction']:
+                        value = trade[aemo_name]
+                    else:
+                        value = float(trade[aemo_name])
+                elif aemo_name == '@Direction':
+                    value = 'missing'
+                trades_by_unit_and_type[our_name].append(value)
+            return trades_by_unit_and_type
+
         for trader in traders:
             if type(trader['TradeCollection']['Trade']) != list:
                 trades = trader['TradeCollection']
                 for _, trade in trades.items():
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
             else:
                 for trade in trader['TradeCollection']['Trade']:
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
+
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
-        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
+        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', BDOF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
                             R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
                             L6SE='LOWER6SEC', R1SE='RAISE1SEC', L1SE='LOWER1SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
+        direction_type_map = dict(GEN='GENERATOR', LOAD='LOAD', missing=None)
+        trades_by_unit_and_type["DIRECTION"] = (
+            trades_by_unit_and_type["DIRECTION"].apply(lambda x: direction_type_map[x]))
         return trades_by_unit_and_type
 
     def get_unit_price_bids(self):
@@ -465,23 +469,23 @@ class XMLCacheManager:
         --------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_unit_price_bids()
-                 DUID     BIDTYPE  PRICEBAND1  PRICEBAND2  PRICEBAND3  PRICEBAND4  PRICEBAND5  PRICEBAND6  PRICEBAND7  PRICEBAND8  PRICEBAND9  PRICEBAND10
-        0      AGLHAL      ENERGY    -1000.00        0.00      278.81      368.81      418.81      498.81      578.81     1365.56    10578.87     13998.99
-        1      AGLSOM      ENERGY    -1000.00        0.00       85.00      110.00      145.00      284.00      451.00     1001.00    13300.87     14499.96
-        2     ANGAST1      ENERGY    -1000.00        0.00      125.00      200.20      299.19      379.98      589.99     1374.85    10618.00     14500.00
-        3       APD01   LOWER5MIN        0.00        1.00        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00
-        4       APD01  LOWER60SEC        0.00        1.00        2.00        3.00        4.00        5.00        6.00        7.00        8.00         9.00
-        ...       ...         ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...
-        1021    YWPS4   LOWER6SEC        0.03        0.05        0.16        0.30        1.90       25.04       30.04       99.00     4600.00      9899.00
-        1022    YWPS4   RAISE5MIN        0.05        1.78        4.48       14.50       30.03       49.00       87.70      100.00    11990.00     12400.40
-        1023    YWPS4    RAISEREG        0.05        2.70        9.99       19.99       49.00       95.50      240.00      450.50      950.50     11900.00
-        1024    YWPS4  RAISE60SEC        0.17        1.80        4.80       10.01       21.00       39.00       52.00      102.00     4400.00     11999.00
-        1025    YWPS4   RAISE6SEC        0.48        1.75        4.90       20.70       33.33       99.90      630.00     1999.00     6000.00     12299.00
+                 DUID     BIDTYPE  DIRECTION  PRICEBAND1  PRICEBAND2  PRICEBAND3  PRICEBAND4  PRICEBAND5  PRICEBAND6  PRICEBAND7  PRICEBAND8  PRICEBAND9  PRICEBAND10
+        0     ADPBA1G      ENERGY  GENERATOR     -966.92        0.00       53.28       94.72      165.76      270.34      369.01      984.68     3945.63      9866.53
+        1     ADPBA1G    LOWERREG  GENERATOR        5.00        8.00       12.00       18.00       24.00       47.00       98.00      268.00      498.00     12000.00
+        2     ADPBA1G   RAISE5MIN  GENERATOR        0.00        1.00        2.00        3.00        4.00        5.00        6.00      100.00     1000.00     15000.00
+        3     ADPBA1G    RAISEREG  GENERATOR        5.00        8.00       12.00       18.00       24.00       47.00       98.00      268.00      498.00     12000.00
+        4     ADPBA1G  RAISE60SEC  GENERATOR        0.00        1.00        2.00        3.00        4.00        5.00        6.00      100.00     1000.00     15000.00
+        ...       ...         ...        ...         ...         ...         ...         ...         ...         ...         ...         ...         ...          ...
+        1725    YWPS4   LOWER6SEC  GENERATOR        0.03        0.05        0.16        0.30        1.90       25.04       30.04       99.00     4600.00      9899.00
+        1726    YWPS4   RAISE5MIN  GENERATOR        0.36        0.71        1.41        4.33       19.88       28.88       46.88       97.88      558.88     12400.40
+        1727    YWPS4    RAISEREG  GENERATOR        0.05        2.70        9.99       19.99       49.00       95.50      240.00      450.50      950.50     11900.00
+        1728    YWPS4  RAISE60SEC  GENERATOR        0.36        0.84        1.41        4.78       19.88       28.88       46.88       97.88      558.88     11999.00
+        1729    YWPS4   RAISE6SEC  GENERATOR        0.36        0.84        1.41        4.78       19.88       28.88       46.88       97.88      558.88     12299.00
         <BLANKLINE>
-        [1026 rows x 12 columns]
+        [1730 rows x 13 columns]
 
 
         Returns
@@ -494,6 +498,7 @@ class XMLCacheManager:
                               (as `str`)
             BIDTYPE           the service the bid applies to, \n
                               (as `str`)
+            DIRECTION         "LOAD" or "GENERATOR"
             PRICEBAND1        the volume bid in the first bid band,
                               in MW, (as `np.float64`)
                  :
@@ -504,48 +509,54 @@ class XMLCacheManager:
 
         """
         traders = self.xml['NEMSPDCaseFile']['NemSpdInputs']['TraderCollection']['Trader']
-        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], PRICEBAND1=[], PRICEBAND2=[], PRICEBAND3=[], PRICEBAND4=[],
-                                       PRICEBAND5=[], PRICEBAND6=[], PRICEBAND7=[], PRICEBAND8=[], PRICEBAND9=[],
-                                       PRICEBAND10=[])
-        name_map = dict(BIDTYPE='@TradeType', PRICEBAND1='@PriceBand1', PRICEBAND2='@PriceBand2',
-                        PRICEBAND3='@PriceBand3', PRICEBAND4='@PriceBand4', PRICEBAND5='@PriceBand5',
-                        PRICEBAND6='@PriceBand6', PRICEBAND7='@PriceBand7', PRICEBAND8='@PriceBand8',
-                        PRICEBAND9='@PriceBand9', PRICEBAND10='@PriceBand10')
+        trades_by_unit_and_type = dict(DUID=[], BIDTYPE=[], DIRECTION=[], PRICEBAND1=[], PRICEBAND2=[], PRICEBAND3=[],
+                                       PRICEBAND4=[], PRICEBAND5=[], PRICEBAND6=[], PRICEBAND7=[], PRICEBAND8=[],
+                                       PRICEBAND9=[], PRICEBAND10=[])
+        name_map = dict(BIDTYPE='@TradeType', DIRECTION='@Direction', PRICEBAND1='@PriceBand1',
+                        PRICEBAND2='@PriceBand2', PRICEBAND3='@PriceBand3', PRICEBAND4='@PriceBand4',
+                        PRICEBAND5='@PriceBand5', PRICEBAND6='@PriceBand6', PRICEBAND7='@PriceBand7',
+                        PRICEBAND8='@PriceBand8', PRICEBAND9='@PriceBand9', PRICEBAND10='@PriceBand10')
+
+        def append_values(trade, trades_by_unit_and_type):
+            trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
+            for our_name, aemo_name in name_map.items():
+                value = None
+                if aemo_name in trade:
+                    if aemo_name in ['@TradeType', '@Direction']:
+                        value = trade[aemo_name]
+                    else:
+                        value = float(trade[aemo_name])
+                elif '@Direction' not in trade:
+                    if trader['@TraderType'] in ["GENERATOR", "NORMALLY_ON_LOAD", "WDR", "BIDIRECTIONAL"]:
+                        value = "GEN"
+                    elif trader['@TraderType'] in ["LOAD"]:
+                        value = "LOAD"
+                trades_by_unit_and_type[our_name].append(value)
+            return trades_by_unit_and_type
+
         for trader in traders:
             if type(trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection']
                     ['TradeTypePriceStructure']) != list:
                 trades = trader['TradePriceStructureCollection']['TradePriceStructure'][
                     'TradeTypePriceStructureCollection']
                 for _, trade in trades.items():
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
             else:
                 for trade in \
-                trader['TradePriceStructureCollection']['TradePriceStructure']['TradeTypePriceStructureCollection'][
-                    'TradeTypePriceStructure']:
-                    trades_by_unit_and_type['DUID'].append(trader['@TraderID'])
-                    for our_name, aemo_name in name_map.items():
-                        if aemo_name in trade:
-                            if aemo_name == '@TradeType':
-                                value = trade[aemo_name]
-                            else:
-                                value = float(trade[aemo_name])
-                        else:
-                            value = 0.0
-                        trades_by_unit_and_type[our_name].append(value)
+                        trader['TradePriceStructureCollection']['TradePriceStructure'][
+                            'TradeTypePriceStructureCollection'][
+                            'TradeTypePriceStructure']:
+                    trades_by_unit_and_type = append_values(trade, trades_by_unit_and_type)
+
         trades_by_unit_and_type = pd.DataFrame(trades_by_unit_and_type)
-        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', L5RE='LOWERREG', R5RE='RAISEREG',
+        bid_type_map = dict(ENOF='ENERGY', LDOF='ENERGY', DROF='ENERGY', BDOF='ENERGY', L5RE='LOWERREG',
+                            R5RE='RAISEREG',
                             R5MI='RAISE5MIN', L5MI='LOWER5MIN', R60S='RAISE60SEC', L60S='LOWER60SEC', R6SE='RAISE6SEC',
                             L6SE='LOWER6SEC', R1SE='RAISE1SEC', L1SE='LOWER1SEC')
         trades_by_unit_and_type["BIDTYPE"] = trades_by_unit_and_type["BIDTYPE"].apply(lambda x: bid_type_map[x])
+        direction_type_map = dict(GEN='GENERATOR', LOAD='LOAD')
+        trades_by_unit_and_type["DIRECTION"] = (
+            trades_by_unit_and_type["DIRECTION"].apply(lambda x: direction_type_map[x]))
         return trades_by_unit_and_type
 
     def get_UIGF_values(self):
@@ -555,23 +566,23 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_UIGF_values()
-                DUID    UIGF
-        0      ARWF1  56.755
-        1   BALDHWF1   9.160
-        2      BANN1   0.000
-        3     BLUFF1   4.833
-        4     BNGSF1   0.000
-        ..       ...     ...
-        57     WGWF1  25.445
-        58   WHITSF1   0.000
-        59  WOODLWN1   0.075
-        60     WRSF1   0.000
-        61     WRWF1  15.760
+                 DUID      UIGF
+        0      ADPPV1  10.90800
+        1       ARWF1   0.00000
+        2      AVLSF1  55.26000
+        3    BALDHWF1  59.81800
+        4    BANGOWF1  41.89800
+        ..        ...       ...
+        165  WSTWYSF1  49.90000
+        166    WYASF1  33.90909
+        167  YARANSF1  59.55000
+        168    YATSF1  20.00000
+        169   YENDWF1   7.00604
         <BLANKLINE>
-        [62 rows x 2 columns]
+        [170 rows x 2 columns]
 
         Returns
         -------
@@ -606,10 +617,10 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_violations()
-        {'regional_demand': 0.0, 'interocnnector': 0.0, 'generic_constraint': 0.0, 'ramp_rate': 0.0, 'unit_capacity': 0.36, 'energy_constraint': 0.0, 'energy_offer': 0.0, 'fcas_profile': 0.0, 'fast_start': 0.0, 'mnsp_ramp_rate': 0.0, 'msnp_offer': 0.0, 'mnsp_capacity': 0.0, 'ugif': 0.0}
+        {'regional_demand': 0.0, 'interocnnector': 0.0, 'generic_constraint': 0.0, 'ramp_rate': 0.416, 'unit_capacity': 0.3, 'energy_constraint': 0.0, 'energy_offer': 0.0, 'fcas_profile': 0.0, 'fast_start': 0.0, 'mnsp_ramp_rate': 0.0, 'msnp_offer': 0.0, 'mnsp_capacity': 0.0, 'ugif': 0.0}
 
         Returns
         -------
@@ -632,13 +643,22 @@ class XMLCacheManager:
                         ugif='@TotalUIGFViolation')
         violations = {}
         if type(outputs['PeriodSolution']) == list:
-            for solution in outputs['PeriodSolution']:
-                if solution['@Intervention'] == '0':
-                    for name, aemo_name in name_map.items():
-                        violations[name] = float(solution[aemo_name])
+            for name, aemo_name in name_map.items():
+                for solution in outputs['PeriodSolution']:
+                    if solution['@Intervention'] == '0':
+                        if aemo_name in solution:
+                            violations[name] = float(solution[aemo_name])
+                for solution in outputs['CaseSolution']:
+                    if solution['@Intervention'] == '0':
+                        if name not in violations:
+                            violations[name] = float(solution[aemo_name])
         else:
             for name, aemo_name in name_map.items():
-                violations[name] = float(outputs['PeriodSolution'][aemo_name])
+                if aemo_name in outputs['PeriodSolution']:
+                    violations[name] = float(outputs['PeriodSolution'][aemo_name])
+                else:
+                    violations[name] = float(outputs['CaseSolution'][aemo_name])
+
         return violations
 
     def get_constraint_violation_prices(self):
@@ -650,10 +670,10 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_constraint_violation_prices()
-        {'regional_demand': 2175000.0, 'interocnnector': 16675000.0, 'generic_constraint': 435000.0, 'ramp_rate': 16747500.0, 'unit_capacity': 5365000.0, 'energy_offer': 16457500.0, 'fcas_profile': 2247500.0, 'fcas_max_avail': 2247500.0, 'fcas_enablement_min': 1015000.0, 'fcas_enablement_max': 1015000.0, 'fast_start': 16385000.0, 'mnsp_ramp_rate': 16747500.0, 'msnp_offer': 16457500.0, 'mnsp_capacity': 5292500.0, 'uigf': 5582500.0, 'voll': 14500.0, 'tiebreak': 1e-06}
+        {'regional_demand': 2625000.0, 'interocnnector': 20125000.0, 'generic_constraint': 525000.0, 'ramp_rate': 20212500.0, 'unit_capacity': 6475000.0, 'energy_offer': 19862500.0, 'fcas_profile': 2712500.0, 'fcas_max_avail': 2712500.0, 'fcas_enablement_min': 1225000.0, 'fcas_enablement_max': 1225000.0, 'fast_start': 19775000.0, 'mnsp_ramp_rate': 20212500.0, 'msnp_offer': 19862500.0, 'mnsp_capacity': 6387500.0, 'uigf': 6737500.0, 'voll': 17500.0, 'tiebreak': 1e-06}
 
         Returns
         -------
@@ -689,7 +709,7 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.is_intervention_period()
         False
@@ -708,23 +728,23 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_constraint_rhs()
-                             set           rhs
-        0               #BANN1_E     32.000000
-        1              #BNGSF2_E      3.000000
-        2            #CROWLWF1_E     43.000000
-        3             #CSPVPS1_E     29.000000
-        4             #DAYDSF1_E      0.000000
-        ..                   ...           ...
-        704          V_OWF_NRB_0  10000.001000
-        705  V_OWF_TGTSNRBHTN_30  10030.000000
-        706        V_S_NIL_ROCOF    812.280029
-        707          V_T_NIL_BL1    478.000000
-        708        V_T_NIL_FCSPS    425.154024
+                           set           rhs
+        0          #BANGOWF2_E     82.800000
+        1          #BBATRYL1_E     50.000000
+        2          #BBATTERY_E     50.000000
+        3          #BBTHREE3_E     25.000000
+        4           #BOWWPV1_E      6.100000
+        ...                ...           ...
+        1107       V_T_NIL_BL1 -10125.000000
+        1108     V_T_NIL_FCSPS    493.111848
+        1109    V_WDR_NO_SCADA     95.000000
+        1110  V_WEMENSF_FLT_20     20.000000
+        1111   V_YATPSF_FLT_20     20.000000
         <BLANKLINE>
-        [709 rows x 2 columns]
+        [1112 rows x 2 columns]
 
         Returns
         -------
@@ -754,23 +774,23 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_constraint_type()
-                             set type       cost
-        0               #BANN1_E   LE  5220000.0
-        1              #BNGSF2_E   LE  5220000.0
-        2            #CROWLWF1_E   LE  5220000.0
-        3             #CSPVPS1_E   LE  5220000.0
-        4             #DAYDSF1_E   LE  5220000.0
-        ..                   ...  ...        ...
-        704          V_OWF_NRB_0   LE  5220000.0
-        705  V_OWF_TGTSNRBHTN_30   LE  5220000.0
-        706        V_S_NIL_ROCOF   LE   507500.0
-        707          V_T_NIL_BL1   LE  5220000.0
-        708        V_T_NIL_FCSPS   LE   435000.0
+                           set type       cost
+        0          #BANGOWF2_E   LE  6300000.0
+        1          #BBATRYL1_E   LE  6300000.0
+        2          #BBATTERY_E   LE  6300000.0
+        3          #BBTHREE3_E   LE  6300000.0
+        4           #BOWWPV1_E   LE  6300000.0
+        ...                ...  ...        ...
+        1172       V_T_NIL_BL1   GE  6300000.0
+        1173     V_T_NIL_FCSPS   LE   525000.0
+        1174    V_WDR_NO_SCADA   LE  6300000.0
+        1175  V_WEMENSF_FLT_20   LE   612500.0
+        1176   V_YATPSF_FLT_20   LE   612500.0
         <BLANKLINE>
-        [709 rows x 3 columns]
+        [1177 rows x 3 columns]
 
         Returns
         -------
@@ -806,23 +826,23 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_constraint_region_lhs()
-                           set region service  coefficient
-        0        F_I+LREG_0120   NSW1    L5RE          1.0
-        1        F_I+LREG_0120   QLD1    L5RE          1.0
-        2        F_I+LREG_0120    SA1    L5RE          1.0
-        3        F_I+LREG_0120   TAS1    L5RE          1.0
-        4        F_I+LREG_0120   VIC1    L5RE          1.0
-        ..                 ...    ...     ...          ...
-        478   F_T+NIL_WF_TG_R5   TAS1    R5RE          1.0
-        479   F_T+NIL_WF_TG_R6   TAS1    R6SE          1.0
-        480  F_T+NIL_WF_TG_R60   TAS1    R60S          1.0
-        481      F_T+RREG_0050   TAS1    R5RE          1.0
-        482    F_T_NIL_MINP_R6   TAS1    R6SE          1.0
+                            set region service  coefficient
+        0        D_I+BIP_ML2_L1   NSW1    L1SE          1.0
+        1        D_I+BIP_ML2_L1   QLD1    L1SE          1.0
+        2        D_I+BIP_ML2_L1    SA1    L1SE          1.0
+        3        D_I+BIP_ML2_L1   TAS1    L1SE          1.0
+        4        D_I+BIP_ML2_L1   VIC1    L1SE          1.0
+        ..                  ...    ...     ...          ...
+        498  F_TASCAP_RREG_0220   NSW1    R5RE          1.0
+        499  F_TASCAP_RREG_0220   QLD1    R5RE          1.0
+        500  F_TASCAP_RREG_0220    SA1    R5RE          1.0
+        501  F_TASCAP_RREG_0220   VIC1    R5RE          1.0
+        502     F_T_NIL_MINP_R6   TAS1    R6SE          1.0
         <BLANKLINE>
-        [483 rows x 4 columns]
+        [503 rows x 4 columns]
 
         Returns
         -------
@@ -870,23 +890,23 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_constraint_unit_lhs()
-                              set      unit service  coefficient
-        0                #BANN1_E     BANN1    ENOF          1.0
-        1               #BNGSF2_E    BNGSF2    ENOF          1.0
-        2             #CROWLWF1_E  CROWLWF1    ENOF          1.0
-        3              #CSPVPS1_E   CSPVPS1    ENOF          1.0
-        4              #DAYDSF1_E   DAYDSF1    ENOF          1.0
-        ...                   ...       ...     ...          ...
-        5864      V_ARWF_FSTTRP_5     ARWF1    ENOF          1.0
-        5865      V_MTGBRAND_33WT  MTGELWF1    ENOF          1.0
-        5866     V_OAKHILL_TFB_42  OAKLAND1    ENOF          1.0
-        5867          V_OWF_NRB_0  OAKLAND1    ENOF          1.0
-        5868  V_OWF_TGTSNRBHTN_30  OAKLAND1    ENOF          1.0
+                            set      unit service  coefficient
+        0           #BANGOWF2_E  BANGOWF2    ENOF          1.0
+        1           #BBATRYL1_E  BBATRYL1    LDOF          1.0
+        2           #BBATTERY_E  BBATTERY    ENOF          1.0
+        3           #BBTHREE3_E  BBTHREE3    ENOF          1.0
+        4            #BOWWPV1_E   BOWWPV1    ENOF          1.0
+        ...                 ...       ...     ...          ...
+        17032    V_WDR_NO_SCADA  DRXVDX01    DROF          1.0
+        17033    V_WDR_NO_SCADA  DRXVQP01    DROF          1.0
+        17034    V_WDR_NO_SCADA  DRXVQX01    DROF          1.0
+        17035  V_WEMENSF_FLT_20  WEMENSF1    ENOF          1.0
+        17036   V_YATPSF_FLT_20    YATSF1    ENOF          1.0
         <BLANKLINE>
-        [5869 rows x 4 columns]
+        [17037 rows x 4 columns]
 
         Returns
         -------
@@ -930,23 +950,23 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_constraint_interconnector_lhs()
                              set interconnector  coefficient
-        0               DATASNAP      N-Q-MNSP1          1.0
-        1        DATASNAP_DFS_LS      N-Q-MNSP1          1.0
-        2      DATASNAP_DFS_NCAN      N-Q-MNSP1          1.0
-        3    DATASNAP_DFS_NCWEST      N-Q-MNSP1          1.0
-        4      DATASNAP_DFS_NNTH      N-Q-MNSP1          1.0
+        0        DATASNAP_DFS_LS      N-Q-MNSP1          1.0
+        1      DATASNAP_DFS_NCAN      N-Q-MNSP1          1.0
+        2    DATASNAP_DFS_NCWEST      N-Q-MNSP1          1.0
+        3      DATASNAP_DFS_NNTH      N-Q-MNSP1          1.0
+        4      DATASNAP_DFS_NSYD      N-Q-MNSP1          1.0
         ..                   ...            ...          ...
-        631      V^^S_NIL_TBSE_1           V-SA          1.0
-        632      V^^S_NIL_TBSE_2           V-SA          1.0
-        633        V_S_NIL_ROCOF           V-SA          1.0
-        634          V_T_NIL_BL1      T-V-MNSP1         -1.0
-        635        V_T_NIL_FCSPS      T-V-MNSP1         -1.0
+        827     V_S_HEYWOOD_UFLS           V-SA          1.0
+        828        V_S_NIL_ROCOF           V-SA          1.0
+        829         V_T_FCSPS_DS      T-V-MNSP1         -1.0
+        830          V_T_NIL_BL1      T-V-MNSP1          1.0
+        831        V_T_NIL_FCSPS      T-V-MNSP1         -1.0
         <BLANKLINE>
-        [636 rows x 3 columns]
+        [832 rows x 3 columns]
 
         Returns
         -------
@@ -986,12 +1006,12 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_market_interconnector_link_bid_availability()
           interconnector to_region  availability
         0      T-V-MNSP1      TAS1         478.0
-        1      T-V-MNSP1      VIC1         478.0
+        1      T-V-MNSP1      VIC1         594.0
 
         Returns
         -------
@@ -1008,8 +1028,8 @@ class XMLCacheManager:
             ================  ========================================
         """
         inters = \
-        self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection'][
-            'InterconnectorPeriod']
+            self.xml['NEMSPDCaseFile']['NemSpdInputs']['PeriodCollection']['Period']['InterconnectorPeriodCollection'][
+                'InterconnectorPeriod']
         bid_availability = dict(interconnector=[], to_region=[], availability=[])
         for inter in inters:
             if inter['@MNSP'] == '1':
@@ -1027,7 +1047,7 @@ class XMLCacheManager:
         -------
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.find_intervals_with_violations(limit=3, start_year=2019, start_month=1, end_year=2019, end_month=1)
         {'2019/01/01 00:00:00': ['unit_capacity'], '2019/01/01 00:05:00': ['unit_capacity'], '2019/01/01 00:10:00': ['unit_capacity']}
@@ -1082,40 +1102,50 @@ class XMLCacheManager:
 
         >>> manager = XMLCacheManager('test_nemde_cache')
 
-        >>> manager.load_interval('2019/01/01 00:00:00')
+        >>> manager.load_interval('2024/07/10 12:05:00')
 
         >>> manager.get_service_prices()
-           region     service     price
-        0    NSW1      ENERGY  62.93553
-        1    NSW1   RAISE5MIN      4.39
-        2    NSW1  RAISE60SEC         1
-        3    NSW1  LOWER60SEC      0.07
-        4    NSW1   RAISE6SEC         1
-        5    NSW1   LOWER6SEC      0.03
-        6    QLD1      ENERGY  58.71004
-        7    QLD1   RAISE5MIN      4.39
-        8    QLD1  RAISE60SEC         1
-        9    QLD1  LOWER60SEC      0.07
-        10   QLD1   RAISE6SEC         1
-        11   QLD1   LOWER6SEC      0.03
-        12    SA1      ENERGY   79.0014
-        13    SA1   RAISE5MIN      4.39
-        14    SA1  RAISE60SEC         1
-        15    SA1  LOWER60SEC      0.07
-        16    SA1   RAISE6SEC         1
-        17    SA1   LOWER6SEC      0.03
-        18   TAS1      ENERGY  79.00957
-        19   TAS1   RAISE5MIN      14.4
-        20   TAS1  RAISE60SEC      4.95
-        21   TAS1  LOWER60SEC      0.07
-        22   TAS1   RAISE6SEC      4.95
-        23   TAS1   LOWER6SEC      0.03
-        24   VIC1      ENERGY  75.23031
-        25   VIC1   RAISE5MIN      4.39
-        26   VIC1  RAISE60SEC         1
-        27   VIC1  LOWER60SEC      0.07
-        28   VIC1   RAISE6SEC         1
-        29   VIC1   LOWER6SEC      0.03
+           region     service      price
+        0    NSW1      ENERGY   53.99972
+        1    NSW1   RAISE5MIN       0.25
+        2    NSW1  RAISE60SEC       0.25
+        3    NSW1  LOWER60SEC          3
+        4    NSW1   RAISE6SEC       0.38
+        5    NSW1   LOWER6SEC          1
+        6    NSW1   RAISE1SEC       0.94
+        7    NSW1   LOWER1SEC       0.01
+        8    QLD1      ENERGY      -10.4
+        9    QLD1   RAISE5MIN       0.25
+        10   QLD1  RAISE60SEC       0.25
+        11   QLD1  LOWER60SEC          3
+        12   QLD1   RAISE6SEC       0.38
+        13   QLD1   LOWER6SEC          1
+        14   QLD1   RAISE1SEC       0.94
+        15   QLD1   LOWER1SEC       0.01
+        16    SA1      ENERGY        -30
+        17    SA1   RAISE5MIN       0.25
+        18    SA1  RAISE60SEC       0.25
+        19    SA1  LOWER60SEC          3
+        20    SA1   RAISE6SEC       0.38
+        21    SA1   LOWER6SEC          1
+        22    SA1   RAISE1SEC       0.94
+        23    SA1   LOWER1SEC       0.01
+        24   TAS1      ENERGY      260.2
+        25   TAS1   RAISE5MIN       0.38
+        26   TAS1  RAISE60SEC       0.38
+        27   TAS1  LOWER60SEC       0.38
+        28   TAS1   RAISE6SEC       0.38
+        29   TAS1   LOWER6SEC       0.38
+        30   TAS1   RAISE1SEC       0.94
+        31   TAS1   LOWER1SEC          0
+        32   VIC1      ENERGY  202.07105
+        33   VIC1   RAISE5MIN       0.25
+        34   VIC1  RAISE60SEC       0.25
+        35   VIC1  LOWER60SEC          3
+        36   VIC1   RAISE6SEC       0.38
+        37   VIC1   LOWER6SEC          1
+        38   VIC1   RAISE1SEC       0.94
+        39   VIC1   LOWER1SEC       0.01
 
         Returns
         -------
@@ -1130,9 +1160,9 @@ class XMLCacheManager:
             ================  ========================================
         """
         service_type_map = \
-            {'@EnergyPrice':'ENERGY', '@LRegPrice':'LOWERREG', '@RRegPrice':'RAISEREG', '@R5Price':'RAISE5MIN',
-             '@RL5Price':'LOWER5MIN', '@R60Price':'RAISE60SEC', '@L60Price':'LOWER60SEC', '@R6Price':'RAISE6SEC',
-             '@L6Price':'LOWER6SEC', '@R1Price':'RAISE1SEC', '@L1Price':'LOWER1SEC'}
+            {'@EnergyPrice': 'ENERGY', '@LRegPrice': 'LOWERREG', '@RRegPrice': 'RAISEREG', '@R5Price': 'RAISE5MIN',
+             '@RL5Price': 'LOWER5MIN', '@R60Price': 'RAISE60SEC', '@L60Price': 'LOWER60SEC', '@R6Price': 'RAISE6SEC',
+             '@L6Price': 'LOWER6SEC', '@R1Price': 'RAISE1SEC', '@L1Price': 'LOWER1SEC'}
         prices = dict(region=[], service=[], price=[])
         regions = self.xml['NEMSPDCaseFile']['NemSpdOutputs']['RegionSolution']
         for region in regions:

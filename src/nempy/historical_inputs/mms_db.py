@@ -2,6 +2,7 @@ import requests
 import zipfile
 import io
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 
 pd.set_option('display.width', None)
@@ -59,13 +60,12 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
-           DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
-    0    AGLHAL  2019/07/01 00:00:00  2020/01/20 00:00:00    GENERATOR             SHPS1      SA1                  0.9748                  1.0000      SCHEDULED
-    1   AGLNOW1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             NDT12     NSW1                  0.9929                  1.0000  NON-SCHEDULED
-    2  AGLSITA1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR            NLP13K     NSW1                  1.0009                  1.0000  NON-SCHEDULED
-    3    AGLSOM  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             VTTS1     VIC1                  0.9915                  0.9891      SCHEDULED
-    4   ANGAST1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             SDRN1      SA1                  0.9517                  0.9890      SCHEDULED
-
+           DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR SCHEDULE_TYPE SECONDARY_TLF
+    0    AGLHAL  2019/07/01 00:00:00  2020/01/20 00:00:00    GENERATOR             SHPS1      SA1                  0.9748                     1.0     SCHEDULED          None
+    338  RT_SA6  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART6      SA1                  1.0000                     1.0     SCHEDULED          None
+    337  RT_SA5  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART5      SA1                  1.0000                     1.0     SCHEDULED          None
+    336  RT_SA4  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART4      SA1                  1.0000                     1.0     SCHEDULED          None
+    335  RT_SA3  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART3      SA1                  1.0000                     1.0     SCHEDULED          None
 
     Clean up by deleting database created.
 
@@ -135,7 +135,8 @@ class DBManager:
                                                       'RAISE1SECACTUALAVAILABILITY',
                                                       'RAISE60SECACTUALAVAILABILITY', 'RAISE5MINACTUALAVAILABILITY',
                                                       'RAISEREGACTUALAVAILABILITY', 'LOWER6SECACTUALAVAILABILITY',
-                                                      'LOWER1SECACTUALAVAILABILITY'],
+                                                      'LOWER1SECACTUALAVAILABILITY', 'LOWER60SECACTUALAVAILABILITY',
+                                                      'LOWER5MINACTUALAVAILABILITY', 'LOWERREGACTUALAVAILABILITY'],
             table_primary_keys=['SETTLEMENTDATE', 'DUID'], con=self.con)
         self.DISPATCHPRICE = InputsBySettlementDate(
             table_name='DISPATCHPRICE', table_columns=['SETTLEMENTDATE', 'REGIONID', 'ROP', 'RAISE6SECROP',
@@ -146,7 +147,7 @@ class DBManager:
         self.DUDETAILSUMMARY = InputsStartAndEnd(
             table_name='DUDETAILSUMMARY', table_columns=['DUID', 'START_DATE', 'END_DATE', 'DISPATCHTYPE',
                                                          'CONNECTIONPOINTID', 'REGIONID', 'TRANSMISSIONLOSSFACTOR',
-                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE'],
+                                                         'DISTRIBUTIONLOSSFACTOR', 'SCHEDULE_TYPE', 'SECONDARY_TLF'],
             table_primary_keys=['START_DATE', 'DUID'], con=self.con)
         self.DUDETAIL = InputsByEffectiveDateVersionNo(
             table_name='DUDETAIL', table_columns=['DUID', 'EFFECTIVEDATE', 'VERSIONNO', 'REGISTEREDCAPACITY'],
@@ -262,7 +263,7 @@ class DBManager:
 
     def populate(self, start_year, start_month, end_year, end_month, verbose=True):
 
-        self.create_tables()
+        # self.create_tables()
 
         if start_month == 1:
             start_year -= 1
@@ -298,7 +299,6 @@ class DBManager:
         self.LOSSMODEL.set_data(year=end_year, month=end_month)
         self.DUDETAILSUMMARY.create_table_in_sqlite_db()
         self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
-        self.DUDETAIL.set_data(year=end_year, month=end_month)
         self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
         self.GENCONDATA.set_data(year=end_year, month=end_month)
         self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
@@ -471,7 +471,8 @@ class _MMSTable:
             'RAISE60SECROP': 'REAL', 'RAISE5MINROP': 'REAL', 'RAISEREGROP': 'REAL', 'LOWER6SECROP': 'REAL',
             'LOWER1SECROP': 'REAL', 'LOWER60SECROP': 'REAL', 'LOWER5MINROP': 'REAL', 'LOWERREGROP': 'REAL',
             'FROM_REGION_TLF': 'REAL', 'TO_REGION_TLF': 'REAL', 'ICTYPE': 'TEXT', 'LINKID': 'TEXT',
-            'FROMREGION': 'TEXT', 'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR', 'ROP': 'REAL'
+            'FROMREGION': 'TEXT', 'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR',
+            'ROP': 'REAL', 'SECONDARY_TLF': 'REAL'
         }
 
     def create_table_in_sqlite_db(self):
@@ -523,6 +524,7 @@ class _MMSTable:
             create_query = base_create_query.format(self.table_name, columns, primary_keys)
             cur.execute(create_query)
             self.con.commit()
+            x=1
 
     def _create_sample_table(self, date_time):
         print(self.table_name)
@@ -606,6 +608,8 @@ class _SingleDataSource(_MMSTable):
         None
         """
         data = _download_to_df(self.url, self.table_name, year, month)
+        cols_to_add = [col for col in self.table_columns if col not in data.columns]
+        data.loc[:, cols_to_add] = np.nan
         data = data.loc[:, self.table_columns]
         with self.con:
             data.to_sql(self.table_name, con=self.con, if_exists='replace', index=False)
@@ -1033,7 +1037,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
         Create the table object.
 
-        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['START_DATE', 'END_DATE', 'INITIALMW'],
+        >>> table = InputsStartAndEnd(table_name='EXAMPLE', table_columns=['DUID', 'START_DATE', 'END_DATE', 'INITIALMW'],
         ...                           table_primary_keys=['START_DATE'], con=con)
 
         Create the table in the database.
@@ -1044,6 +1048,7 @@ class InputsStartAndEnd(_SingleDataSource):
         database so some simple example data can be added.
 
         >>> data = pd.DataFrame({
+        ...   'DUID': ['A', 'A'],
         ...   'START_DATE': ['2019/01/01 00:00:00', '2019/01/02 00:00:00'],
         ...   'END_DATE': ['2019/01/02 00:00:00', '2019/01/03 00:00:00'],
         ...   'INITIALMW': [1.0, 2.0]})
@@ -1053,20 +1058,21 @@ class InputsStartAndEnd(_SingleDataSource):
         When we call get_data the output is filtered by START_DATE and END_DATE.
 
         >>> print(table.get_data(date_time='2019/01/01 00:00:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        0    A  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
+
 
         >>> print(table.get_data(date_time='2019/01/01 12:00:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        0    A  2019/01/01 00:00:00  2019/01/02 00:00:00        1.0
 
         >>> print(table.get_data(date_time='2019/01/02 00:00:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        1    A  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         >>> print(table.get_data(date_time='2019/01/02 00:12:00'))
-                    START_DATE             END_DATE  INITIALMW
-        0  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
+          DUID           START_DATE             END_DATE  INITIALMW
+        0    A  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
@@ -1083,9 +1089,12 @@ class InputsStartAndEnd(_SingleDataSource):
         pd.DataFrame
         """
 
-        query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE > '{datetime}'"
+        query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE >= '{datetime}'"
         query = query.format(table=self.table_name, datetime=date_time)
-        return pd.read_sql_query(query, con=self.con)
+        data = pd.read_sql_query(query, con=self.con)
+        data = data.sort_values('START_DATE')
+        data = data.drop_duplicates(subset=["DUID"], keep='last')
+        return data
 
 
 class InputsByMatchDispatchConstraints(_AllHistDataSource):

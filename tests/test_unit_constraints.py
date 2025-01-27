@@ -1,6 +1,6 @@
 import pandas as pd
 from pandas._testing import assert_frame_equal
-from nempy.spot_markert_backend import unit_constraints
+from nempy.spot_market_backend import unit_constraints
 
 
 def test_create_constraints():
@@ -16,6 +16,7 @@ def test_create_constraints():
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'constraint_id': [4, 5],
         'type': ['<=', '<='],
         'rhs': [16.0, 23.0]
@@ -24,6 +25,7 @@ def test_create_constraints():
         'constraint_id': [4, 5],
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'coefficient': [1.0, 1.0]
     })
     assert_frame_equal(output_rhs, expected_rhs)
@@ -43,6 +45,7 @@ def test_one_unit_create_constraints():
     expected_rhs = pd.DataFrame({
         'unit': ['A'],
         'service': ['energy'],
+        'dispatch_type': ['generator'],
         'constraint_id': [4],
         'type': ['<='],
         'rhs': [16.0],
@@ -52,6 +55,7 @@ def test_one_unit_create_constraints():
         'constraint_id': [4],
         'unit': ['A'],
         'service': ['energy'],
+        'dispatch_type': ['generator'],
         'coefficient': [1.0],
     })
     assert_frame_equal(output_rhs, expected_rhs)
@@ -70,6 +74,7 @@ def test_ramp_down():
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'constraint_id': [4, 5],
         'type': ['>=', '>='],
         'rhs': [15.0, 20.0]
@@ -78,6 +83,7 @@ def test_ramp_down():
         'constraint_id': [4, 5],
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'coefficient': [1.0, 1.0],
     })
     assert_frame_equal(output_rhs.reset_index(drop=True), expected_rhs)
@@ -96,6 +102,7 @@ def test_ramp_up():
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'constraint_id': [4, 5],
         'type': ['<=', '<='],
         'rhs': [17.0, 26.0],
@@ -104,6 +111,7 @@ def test_ramp_up():
         'constraint_id': [4, 5],
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'coefficient': [1.0, 1.0]
     })
     assert_frame_equal(output_rhs.reset_index(drop=True), expected_rhs)
@@ -116,10 +124,12 @@ def test_capacity():
         'capacity': [16.0, 23.0]
     })
     next_constraint_id = 4
-    output_rhs, output_variable_map = unit_constraints.capacity(unit_limit, next_constraint_id)
+    bidirectional_units = []
+    output_rhs, output_variable_map = unit_constraints.capacity(unit_limit, next_constraint_id, bidirectional_units)
     expected_rhs = pd.DataFrame({
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'constraint_id': [4, 5],
         'type': ['<=', '<='],
         'rhs': [16.0, 23.0],
@@ -128,6 +138,7 @@ def test_capacity():
         'constraint_id': [4, 5],
         'unit': ['A', 'B'],
         'service': ['energy', 'energy'],
+        'dispatch_type': ['generator', 'generator'],
         'coefficient': [1.0, 1.0],
     })
     assert_frame_equal(output_rhs.reset_index(drop=True), expected_rhs)
