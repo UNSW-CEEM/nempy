@@ -70,7 +70,7 @@ def _adjust_ramp_rates_for_fast_start_profiles(ramp_rates, run_type, fast_start_
 
 
 def _adjust_for_scada_ramp_rates(ramp_rates, scada_ramp_rates):
-    ramp_rates = pd.merge(ramp_rates, scada_ramp_rates, on='unit')
+    ramp_rates = pd.merge(ramp_rates, scada_ramp_rates, on='unit', how="left")
     if "scada_ramp_down_rate" in ramp_rates.columns:
         ramp_rates['ramp_down_rate'] = np.fmin(ramp_rates['ramp_down_rate'], ramp_rates['scada_ramp_down_rate'])
         ramp_rates = ramp_rates.drop(columns=['scada_ramp_down_rate'])

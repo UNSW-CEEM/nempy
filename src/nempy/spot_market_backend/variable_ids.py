@@ -3,7 +3,7 @@ import numpy as np
 from nempy.help_functions import helper_functions as hf
 
 
-def bids(volume_bids, unit_info, next_variable_id, bidirectional_units=None):
+def bids(volume_bids, unit_info, next_variable_id, bidirectional_units):
     """Create decision variables that correspond to unit bids, for use in the linear program.
 
     This function defines the needed parameters for each variable, with a lower bound equal to zero, an upper bound

@@ -3,6 +3,7 @@ import numpy as np
 import doctest
 from nempy.historical_inputs import aemo_to_nempy_name_mapping as an
 
+pd.set_option('display.width', None)
 
 def _test_setup():
     import sqlite3
@@ -13,8 +14,7 @@ def _test_setup():
     mms_db_manager = mms_db.DBManager(connection=con)
     xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    inputs_loader.set_interval('2019/01/10 12:05:00')
-    # inputs_loader.set_interval('2024/08/01 02:15:00')
+    inputs_loader.set_interval('2024/07/10 12:05:00')
     return inputs_loader
 
 
@@ -41,27 +41,27 @@ class UnitData:
     >>> mms_db_manager = mms_db.DBManager(connection=con)
     >>> xml_cache_manager = xml_cache.XMLCacheManager('test_nemde_cache')
     >>> inputs_loader = loaders.RawInputsLoader(xml_cache_manager, mms_db_manager)
-    >>> inputs_loader.set_interval('2019/01/10 12:05:00')
+    >>> inputs_loader.set_interval('2024/07/10 12:05:00')
 
     Create the UnitData instance.
 
     >>> unit_data = UnitData(inputs_loader)
 
     >>> unit_data.get_unit_bid_availability()
-              unit  capacity
-    0       AGLHAL     170.0
-    1       AGLSOM     160.0
-    2      ANGAST1      44.0
-    23      BALBG1       0.0
-    33      BALBL1       0.0
-    ...        ...       ...
-    989   YARWUN_1     165.0
-    990      YWPS1     380.0
-    999      YWPS2     180.0
-    1008     YWPS3     350.0
-    1017     YWPS4     340.0
+             unit dispatch_type  capacity
+    0     ADPBA1G     generator       6.0
+    10    ADPBA1L          load       6.0
+    12     ADPPV1     generator      19.0
+    13     AGLHAL     generator     139.0
+    14     AGLSOM     generator     128.0
+    ...       ...           ...       ...
+    1713    YWPS4     generator     340.0
+    210      BHB1     generator       0.0
+    211      BHB1          load       0.0
+    1622   WANDB1     generator       0.0
+    1623   WANDB1          load       0.0
     <BLANKLINE>
-    [218 rows x 2 columns]
+    [446 rows x 3 columns]
     """
 
     def __init__(self, raw_input_loader):
@@ -111,20 +111,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_unit_bid_availability()
-                  unit  direction  capacity
-        0       AGLHAL  generator     170.0
-        1       AGLSOM  generator     160.0
-        2      ANGAST1  generator      44.0
-        23      BALBG1  generator       0.0
-        33      BALBL1       load       0.0
-        ...        ...        ...       ...
-        989   YARWUN_1  generator     165.0
-        990      YWPS1  generator     380.0
-        999      YWPS2  generator     180.0
-        1008     YWPS3  generator     350.0
-        1017     YWPS4  generator     340.0
+                 unit dispatch_type  capacity
+        0     ADPBA1G     generator       6.0
+        10    ADPBA1L          load       6.0
+        12     ADPPV1     generator      19.0
+        13     AGLHAL     generator     139.0
+        14     AGLSOM     generator     128.0
+        ...       ...           ...       ...
+        1713    YWPS4     generator     340.0
+        210      BHB1     generator       0.0
+        211      BHB1          load       0.0
+        1622   WANDB1     generator       0.0
+        1623   WANDB1          load       0.0
         <BLANKLINE>
-        [218 rows x 3 columns]
+        [446 rows x 3 columns]
 
         Returns
         -------
@@ -133,6 +133,7 @@ class UnitData:
             ================  ========================================
             Columns:          Description:
             unit              unique identifier for units, (as `str`) \n
+            dispatch_type     "load" or "generator", (as `str`) \n
             capacity          unit bid in max availability, in MW, \n
                               (as `str`)
             ================  ========================================
@@ -167,20 +168,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_unit_uigf_limits()
-                unit  capacity
-        0      ARWF1    18.654
-        1   BALDHWF1    11.675
-        2      BANN1    53.661
-        3     BLUFF1     8.655
-        4     BNGSF1    98.877
-        ..       ...       ...
-        57     WGWF1     7.649
-        58   WHITSF1     6.075
-        59  WOODLWN1    11.659
-        60     WRSF1    20.000
-        61     WRWF1     7.180
+                 unit  capacity
+        0      ADPPV1  10.90800
+        1       ARWF1   0.00000
+        2      AVLSF1  55.26000
+        3    BALDHWF1  59.81800
+        4    BANGOWF1  41.89800
+        ..        ...       ...
+        165  WSTWYSF1  49.90000
+        166    WYASF1  33.90909
+        167  YARANSF1  59.55000
+        168    YATSF1  20.00000
+        169   YENDWF1   7.00604
         <BLANKLINE>
-        [62 rows x 2 columns]
+        [170 rows x 2 columns]
 
         Returns
         -------
@@ -208,20 +209,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_bid_ramp_rates()
-                 unit  direction  initial_output  ramp_up_rate  ramp_down_rate
-        0      AGLHAL  generator        0.000000    720.000000      720.000000
-        1      AGLSOM  generator        0.000000    480.000000      480.000000
-        2     ANGAST1  generator        0.000000    840.000000      840.000000
-        3       ARWF1  generator       15.800001   1200.000000      600.000000
-        4      BALBG1  generator        0.000000   6000.000000     6000.000000
-        ..        ...        ...             ...           ...             ...
-        275  YARWUN_1  generator      157.019989      0.000000        0.000000
-        276     YWPS1  generator      383.959503    177.750006      177.750006
-        277     YWPS2  generator      180.445572    177.750006      177.750006
-        278     YWPS3  generator      353.460754    175.499997      175.499997
-        279     YWPS4  generator      338.782288    180.000000      180.000000
+                 unit dispatch_type  ramp_down_rate  ramp_up_rate  initial_output
+        0     ADPBA1G     generator           120.0         120.0         0.00000
+        10    ADPBA1L          load           120.0         120.0         1.40400
+        12     ADPPV1     generator           120.0         120.0        10.90800
+        13     AGLHAL     generator           720.0         720.0         0.00000
+        14     AGLSOM     generator           480.0         480.0        60.00000
+        ...       ...           ...             ...           ...             ...
+        1713    YWPS4     generator           180.0         180.0       337.93546
+        1722     BHB1     generator           600.0         600.0         0.00000
+        1723     BHB1          load           600.0         600.0         0.00000
+        1724   WANDB1     generator          1200.0        1200.0         0.00000
+        1725   WANDB1          load          1200.0        1200.0         0.00000
         <BLANKLINE>
-        [280 rows x 5 columns]
+        [446 rows x 5 columns]
 
         Returns
         -------
@@ -230,8 +231,7 @@ class UnitData:
             ================  ========================================
             Columns:          Description:
             unit              unique identifier for units, (as `str`) \n
-            dispatch_type    "load" or "generator", optional default
-                             'generator', (as `str`) \n
+            dispatch_type    "load" or "generator" (as `str`) \n
             initial_output    the output/consumption of the unit at \n
                               the start of the dispatch interval, \n
                               in MW, (as `np.float64`)
@@ -260,21 +260,26 @@ class UnitData:
 
         >>> unit_data = UnitData(inputs_loader)
 
-        >>> unit_data.get_scada_ramp_rates()
-                 unit  direction  initial_output  ramp_up_rate  ramp_down_rate
-        0      AGLHAL  generator        0.000000    720.000000      720.000000
-        1      AGLSOM  generator        0.000000    480.000000      480.000000
-        2     ANGAST1  generator        0.000000    840.000000      840.000000
-        3       ARWF1  generator       15.800001   1200.000000      600.000000
-        4      BALBG1  generator        0.000000   6000.000000     6000.000000
-        ..        ...        ...             ...           ...             ...
-        275  YARWUN_1  generator      157.019989      0.000000        0.000000
-        276     YWPS1  generator      383.959503    177.750006      177.750006
-        277     YWPS2  generator      180.445572    177.750006      177.750006
-        278     YWPS3  generator      353.460754    175.499997      175.499997
-        279     YWPS4  generator      338.782288    180.000000      180.000000
+        >>> unit_data.get_scada_ramp_rates(inlude_initial_output=True)
+                 unit  scada_ramp_down_rate  scada_ramp_up_rate  initial_output
+        0     ADPBA1G             93.119938           93.119938         0.00000
+        1     ADPBA1L             93.119938           93.119938         1.40400
+        2      ADPPV1            298.499937          298.499937        10.90800
+        30     BALBG1          54000.000000        54000.000000         0.00000
+        31     BALBL1          54000.000000        54000.000000         0.00000
+        ..        ...                   ...                 ...             ...
+        481  WOOLGSF1           2112.000046         2112.000046        91.80000
+        493     YWPS1            180.000000          180.000000         0.00000
+        494     YWPS2            176.624994          176.624994       358.89621
+        495     YWPS3            181.124997          181.124997       371.52658
+        496     YWPS4            180.000000          180.000000       337.93546
         <BLANKLINE>
-        [280 rows x 5 columns]
+        [191 rows x 4 columns]
+
+
+        Args:
+            inlude_initial_output: boolean specifying whether or not to
+            inlcude the column initial_output in the returned dataframe, default False.
 
         Returns
         -------
@@ -287,6 +292,9 @@ class UnitData:
                                   (as `np.float64`)
             scada_ramp_down_rate  the ramp down rate, in MW/h, \n
                                   (as `np.float64`)
+            initial_output        the output/consumption of the unit at \n
+                                  the start of the dispatch interval, \n
+                                  in MW, (as `np.float64`)
             ====================  ========================================
         """
         cols = ['DUID', 'RAMPDOWNRATE', 'RAMPUPRATE']
@@ -298,139 +306,10 @@ class UnitData:
             columns={'RAMPDOWNRATE': 'SCADARAMPDOWNRATE', 'RAMPUPRATE': 'SCADARAMPUPRATE'}
         )
         ramp_rates = an.map_aemo_column_names_to_nempy_names(scada_telemetered_ramp_rates)
-        return ramp_rates
-
-    def _remove_fast_start_units_starting_in_mode_0_1_2(self, dataframe):
-        fast_start_profiles = self._get_fast_start_profiles()
-        units_starting_in_mode_0_1_2 = list(
-            fast_start_profiles[fast_start_profiles['current_mode'].isin([0, 1, 2])]['unit'].unique())
-        dataframe = dataframe[~dataframe['DUID'].isin(units_starting_in_mode_0_1_2)]
-        return dataframe
-
-    def _remove_fast_start_units_ending_in_mode_0_1_2(self, dataframe):
-        fast_start_profiles = self.updated_fast_start_profiles.copy()
-        units_starting_in_mode_0_1_2 = list(
-            fast_start_profiles[fast_start_profiles['end_mode'].isin([0, 1, 2])]['unit'].unique())
-        dataframe = dataframe[~dataframe['DUID'].isin(units_starting_in_mode_0_1_2)]
-        return dataframe
-
-    def _remove_fast_start_units_ending_dispatch_interval_in_mode_two(self, dataframe):
-        fast_start_profiles = self._get_fast_start_profiles()
-        units_ending_in_mode_two = list(fast_start_profiles[fast_start_profiles['end_mode'] == 2]['unit'].unique())
-        dataframe = dataframe[~dataframe['DUID'].isin(units_ending_in_mode_two)]
-        return dataframe
-
-    def _adjust_ramp_rates_of_units_ending_in_mode_three_and_four(self, ramp_rates, dispatch_interval):
-        """
-        If a unit is ending in mode three of four but it has been less than 5 minutes since leaving mode 2 or 1 then
-        adjust their ramp rate to account for the limited time operating without a dispatch inflexibility profile
-        upper bound
-        """
-        fast_start_profiles = self.updated_fast_start_profiles.copy()
-        if not fast_start_profiles.empty:
-            profiles_to_adjust = fast_start_profiles[~fast_start_profiles['time_since_end_of_mode_two'].isna()]
-            profiles_to_adjust = profiles_to_adjust.loc[:, ['unit', 'min_loading', 'time_since_end_of_mode_two']]
-            profiles_to_adjust = pd.merge(ramp_rates, profiles_to_adjust, 'inner', left_on='DUID',
-                                          right_on='unit')
-            profiles_to_adjust['ramp_mw_per_min'] = profiles_to_adjust['RAMPUPRATE'] / 60
-            profiles_to_adjust['ramp_max'] = profiles_to_adjust['time_since_end_of_mode_two'] * \
-                                                   profiles_to_adjust['ramp_mw_per_min'] + \
-                                                   profiles_to_adjust['min_loading']
-            profiles_to_adjust['RAMPUPRATE'] = (profiles_to_adjust['ramp_max'] -
-                                                profiles_to_adjust['INITIALMW']) * \
-                                                (60 / dispatch_interval)
-            profiles_to_adjust = profiles_to_adjust.drop(
-                columns=["unit", "min_loading", "time_since_end_of_mode_two", "unit", "ramp_mw_per_min",
-                         "ramp_max"])
-            ramp_rates_not_adjusted = ramp_rates[~ramp_rates['DUID'].isin(profiles_to_adjust['DUID'])]
-            ramp_rates = pd.concat([profiles_to_adjust, ramp_rates_not_adjusted])
-        return ramp_rates
-
-    def _adjust_ramp_rates_to_account_for_fast_start_mode_two_inflexibility_profile(self, ramp_rates):
-        fast_start_profiles = self._get_fast_start_profiles()
-        if not fast_start_profiles.empty:
-            fast_start_profiles = self._fast_start_mode_two_initial_mw(fast_start_profiles)
-            fast_start_target = self._fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_profiles,
-                                                                       self.dispatch_interval)
-            ramp_rates = pd.merge(ramp_rates, fast_start_target, 'left', left_on='DUID', right_on='unit')
-            ramp_rates['INITIALMW'] = np.where(~ramp_rates['fast_start_initial_mw'].isna(),
-                                               ramp_rates['fast_start_initial_mw'], ramp_rates['INITIALMW'])
-            ramp_rates['RAMPUPRATE'] = np.where(~ramp_rates['new_ramp_up_rate'].isna(),
-                                                ramp_rates['new_ramp_up_rate'], ramp_rates['RAMPUPRATE'])
-        return ramp_rates
-
-    @staticmethod
-    def _fast_start_mode_two_initial_mw(fast_start_profile):
-        """Calculates the initial conditions of the unit had it adhering to the dispatch inflexibility profile."""
-        units_in_mode_two = \
-            fast_start_profile[(fast_start_profile['current_mode'] == 2)].copy()
-        units_in_mode_two['fast_start_initial_mw'] = (((units_in_mode_two['time_in_current_mode'])
-                                                       / units_in_mode_two['mode_two_length']) *
-                                                      units_in_mode_two['min_loading'])
-        return units_in_mode_two
-
-    @staticmethod
-    def _fast_start_adjusted_ramp_up_rate(ramp_rates, fast_start_end_condition, dispatch_interval):
-        """Calculate the ramp rate required to adjust for a unit spending the first part of the dispatch interval
-           constrained by its dispatch inflexibility profile."""
-        fast_start_end_condition = fast_start_end_condition[(fast_start_end_condition['current_mode'] == 2) &
-                                                            (fast_start_end_condition['end_mode'] > 2)]
-        fast_start_end_condition = pd.merge(ramp_rates, fast_start_end_condition, left_on='DUID', right_on='unit')
-        fast_start_end_condition['ramp_mw_per_min'] = fast_start_end_condition['RAMPUPRATE'] / 60
-        fast_start_end_condition['ramp_max'] = fast_start_end_condition['time_after_mode_two'] * \
-                                               fast_start_end_condition['ramp_mw_per_min'] + fast_start_end_condition[
-                                                   'min_loading']
-        fast_start_end_condition['new_ramp_up_rate'] = (fast_start_end_condition['ramp_max'] -
-                                                        fast_start_end_condition['fast_start_initial_mw']) * \
-                                                       (60 / dispatch_interval)
-        return fast_start_end_condition.loc[:, ['unit', 'fast_start_initial_mw', 'new_ramp_up_rate']]
-
-    def get_as_bid_ramp_rates(self):
-        """Get ramp rates used as bid by units.
-
-        Examples
-        --------
-
-        >>> inputs_loader = _test_setup()
-
-        >>> unit_data = UnitData(inputs_loader)
-
-        >>> unit_data.get_as_bid_ramp_rates()
-                  unit  direction  ramp_up_rate  ramp_down_rate
-        0       AGLHAL  generator         720.0           720.0
-        1       AGLSOM  generator         480.0           480.0
-        2      ANGAST1  generator         840.0           840.0
-        9        ARWF1  generator        1200.0           600.0
-        23      BALBG1  generator        6000.0          6000.0
-        ...        ...        ...           ...             ...
-        989   YARWUN_1  generator           0.0             0.0
-        990      YWPS1  generator         180.0           180.0
-        999      YWPS2  generator         180.0           180.0
-        1008     YWPS3  generator         180.0           180.0
-        1017     YWPS4  generator         180.0           180.0
-        <BLANKLINE>
-        [280 rows x 4 columns]
-
-        Returns
-        -------
-        pd.DataFrame
-
-            ================  ========================================
-            Columns:          Description:
-            unit              unique identifier for units, (as `str`) \n
-            dispatch_type    "load" or "generator", optional default
-                             'generator', (as `str`) \n
-            ramp_up_rate      the ramp up rate, in MW/h, \n
-                              (as `np.float64`)
-            ramp_down_rate    the ramp down rate, in MW/h, \n
-                              (as `np.float64`)
-            ================  ========================================
-        """
-        ramp_rates = self.volume_bids.loc[:, ['DUID', 'DIRECTION', 'BIDTYPE', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-        ramp_rates = ramp_rates[ramp_rates['BIDTYPE'] == 'ENERGY'].copy()
-        ramp_rates = ramp_rates.loc[:, ['DUID', 'DIRECTION', 'RAMPUPRATE', 'RAMPDOWNRATE']]
-        ramp_rates = an.map_aemo_column_names_to_nempy_names(ramp_rates)
-        ramp_rates = an.map_aemo_column_values_to_nempy_name(ramp_rates, 'direction')
+        ramp_rates = ramp_rates[
+            ~(ramp_rates["scada_ramp_up_rate"].isna() &
+              ramp_rates["scada_ramp_down_rate"].isna())
+        ].copy()
         return ramp_rates
 
     def get_initial_unit_output(self):
@@ -444,20 +323,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_initial_unit_output()
-                 unit  initial_output
-        0      AGLHAL        0.000000
-        1      AGLSOM        0.000000
-        2     ANGAST1        0.000000
-        3       APD01        0.000000
-        4       ARWF1       15.800001
-        ..        ...             ...
-        283  YARWUN_1      157.019989
-        284     YWPS1      383.959503
-        285     YWPS2      180.445572
-        286     YWPS3      353.460754
-        287     YWPS4      338.782288
+                unit  initial_output
+        0    ADPBA1G         0.00000
+        1    ADPBA1L         1.40400
+        2     ADPPV1        10.90800
+        3     AGLHAL         0.00000
+        4     AGLSOM        60.00000
+        ..       ...             ...
+        492  YENDWF1         6.75000
+        493    YWPS1         0.00000
+        494    YWPS2       358.89621
+        495    YWPS3       371.52658
+        496    YWPS4       337.93546
         <BLANKLINE>
-        [288 rows x 2 columns]
+        [497 rows x 2 columns]
 
         Returns
         -------
@@ -475,7 +354,8 @@ class UnitData:
         initial_unit_output = an.map_aemo_column_names_to_nempy_names(initial_unit_output)
         return initial_unit_output
 
-    def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None):
+    def get_fast_start_profiles_for_dispatch(self, unconstrained_dispatch=None,
+                                             return_all_columns=False) -> pd.DataFrame:
         """Get the parameters needed to construct the fast dispatch inflexibility profiles used for dispatch.
 
         If the results of a non-fast start constrained dispatch run are provided then these are used to commit fast
@@ -483,47 +363,86 @@ class UnitData:
 
         For more info on fast start dispatch inflexibility profiles :download:`see AEMO docs <../../docs/pdfs/Fast_Start_Unit_Inflexibility_Profile_Model_October_2014.pdf>`.
 
+        Examples
+        --------
+
+        >>> inputs_loader = _test_setup()
+
+        >>> unit_data = UnitData(inputs_loader)
+
+        >>> unit_data.get_fast_start_profiles_for_dispatch()
+                unit  current_mode
+        0     AGLHAL             0
+        1     AGLSOM             4
+        2   BARRON-1             4
+        3   BARRON-2             0
+        4   BBTHREE1             0
+        ..       ...           ...
+        68     VPGS4             0
+        69     VPGS5             0
+        70     VPGS6             0
+        71   W/HOE#1             0
+        72   W/HOE#2             0
+        <BLANKLINE>
+        [73 rows x 2 columns]
+
         Returns
         -------
         pd.DataFrame
 
+            If unconstrained_dispatch is not provided, i.e. geting profiles of first run:
+
             ================  ========================================
             Columns:          Description:
             unit              unique identifier for units, (as `str`) \n
-            end_mode          the fast start mode the unit will end \n
-                              the dispatch interval in, (as `np.int64`)
-            time_in_end_mode  the amount of time the unit will have \n
-                              spend in the end mode at the end of the \n
-                              dispatch interval, (as `np.float64`)
-            mode_two_length   the length the units mode two, in minutes \n
-                              (as `np.float64`)
-            mode_four_length  the length the units mode four, in minutes \n
-                              (as `np.float64`)
-            min_loading       the mininum opperating level of the unit \n
-                              during mode three, in MW, (as `no.float64`)
+
+            dispatch_type    "load" or "generator" (as `str`) \n
+            current_mode      the fast start mode the unit starts the interval in \n
+                              (as `np.int64`)
             ================  ========================================
+
+            If unconstrained_dispatch is provided, i.e. geting profiles of second run:
+
+            ==========================  ========================================
+            Columns:                    Description:
+            unit                        unique identifier for units, (as `str`) \n
+            end_mode                    the fast start mode the unit will end \n
+                                        the dispatch interval in, (as `np.int64`)
+            time_in_end_mode            the amount of time the unit will have \n
+                                        spend in the end mode at the end of the \n
+                                        dispatch interval, (as `np.float64`)
+            mode_two_length             the length the units mode two, in minutes \n
+                                        (as `np.float64`)
+            mode_four_length            the length the units mode four, in minutes\n
+                                        (as `np.float64`)
+            min_loading                 the mininum opperating level of the unit \n
+                                        during mode three, in MW, (as `no.float64`)
+            time_since_end_of_mode_two  the time since the unit was last operating\n
+                                        in mode two in minutes , (as `np.int64`)
+            ==========================  ========================================
+
         """
         profiles = self._get_fast_start_profiles(unconstrained_dispatch=unconstrained_dispatch)
         self.updated_fast_start_profiles = profiles
         profiles['mode_two_length'] = np.float64(profiles['mode_two_length'])
         profiles['mode_four_length'] = np.float64(profiles['mode_four_length'])
         profiles['min_loading'] = np.float64(profiles['min_loading'])
-        if unconstrained_dispatch is not None:
+        if unconstrained_dispatch is not None and not return_all_columns:
             profiles = profiles.loc[:, ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
-                                        'mode_four_length', 'min_loading' , 'time_since_end_of_mode_two']]
-        unit_info = self.get_unit_info().loc[:, ['unit', 'dispatch_type']]
-        profiles = pd.merge(profiles, unit_info, on='unit')
+                                        'mode_four_length', 'min_loading', 'time_since_end_of_mode_two']]
+        elif not return_all_columns:
+            profiles = profiles.loc[:, ['unit', 'current_mode']]
         return profiles
 
     def _get_fast_start_profiles(self, unconstrained_dispatch=None):
         fast_start_profiles = self.fast_start_profiles
         fast_start_profiles = an.map_aemo_column_names_to_nempy_names(fast_start_profiles)
         if unconstrained_dispatch is not None:
-            fast_start_profiles = self.update_modes(fast_start_profiles, unconstrained_dispatch)
+            fast_start_profiles = self._update_modes(fast_start_profiles, unconstrained_dispatch)
         return fast_start_profiles
 
     @staticmethod
-    def update_modes(fast_start_profiles, unconstrained_dispatch):
+    def _update_modes(fast_start_profiles, unconstrained_dispatch):
         unconstrained_dispatch = unconstrained_dispatch[unconstrained_dispatch['service'] == 'energy']
         fast_start_profiles = pd.merge(fast_start_profiles, unconstrained_dispatch, on='unit')
         fsp = fast_start_profiles
@@ -569,16 +488,6 @@ class UnitData:
         df1['temp_time_in_current_mode'] = 0.0
         fsp = pd.concat([df1, df2])
 
-        # Move units from mode four to mode 0
-        # mask = (fsp['temp_current_mode'] == 4) & (fsp['mode_four_length'] - fsp['temp_time_in_current_mode'] <
-        #                                      fsp['time_left_in_interval'])
-        # df1 = fsp[mask].copy()
-        # df2 = fsp[~mask].copy()
-        # df1['temp_current_mode'] = 0
-        # df1['time_left_in_interval'] = df1['time_left_in_interval'] - (df1['mode_four_length'] - df1['temp_time_in_current_mode'])
-        # df1['time_in_end_mode'] = 0.0
-        # fsp = pd.concat([df1, df2])
-
         fsp['time_in_end_mode'] = fsp['temp_time_in_current_mode'] + fsp['time_left_in_interval']
         fsp['end_mode'] = fsp['temp_current_mode']
 
@@ -607,20 +516,20 @@ class UnitData:
         >>> unit_data = UnitData(inputs_loader)
 
         >>> unit_data.get_unit_info()
-                 unit region dispatch_type  loss_factor
-        0      AGLHAL    SA1     generator     0.971500
-        1     AGLNOW1   NSW1     generator     1.003700
-        2    AGLSITA1   NSW1     generator     1.002400
-        3      AGLSOM   VIC1     generator     0.984743
-        4     ANGAST1    SA1     generator     1.005674
-        ..        ...    ...           ...          ...
-        477     YWNL1   VIC1     generator     0.957300
-        478     YWPS1   VIC1     generator     0.969600
-        479     YWPS2   VIC1     generator     0.957300
-        480     YWPS3   VIC1     generator     0.957300
-        481     YWPS4   VIC1     generator     0.957300
+                unit dispatch_type region  loss_factor
+        0    ADPBA1G     generator    SA1     1.013527
+        1    ADPBA1L          load    SA1     1.013527
+        2     ADPPV1     generator    SA1     1.013527
+        3     AGLHAL     generator    SA1     0.956500
+        4     AGLSOM     generator   VIC1     0.979065
+        ..       ...           ...    ...          ...
+        494  YENDWF1     generator   VIC1     0.930059
+        495    YWPS1     generator   VIC1     0.962100
+        496    YWPS2     generator   VIC1     0.960400
+        497    YWPS3     generator   VIC1     0.960400
+        498    YWPS4     generator   VIC1     0.960400
         <BLANKLINE>
-        [482 rows x 4 columns]
+        [499 rows x 4 columns]
 
         Returns
         -------
@@ -691,36 +600,36 @@ class UnitData:
         >>> volume_bids, price_bids = unit_data.get_processed_bids()
 
         >>> volume_bids
-                 unit    service    1      2     3    4    5     6     7     8    9     10
-        0      AGLHAL     energy  0.0    0.0   0.0  0.0  0.0   0.0  60.0   0.0  0.0  160.0
-        1      AGLSOM     energy  0.0    0.0   0.0  0.0  0.0   0.0   0.0   0.0  0.0  170.0
-        2     ANGAST1     energy  0.0    0.0   0.0  0.0  0.0  50.0   0.0   0.0  0.0   50.0
-        9       ARWF1     energy  0.0  241.0   0.0  0.0  0.0   0.0   0.0   0.0  0.0    0.0
-        23     BALBG1     energy  0.0    0.0   0.0  0.0  0.0   0.0   0.0   0.0  0.0   30.0
-        ..        ...        ...  ...    ...   ...  ...  ...   ...   ...   ...  ...    ...
-        364  TREVALLN  raise_reg  0.0    0.0   0.0  0.0  0.0  28.0   0.0   0.0  0.0   73.0
-        365  TUNGATIN  raise_reg  0.0   16.0  61.0  0.0  0.0   0.0   0.0   0.0  0.0   63.0
-        367       VP6  raise_reg  0.0    0.0   0.0  0.0  0.0   0.0   5.0  10.0  5.0   30.0
-        369     YWPS3  raise_reg  0.0    0.0   0.0  0.0  0.0   0.0   5.0  10.0  0.0    5.0
-        370     YWPS4  raise_reg  0.0    0.0   0.0  0.0  0.0   0.0   5.0  10.0  0.0    5.0
+                unit     service dispatch_type    1     2    3      4    5     6    7    8    9     10
+        0    ADPBA1G      energy     generator  0.0   0.0  0.0    0.0  0.0   0.0  0.0  6.0  0.0    0.0
+        10   ADPBA1L      energy          load  0.0   0.0  0.0    0.0  6.0   0.0  0.0  0.0  0.0    0.0
+        12    ADPPV1      energy     generator  0.0   0.0  1.0    1.0  4.0  13.0  0.0  0.0  0.0    0.0
+        13    AGLHAL      energy     generator  0.0   0.0  0.0    0.0  0.0   0.0  0.0  0.0  0.0  255.0
+        14    AGLSOM      energy     generator  0.0  60.0  0.0  110.0  0.0   0.0  0.0  0.0  0.0    0.0
+        ..       ...         ...           ...  ...   ...  ...    ...  ...   ...  ...  ...  ...    ...
+        619  KIAMSF1   lower_60s     generator  0.0  37.0  0.0    0.0  0.0   0.0  0.0  0.0  0.0    0.0
+        620  KIAMSF1    lower_6s     generator  0.0  37.0  0.0    0.0  0.0   0.0  0.0  0.0  0.0    0.0
+        621   WDGPH1  lower_5min     generator  0.0   0.0  0.0    0.0  6.0   6.0  6.0  6.0  6.0   27.0
+        622   WDGPH1   lower_60s     generator  0.0   0.0  0.0    0.0  6.0   6.0  6.0  6.0  6.0   27.0
+        623   WDGPH1    lower_6s     generator  0.0   0.0  0.0    0.0  6.0   6.0  6.0  6.0  6.0   27.0
         <BLANKLINE>
-        [591 rows x 12 columns]
+        [1038 rows x 13 columns]
 
         >>> price_bids
-                unit    service           1          2           3           4           5           6           7            8             9            10
-        0     AGLHAL     energy  -971.50000   0.000000  270.863915  358.298915  406.873915  484.593915  562.313915  1326.641540  10277.372205  13600.018785
-        1     AGLSOM     energy  -984.74292   0.000000   83.703148  108.321721  142.787723  279.666989  444.119057   985.727663  13097.937562  14278.732950
-        2    ANGAST1     energy -1005.67390   0.000000  125.709237  201.335915  300.887574  382.135969  593.337544  1382.650761  10678.245470  14582.271550
-        3      ARWF1     energy  -969.10000 -63.001191    1.996346    4.002383    8.004766   15.999841   31.999682    63.999364    127.998728  14051.950000
-        4     BALBG1     energy  -994.80000   0.000000   19.915896   47.372376   75.177036  109.447896  298.440000   443.133660  10047.489948  14424.600000
-        ..       ...        ...         ...        ...         ...         ...         ...         ...         ...          ...           ...           ...
-        586    YWPS4  lower_60s     0.08000   0.170000    0.290000    0.940000    2.900000    9.990000   29.000000    99.000000   4600.000000   9899.000000
-        587    YWPS4   lower_6s     0.03000   0.050000    0.160000    0.300000    1.900000   25.040000   30.040000    99.000000   4600.000000   9899.000000
-        588    YWPS4  raise_reg     0.05000   2.700000    9.990000   19.990000   49.000000   95.500000  240.000000   450.500000    950.500000  11900.000000
-        589    YWPS4  raise_60s     0.17000   1.800000    4.800000   10.010000   21.000000   39.000000   52.000000   102.000000   4400.000000  11999.000000
-        590    YWPS4   raise_6s     0.48000   1.750000    4.900000   20.700000   33.330000   99.900000  630.000000  1999.000000   6000.000000  12299.000000
+                 unit    service dispatch_type           1           2           3           4           5           6            7            8             9            10
+        0     ADPBA1G     energy     generator  -980.00001    0.000000   54.000745   96.001325  168.002318  273.997024   374.001783   998.000259   3999.004510   9999.999485
+        1     ADPBA1L     energy          load  -980.00001 -449.996075 -174.002401  -88.997850   19.003641   54.000745   133.998471   223.999713    348.998059    500.003522
+        2      ADPPV1     energy     generator -1013.52750 -506.763750 -110.474497 -100.339222  -57.771067  -47.635792     0.000000   304.058250   3040.582500  17736.731250
+        3      AGLHAL     energy     generator  -956.50000    0.000000  274.410285  363.460435  566.142785  956.385220  3808.677785  9469.235220  15112.585220  16738.750000
+        4      AGLSOM     energy     generator  -979.06536    0.000000  109.635739  206.690488  278.054562  364.466871   454.296118   980.044425  13022.430866  17133.643800
+        ...       ...        ...           ...         ...         ...         ...         ...         ...         ...          ...          ...           ...           ...
+        1033   WDGPH1   lower_6s     generator     0.01000    0.130000    0.330000    0.850000    1.830000    4.870000    19.920000    97.790000    998.990000  17500.000000
+        1034  WKIEWA1  lower_60s     generator     0.00000    0.030000    1.000000    2.000000   26.000000   98.900000   147.000000   300.000000   1199.000000  17500.000000
+        1035  WKIEWA1   lower_6s     generator     0.00000    0.500000    1.000000    2.000000   45.000000   98.690000   144.000000   300.000000   1199.000000  17500.000000
+        1036  WKIEWA1  raise_60s     generator     0.00000    0.600000    1.700000    9.500000   22.100000   99.600000   132.100000   240.100000    495.000000  17500.000000
+        1037  WKIEWA1   raise_6s     generator     0.00000    0.600000    1.700000    9.500000   32.100000   99.600000   132.100000   240.100000    495.000000  17500.000000
         <BLANKLINE>
-        [591 rows x 12 columns]
+        [1038 rows x 13 columns]
 
 
         Multiple Returns
@@ -825,26 +734,26 @@ class UnitData:
            ...
         nempy.historical_inputs.units.MethodCallOrderError: Call add_fcas_trapezium_constraints before get_fcas_max_availability.
 
-        After calling it the error goes away.
+        After calling add_fcas_trapezium_constraints the error goes away.
 
         >>> volume_bids, price_bids = unit_data.get_processed_bids()
         >>> unit_data.add_fcas_trapezium_constraints()
 
         >>> unit_data.get_fcas_max_availability()
-                 unit     service  max_availability
-        0       APD01  raise_5min         34.000000
-        1       APD01   raise_60s         34.000000
-        2       APD01    raise_6s         17.000000
-        3     ASNENC1  raise_5min         12.000000
-        4     ASNENC1   raise_60s          4.000000
-        ..        ...         ...               ...
-        364  TREVALLN   raise_reg         28.000000
-        365  TUNGATIN   raise_reg         77.000000
-        367       VP6   raise_reg         29.867187
-        369     YWPS3   raise_reg         14.625000
-        370     YWPS4   raise_reg         15.000000
+                unit     service dispatch_type  max_availability
+        0    ADPBA1G  raise_5min     generator               3.0
+        1    ADPBA1G   raise_60s     generator               3.0
+        2    ADPBA1G    raise_6s     generator               3.0
+        3    ADPBA1L  lower_5min          load               3.0
+        4    ADPBA1L   lower_60s          load               3.0
+        ..       ...         ...           ...               ...
+        619  KIAMSF1   lower_60s     generator              37.0
+        620  KIAMSF1    lower_6s     generator              37.0
+        621   WDGPH1  lower_5min     generator              57.0
+        622   WDGPH1   lower_60s     generator              57.0
+        623   WDGPH1    lower_6s     generator              57.0
         <BLANKLINE>
-        [311 rows x 3 columns]
+        [592 rows x 4 columns]
 
         Returns
         -------
@@ -879,20 +788,20 @@ class UnitData:
         Now facs max availibility can be accessed.
 
         >>> unit_data.get_fcas_max_availability()
-                 unit     service  max_availability
-        0       APD01  raise_5min         34.000000
-        1       APD01   raise_60s         34.000000
-        2       APD01    raise_6s         17.000000
-        3     ASNENC1  raise_5min         12.000000
-        4     ASNENC1   raise_60s          4.000000
-        ..        ...         ...               ...
-        364  TREVALLN   raise_reg         28.000000
-        365  TUNGATIN   raise_reg         77.000000
-        367       VP6   raise_reg         29.867187
-        369     YWPS3   raise_reg         14.625000
-        370     YWPS4   raise_reg         15.000000
+                unit     service dispatch_type  max_availability
+        0    ADPBA1G  raise_5min     generator               3.0
+        1    ADPBA1G   raise_60s     generator               3.0
+        2    ADPBA1G    raise_6s     generator               3.0
+        3    ADPBA1L  lower_5min          load               3.0
+        4    ADPBA1L   lower_60s          load               3.0
+        ..       ...         ...           ...               ...
+        619  KIAMSF1   lower_60s     generator              37.0
+        620  KIAMSF1    lower_6s     generator              37.0
+        621   WDGPH1  lower_5min     generator              57.0
+        622   WDGPH1   lower_60s     generator              57.0
+        623   WDGPH1    lower_6s     generator              57.0
         <BLANKLINE>
-        [311 rows x 3 columns]
+        [592 rows x 4 columns]
 
         Returns
         -------
@@ -901,6 +810,7 @@ class UnitData:
             ================  ========================================
             Columns:          Description:
             unit              unique identifier for units, (as `str`)
+            dispatch_type     "load" or "generator", (as `str`)
             service           the service the bid applies to, (as `str`)
             max_availability  the unit bid maximum availability, in MW, \n
                               (as `np.float64`)
@@ -932,20 +842,20 @@ class UnitData:
         Now facs max availibility can be accessed.
 
         >>> unit_data.get_fcas_regulation_trapeziums()
-                 unit    service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
-        277      BW01  lower_reg         35.015640       309.27185       344.287490        520.807010       520.80701
-        278  CALL_B_1  lower_reg         15.000000       180.00000       195.000000        270.300020       270.30002
-        280      ER01  lower_reg         24.906273       490.02502       514.931293        680.000000       680.00000
-        282      ER03  lower_reg         24.765625       419.82495       444.590575        679.775020       679.77502
-        283      ER04  lower_reg         24.859352       350.22498       375.084332        520.000000       520.00000
-        ..        ...        ...               ...             ...              ...               ...             ...
-        364  TREVALLN  raise_reg         28.000000         1.00002         1.000020          1.000000        29.00000
-        365  TUNGATIN  raise_reg         77.000000         3.00003         3.000030          1.000000        78.00000
-        367       VP6  raise_reg         29.867187       279.97501       279.975010        630.132813       660.00000
-        369     YWPS3  raise_reg         14.625000       250.00000       250.000000        370.375000       385.00000
-        370     YWPS4  raise_reg         15.000000       250.00000       250.000000        370.000000       385.00000
+                 unit    service dispatch_type  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
+        474   ADPBA1G  lower_reg     generator          6.000000             0.0              6.0          6.000000             6.0
+        475   ADPBA1L  lower_reg          load          6.000000             0.0              0.0          0.000000             6.0
+        476    BALBG1  lower_reg     generator         30.000000             0.0             30.0         30.000000            30.0
+        477    BALBL1  lower_reg          load         30.000000             0.0              0.0          0.000000            30.0
+        478   BASTYAN  lower_reg     generator         63.000000            25.0             88.0         83.000000            83.0
+        ..        ...        ...           ...               ...             ...              ...               ...             ...
+        611       VP6  raise_reg     generator         14.870144           250.0            250.0        535.129856           550.0
+        612  WALGRVG1  raise_reg     generator         39.000000             0.0              0.0          0.000000            39.0
+        613  WALGRVL1  raise_reg          load         35.000000             0.0             35.0         35.000000            35.0
+        614   WANDBG1  raise_reg     generator         70.000000             0.0              0.0         30.000000           100.0
+        615   WANDBL1  raise_reg          load         30.000000             0.0             30.0         75.000000            75.0
         <BLANKLINE>
-        [75 rows x 7 columns]
+        [132 rows x 8 columns]
 
         Returns
         -------
@@ -955,6 +865,7 @@ class UnitData:
             Columns:           Description:
             unit               unique identifier of a dispatch unit, \n
                                (as `str`)
+            dispatch_type     "load" or "generator", (as `str`)
             service            the regulation service being offered, \n
                                (as `str`)
             max_availability   the maximum volume of the contingency \n
@@ -1003,20 +914,20 @@ class UnitData:
         Now facs max availibility can be accessed.
 
         >>> unit_data.get_contingency_services()
-                unit     service  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
-        0      APD01  raise_5min              34.0             0.0              0.0               0.0             0.0
-        1      APD01   raise_60s              34.0             0.0              0.0               0.0             0.0
-        2      APD01    raise_6s              17.0             0.0              0.0               0.0             0.0
-        3    ASNENC1  raise_5min              12.0             0.0              0.0               0.0             0.0
-        4    ASNENC1   raise_60s               4.0             0.0              0.0               0.0             0.0
-        ..       ...         ...               ...             ...              ...               ...             ...
-        272    YWPS4  lower_5min              15.0           250.0            265.0             385.0           385.0
-        273    YWPS4   lower_60s              20.0           250.0            270.0             385.0           385.0
-        274    YWPS4    lower_6s              25.0           250.0            275.0             385.0           385.0
-        275    YWPS4   raise_60s              10.0           220.0            220.0             390.0           400.0
-        276    YWPS4    raise_6s              15.0           220.0            220.0             390.0           405.0
+                unit     service dispatch_type  max_availability  enablement_min  low_break_point  high_break_point  enablement_max
+        0    ADPBA1G  raise_5min     generator               3.0             0.0              0.0           3.00000          6.0000
+        1    ADPBA1G   raise_60s     generator               3.0             0.0              0.0           3.00000          6.0000
+        2    ADPBA1G    raise_6s     generator               3.0             0.0              0.0           3.00000          6.0000
+        3    ADPBA1L  lower_5min          load               3.0             0.0              0.0           3.00000          6.0000
+        4    ADPBA1L   lower_60s          load               3.0             0.0              0.0           3.00000          6.0000
+        ..       ...         ...           ...               ...             ...              ...               ...             ...
+        619  KIAMSF1   lower_60s     generator              37.0             0.0            200.0           0.00000          0.0000
+        620  KIAMSF1    lower_6s     generator              37.0             0.0            200.0           0.00000          0.0000
+        621   WDGPH1  lower_5min     generator              57.0            59.0            116.0         276.82729        276.8273
+        622   WDGPH1   lower_60s     generator              57.0            59.0            116.0         276.82729        276.8273
+        623   WDGPH1    lower_6s     generator              57.0            59.0            116.0         276.82729        276.8273
         <BLANKLINE>
-        [236 rows x 7 columns]
+        [460 rows x 8 columns]
 
         Returns
         -------
@@ -1026,6 +937,7 @@ class UnitData:
             Columns:           Description:
             unit               unique identifier of a dispatch unit, \n
                                (as `str`)
+            dispatch_type     "load" or "generator", (as `str`)
             service            the contingency service being offered, \n
                                (as `str`)
             max_availability   the maximum volume of the contingency \n
@@ -1652,6 +1564,7 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
 
     >>> BIDPEROFFER_D = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
+    ...   'DIRECTION': ['GENERATOR', 'GENERATOR', 'GENERATOR'],
     ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'RAISEREG'],
     ...   'BANDAVAIL1': [100.0, 50.0, 50.0],
     ...   'BANDAVAIL2': [10.0, 10.0, 0.0],
@@ -1663,6 +1576,7 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
 
     >>> BIDDAYOFFER_D = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
+    ...   'DIRECTION': ['GENERATOR', 'GENERATOR', 'GENERATOR'],
     ...   'BIDTYPE': ['ENERGY', 'RAISEREG', 'RAISEREG'],
     ...   'PRICEBAND1': [100.0, 50.0, 60.0],
     ...   'PRICEBAND2': [110.0, 60.0, 80.0]})
@@ -1670,10 +1584,12 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     >>> DISPATCHLOAD = pd.DataFrame({
     ...   'DUID': ['A', 'B', 'C'],
     ...   'INITIALMW': [50.0, 60.0, 60.0],
-    ...   'AGCSTATUS': [0.0, 1.0, 1.0]})
+    ...   'AGCSTATUS': [0.0, 1.0, 1.0],
+    ...   'TRADERTYPE': ['GENERATOR', 'GENERATOR', 'GENERATOR']})
 
     >>> capacity_limits = pd.DataFrame({
     ...   'unit': ['A', 'B', 'C'],
+    ...   'dispatch_type': ['generator', 'generator', 'generator'],
     ...   'capacity': [50.0, 120.0, 80.0]})
 
     >>> BIDPEROFFER_D_out, BIDDAYOFFER_D_out = _enforce_preconditions_for_enabling_fcas(
@@ -1682,16 +1598,16 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
-    1    C  RAISEREG        50.0         0.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+    1    C  GENERATOR  RAISEREG        50.0         0.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
-    1    C  RAISEREG        60.0        80.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
+    1    C  GENERATOR  RAISEREG        60.0        80.0
 
     If unit C's FCAS MAX AVAILABILITY is changed to zero then it gets filtered out.
 
@@ -1705,14 +1621,14 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
 
     If unit C's BANDAVAIL1 is changed to zero then it gets filtered out.
 
@@ -1727,14 +1643,14 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
 
     If unit C's capacity is changed to less than its enablement min then it gets filtered out.
 
@@ -1749,14 +1665,14 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
 
     If unit C's ENABLEMENTMIN ENABLEMENTMAX and INITIALMW are changed to zero and its then it gets filtered out.
 
@@ -1778,16 +1694,16 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
-    1    C  RAISEREG        50.0         0.0     100.0            0.0           50.0            70.0            0.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+    1    C  GENERATOR  RAISEREG        50.0         0.0     100.0            0.0           50.0            70.0            0.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
-    1    C  RAISEREG        60.0        80.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
+    1    C  GENERATOR  RAISEREG        60.0        80.0
 
     If unit C's INITIALMW is changed to less than its enablement min then it gets filtered out.
 
@@ -1801,14 +1717,14 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
 
     If unit C's AGCSTATUS is changed to  0.0 then it gets filtered out.
 
@@ -1822,14 +1738,14 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     All criteria are meet so no units are filtered out.
 
     >>> print(BIDPEROFFER_D_out)
-      DUID   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
-    0    A    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
-    0    B  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
+      DUID  DIRECTION   BIDTYPE  BANDAVAIL1  BANDAVAIL2  MAXAVAIL  ENABLEMENTMIN  LOWBREAKPOINT  HIGHBREAKPOINT  ENABLEMENTMAX
+    0    A  GENERATOR    ENERGY       100.0        10.0       0.0            0.0            0.0             0.0            0.0
+    0    B  GENERATOR  RAISEREG        50.0        10.0     100.0           20.0           50.0            70.0          100.0
 
     >>> print(BIDDAYOFFER_D_out)
-      DUID   BIDTYPE  PRICEBAND1  PRICEBAND2
-    0    A    ENERGY       100.0       110.0
-    0    B  RAISEREG        50.0        60.0
+      DUID  DIRECTION   BIDTYPE  PRICEBAND1  PRICEBAND2
+    0    A  GENERATOR    ENERGY       100.0       110.0
+    0    B  GENERATOR  RAISEREG        50.0        60.0
 
     Parameters
     ----------
@@ -2047,175 +1963,11 @@ def _enforce_preconditions_for_enabling_fcas(BIDPEROFFER_D, BIDDAYOFFER_D, DISPA
     BIDDAYOFFER_D = pd.concat([energy_price_bids, fcas_price_bids])
     BIDPEROFFER_D = pd.concat([energy_bids, fcas_bids])
 
+    band_cols = [col for col in BIDPEROFFER_D.columns if "BAND" in col]
+
+    BIDPEROFFER_D = BIDPEROFFER_D.loc[:, [
+        "DUID", "DIRECTION", "BIDTYPE", "MAXAVAIL",
+        "ENABLEMENTMIN", "LOWBREAKPOINT", "HIGHBREAKPOINT", "ENABLEMENTMAX"
+    ] + band_cols]
+
     return BIDPEROFFER_D, BIDDAYOFFER_D
-
-
-def _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D):
-    """Approximates the unit limits used in historical dispatch, returns inputs compatible with the Spot market class.
-
-    The exact method for determining unit limits in historical dispatch is not known. This function first assumes the
-    limits are set by the AVAILABILITY, INITIALMW, RAMPUPRATE and RAMPDOWNRATE columns in the MMS table DISPATCHLOAD.
-    Then if the historical dispatch amount recorded in TOTALCLEARED is outside these limits the limits are extended.
-    This occurs in the following circumstances:
-
-    * For units operating in fast start mode, i.e. dispatch mode not equal to 0.0, if the TOTALCLEARED is outside
-      the ramp rate limits then new less restrictive ramp rates are calculated that allow the unit to ramp to the
-      TOTALCLEARED amount.
-
-    * For units operating with a SEMIDISPATCHCAP of 1.0 and an offered MAXAVAIL (from the MMS table) amount less than
-      the AVAILABILITY, and a TOTALCLEARED amount less than or equal to MAXAVAIL, then MAXAVAIL is used as the upper
-      capacity limit instead of TOTALCLEARED.
-
-    * If the unit is incapable of ramping down to its capacity limit then the capacity limit is increased to the ramp
-      down limit, to prevent a set of infeasible unit limits.
-
-    From the testing conducted in the tests/historical_testing module these adjustments appear sufficient to ensure
-    units can be dispatched to their TOTALCLEARED amount.
-
-    Examples
-    --------
-
-    An example where a fast start units initial limits are too restrictive, note the non fast start unit with the same
-    paramaters does not have it ramp rates adjusted.
-
-    >>> DISPATCHLOAD = pd.DataFrame({
-    ...   'DUID': ['A', 'B', 'C', 'D'],
-    ...   'INITIALMW': [50.0, 50.0, 50.0, 50.0],
-    ...   'AVAILABILITY': [90.0, 90.0, 90.0, 90.0],
-    ...   'RAMPDOWNRATE': [120.0, 120.0, 120.0, 120.0],
-    ...   'RAMPUPRATE': [120.0, 120.0, 120.0, 120.0],
-    ...   'TOTALCLEARED': [80.0, 80.0, 30.0, 30.0],
-    ...   'DISPATCHMODE': [1.0, 0.0, 4.0, 0.0],
-    ...   'SEMIDISPATCHCAP': [0.0, 0.0, 0.0, 0.0]})
-
-    >>> BIDPEROFFER_D = pd.DataFrame({
-    ...   'DUID': ['A', 'B', 'C', 'D'],
-    ...   'BIDTYPE': ['ENERGY', 'ENERGY', 'ENERGY', 'ENERGY'],
-    ...   'MAXAVAIL': [100.0, 100.0, 100.0, 100.0]})
-
-    >>> unit_limits = _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
-
-    >>> print(unit_limits)
-      unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
-    0    A            50.0      90.0           120.0         360.0
-    1    B            50.0      90.0           120.0         120.0
-    2    C            50.0      90.0           240.0         120.0
-    3    D            50.0      90.0           120.0         120.0
-
-    An example with a unit operating with a SEMIDISPATCHCAP  of 1.0. Only unit A meets all the criteria for having its
-    capacity adjusted from the reported AVAILABILITY value.
-
-    >>> DISPATCHLOAD = pd.DataFrame({
-    ...   'DUID': ['A', 'B', 'C', 'D'],
-    ...   'INITIALMW': [50.0, 50.0, 50.0, 50.0],
-    ...   'AVAILABILITY': [90.0, 90.0, 90.0, 90.0],
-    ...   'RAMPDOWNRATE': [600.0, 600.0, 600.0, 600.0],
-    ...   'RAMPUPRATE': [600.0, 600.0, 600.0, 600.0],
-    ...   'TOTALCLEARED': [70.0, 90.0, 80.0, 70.0],
-    ...   'DISPATCHMODE': [0.0, 0.0, 0.0, 0.0],
-    ...   'SEMIDISPATCHCAP': [1.0, 1.0, 1.0, 0.0]})
-
-    >>> BIDPEROFFER_D = pd.DataFrame({
-    ...   'DUID': ['A', 'B', 'C', 'D'],
-    ...   'BIDTYPE': ['ENERGY', 'ENERGY', 'ENERGY', 'ENERGY'],
-    ...   'MAXAVAIL': [80.0, 80.0, 100.0, 80.0]})
-
-    >>> unit_limits = _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
-
-    >>> print(unit_limits)
-      unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
-    0    A            50.0      80.0           600.0         600.0
-    1    B            50.0      90.0           600.0         600.0
-    2    C            50.0      90.0           600.0         600.0
-    3    D            50.0      90.0           600.0         600.0
-
-    An example where the AVAILABILITY is lower than the ramp down limit.
-
-    >>> DISPATCHLOAD = pd.DataFrame({
-    ...   'DUID': ['A'],
-    ...   'INITIALMW': [50.0],
-    ...   'AVAILABILITY': [30.0],
-    ...   'RAMPDOWNRATE': [120.0],
-    ...   'RAMPUPRATE': [120.0],
-    ...   'TOTALCLEARED': [40.0],
-    ...   'DISPATCHMODE': [0.0],
-    ...   'SEMIDISPATCHCAP': [0.0]})
-
-    >>> BIDPEROFFER_D = pd.DataFrame({
-    ...   'DUID': ['A'],
-    ...   'BIDTYPE': ['ENERGY'],
-    ...   'MAXAVAIL': [30.0]})
-
-    >>> unit_limits = _determine_unit_limits(DISPATCHLOAD, BIDPEROFFER_D)
-
-    >>> print(unit_limits)
-      unit  initial_output  capacity  ramp_down_rate  ramp_up_rate
-    0    A            50.0      40.0           120.0         120.0
-
-    Parameters
-    ----------
-    DISPATCHLOAD : pd.DataFrame
-
-        ===============  ======================================================================================
-        Columns:         Description:
-        DUID             unique identifier of a dispatch unit (as `str`)
-        INITIALMW        the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-        AVAILABILITY     the reported maximum output of the unit for dispatch interval, in MW (as `np.float64`)
-        RAMPDOWNRATE     the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
-        RAMPUPRATE       the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
-        TOTALCLEARED     the dispatch target for interval, in MW (as `np.float64`)
-        DISPATCHMODE     fast start operating mode, 0.0 for not in fast start mode, 1.0, 2.0, 3.0, 4.0 for in
-                         fast start mode, (as `np.float64`)
-        SEMIDISPATCHCAP  0.0 for not applicable, 1.0 if the semi scheduled unit output is capped by dispatch
-                         target.
-        ===============  ======================================================================================
-
-    BIDPEROFFER_D : pd.DataFrame
-        Should only be bids of type energy.
-
-        ===============  ======================================================================================
-        Columns:         Description:
-        DUID             unique identifier of a dispatch unit (as `str`)
-        MAXAVAIL         the maximum unit output as specified in the units bid, in MW (as `np.float64`)
-        ===============  ======================================================================================
-
-    Returns
-    -------
-    unit_limits : pd.DataFrame
-
-        ==============  =====================================================================================
-        Columns:        Description:
-        unit            unique identifier of a dispatch unit (as `str`)
-        initial_output  the output of the unit at the start of the dispatch interval, in MW (as `np.float64`)
-        capacity        the maximum output of the unit if unconstrained by ramp rate, in MW (as `np.float64`)
-        ramp_down_rate  the maximum rate at which the unit can decrease output, in MW/h (as `np.float64`)
-        ramp_up_rate    the maximum rate at which the unit can increase output, in MW/h (as `np.float64`)
-        ==============  =====================================================================================
-
-    """
-
-    # Override ramp rates for fast start units.
-    ic = DISPATCHLOAD  # DISPATCHLOAD provides the initial operating conditions (ic).
-    ic['RAMPMAX'] = ic['INITIALMW'] + ic['RAMPUPRATE'] * (5 / 60)
-    ic['RAMPUPRATE'] = np.where((ic['TOTALCLEARED'] > ic['RAMPMAX']) & (ic['DISPATCHMODE'] != 0.0),
-                                (ic['TOTALCLEARED'] - ic['INITIALMW']) * (60 / 5), ic['RAMPUPRATE'])
-    ic['RAMPMIN'] = ic['INITIALMW'] - ic['RAMPDOWNRATE'] * (5 / 60)
-    ic['RAMPDOWNRATE'] = np.where((ic['TOTALCLEARED'] < ic['RAMPMIN']) & (ic['DISPATCHMODE'] != 0.0),
-                                  (ic['INITIALMW'] - ic['TOTALCLEARED']) * (60 / 5), ic['RAMPDOWNRATE'])
-
-    ic['AVAILABILITY'] = np.where(ic['AVAILABILITY'] < ic['TOTALCLEARED'], ic['TOTALCLEARED'], ic['AVAILABILITY'])
-
-    # Override AVAILABILITY when SEMIDISPATCHCAP is 1.0
-    BIDPEROFFER_D = BIDPEROFFER_D[BIDPEROFFER_D['BIDTYPE'] == 'ENERGY']
-    ic = pd.merge(ic, BIDPEROFFER_D.loc[:, ['DUID', 'MAXAVAIL']], 'inner', on='DUID')
-    ic['AVAILABILITY'] = np.where((ic['MAXAVAIL'] < ic['AVAILABILITY']) & (ic['SEMIDISPATCHCAP'] == 1.0) &
-                                  (ic['TOTALCLEARED'] <= ic['MAXAVAIL']), ic['MAXAVAIL'],
-                                  ic['AVAILABILITY'])
-
-    # Where the availability is lower than the ramp down min set the AVAILABILITY to equal the ramp down min.
-    ic['AVAILABILITY'] = np.where(ic['AVAILABILITY'] < ic['RAMPMIN'], ic['RAMPMIN'], ic['AVAILABILITY'])
-
-    # Format for compatibility with the Spot market class.
-    ic = ic.loc[:, ['DUID', 'INITIALMW', 'AVAILABILITY', 'RAMPDOWNRATE', 'RAMPUPRATE']]
-    ic.columns = ['unit', 'initial_output', 'capacity', 'ramp_down_rate', 'ramp_up_rate']
-    return ic

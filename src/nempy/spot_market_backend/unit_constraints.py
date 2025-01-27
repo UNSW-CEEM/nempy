@@ -435,7 +435,14 @@ def fcas_max_availability(fcas_availability, next_constraint_id):
     return type_and_rhs, variable_map
 
 
-def create_fast_start_profile_constraints(fast_start_profiles, next_constraint_id, dispatch_interval):
+def create_fast_start_profile_constraints(fast_start_profiles, next_constraint_id):
+
+    # If no service column is present assume the constraints are for the energy service.
+    if 'service' not in fast_start_profiles.columns:
+        fast_start_profiles['service'] = 'energy'
+
+    if 'dispatch_type' not in fast_start_profiles.columns:
+        fast_start_profiles['dispatch_type'] = 'generator'
 
     mode_one_cons = fast_start_mode_one_constraints(fast_start_profiles)
     mode_two_cons = fast_start_mode_two_constraints(fast_start_profiles)

@@ -214,7 +214,7 @@ def joint_capacity_constraints(contingency_trapeziums, bidirectional_units, next
     """
 
     if 'dispatch_type' not in contingency_trapeziums.columns:
-        contingency_trapeziums['dispatch_type'] = 'generator'
+        contingency_trapeziums.loc[:, ['dispatch_type']] = 'generator'
 
     # Create each constraint set.
     constraints_upper_slope = hf.save_index(contingency_trapeziums, 'constraint_id', next_constraint_id)
@@ -344,11 +344,12 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     0    A  raise_reg              2   >=  20.0
 
     >>> print(variable_mapping)
-       constraint_id unit    service  coefficient
-    0              1    A     energy     1.000000
-    0              1    A  raise_reg     0.333333
-    0              2    A     energy     1.000000
-    0              2    A  raise_reg    -0.333333
+      unit dispatch_type    service  dispatch
+    0    A     generator     energy     100.0
+    1    A     generator   raise_6s       5.0
+    2    B     generator     energy      95.0
+    3    B     generator   raise_6s       5.0
+    4    B     generator  raise_reg      10.0
 
     Parameters
     ----------
@@ -405,7 +406,7 @@ def energy_and_regulation_capacity_constraints(regulation_trapeziums, next_const
     """
 
     if 'dispatch_type' not in regulation_trapeziums.columns:
-        regulation_trapeziums['dispatch_type'] = 'generator'
+        regulation_trapeziums.loc[:, ['dispatch_type']] = 'generator'
 
     # Create each constraint set.
     constraints_upper_slope = hf.save_index(regulation_trapeziums, 'constraint_id', next_constraint_id)

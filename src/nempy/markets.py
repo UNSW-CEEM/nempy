@@ -31,9 +31,10 @@ class SpotMarket:
     not intended for public use.
 
     >>> market._unit_info
-      unit region dispatch_type  loss_factor
-    0    A    NSW     generator          1.0
-    1    B    NSW     generator          1.0
+      unit region  loss_factor dispatch_type
+    0    A    NSW          1.0     generator
+    1    B    NSW          1.0     generator
+
 
     Parameters
     ----------
@@ -575,18 +576,18 @@ class SpotMarket:
         The market should now have a set of constraints.
 
         >>> print(market._constraints_rhs_and_type['uigf_capacity'])
-          unit service  constraint_id type    rhs
-        0    A  energy              0   <=   60.0
-        1    B  energy              1   <=  100.0
+          unit service dispatch_type  constraint_id type    rhs
+        0    A  energy     generator              0   <=   60.0
+        1    B  energy     generator              1   <=  100.0
 
         ... and a mapping of those constraints to the variable types on the lhs.
 
         >>> unit_mapping = market._constraint_to_variable_map['unit_level']
 
         >>> print(unit_mapping['uigf_capacity'])
-           constraint_id unit service  coefficient
-        0              0    A  energy          1.0
-        1              1    B  energy          1.0
+           constraint_id unit service dispatch_type  coefficient
+        0              0    A  energy     generator          1.0
+        1              1    B  energy     generator          1.0
 
 
         Parameters
@@ -948,26 +949,26 @@ class SpotMarket:
         The market should now have a set of constraints.
 
         >>> print(market._constraints_rhs_and_type['fast_start'])
-          unit service  constraint_id type   rhs
-        0    A  energy              0   <=   0.0
-        1    B  energy              1   <=   0.0
-        0    C  energy              2   >=  17.5
-        0    C  energy              3   <=  17.5
-        0    D  energy              4   >=  50.0
-        0    E  energy              5   >=  30.0
+          unit service dispatch_type  constraint_id type   rhs
+        0    A  energy     generator              0   <=   0.0
+        1    B  energy     generator              1   <=   0.0
+        0    C  energy     generator              2   >=  17.5
+        0    C  energy     generator              3   <=  17.5
+        0    D  energy     generator              4   >=  50.0
+        0    E  energy     generator              5   >=  30.0
 
         ... and a mapping of those constraints to variable type for the lhs.
 
         >>> unit_mapping = market._constraint_to_variable_map['unit_level']
 
         >>> print(unit_mapping['fast_start'])
-           constraint_id unit service  coefficient
-        0              0    A  energy          1.0
-        1              1    B  energy          1.0
-        0              3    C  energy          1.0
-        0              2    C  energy          1.0
-        0              4    D  energy          1.0
-        0              5    E  energy          1.0
+           constraint_id unit service dispatch_type  coefficient
+        0              0    A  energy     generator          1.0
+        1              1    B  energy     generator          1.0
+        0              3    C  energy     generator          1.0
+        0              2    C  energy     generator          1.0
+        0              4    D  energy     generator          1.0
+        0              5    E  energy     generator          1.0
 
         Parameters
         ----------
@@ -1012,8 +1013,15 @@ class SpotMarket:
         """
         if self.validate_inputs:
             self._validate_fast_start_profiles(fast_start_profiles)
+
+        fast_start_profiles = pd.merge(
+            self._unit_info.loc[:, ['unit', 'dispatch_type']],
+            fast_start_profiles,
+            on=['unit']
+        )
+
         rhs_and_type, variable_map = unit_constraints.create_fast_start_profile_constraints(
-            fast_start_profiles, self._next_constraint_id, self.dispatch_interval)
+            fast_start_profiles, self._next_constraint_id)
         if not rhs_and_type.empty:
             self._constraints_rhs_and_type['fast_start'] = rhs_and_type
             self._constraint_to_variable_map['unit_level']['fast_start'] = variable_map
@@ -1033,8 +1041,6 @@ class SpotMarket:
     def _validate_fast_start_profiles(self, fast_start_profiles):
         schema = dv.DataFrameSchema(name='fast_start_profiles', primary_keys=['unit'])
         schema.add_column(dv.SeriesSchema(name='unit', data_type=str, allowed_values=self._unit_info['unit']))
-        schema.add_column(dv.SeriesSchema(name='dispatch_type', data_type=str, allowed_values=['generator', 'load']),
-                                          optional=True)
         schema.add_column(dv.SeriesSchema(name='end_mode', data_type=np.int64, must_be_real_number=True,
                                           not_negative=True))
         schema.add_column(dv.SeriesSchema(name='time_in_end_mode', data_type=np.float64, must_be_real_number=True,
@@ -1044,8 +1050,6 @@ class SpotMarket:
         schema.add_column(dv.SeriesSchema(name='mode_four_length', data_type=np.float64, must_be_real_number=True,
                                           not_negative=True))
         schema.add_column(dv.SeriesSchema(name='min_loading', data_type=np.float64, must_be_real_number=True,
-                                          not_negative=True))
-        schema.add_column(dv.SeriesSchema(name='time_since_end_of_mode_two', data_type=np.float64,
                                           not_negative=True))
         schema.validate(fast_start_profiles)
 
@@ -1207,7 +1211,7 @@ class SpotMarket:
                        the column is missing (as `str`)
             ========   ===============================================
 
-        violation_cost : float
+        violation_cost : float | pd.DataFrame
             Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
 
         Returns
@@ -1281,7 +1285,7 @@ class SpotMarket:
 
         >>> print(market._constraints_rhs_and_type['fcas_max_availability'])
           unit   service dispatch_type  constraint_id type   rhs
-        0    A  raise_6s     generator              0   <=  60.00
+        0    A  raise_6s     generator              0   <=  60.0
 
         >>> unit_mapping = market._constraint_to_variable_map['unit_level']
 
@@ -1370,6 +1374,17 @@ class SpotMarket:
         >>> market = SpotMarket(market_regions=['NSW'],
         ...                     unit_info=unit_info,
         ...                     dispatch_interval=60)
+
+        Add bids to the market.
+
+        >>> volume_bids = pd.DataFrame({
+        ...     'unit': ['A', 'B'],
+        ...     'service': ['raise_reg', 'raise_reg'],
+        ...     '1': [20.0, 50.0],
+        ...     '2': [20.0, 30.0],
+        ...     '3': [5.0, 10.0]})
+
+        >>> market.set_unit_volume_bids(volume_bids)
 
         Define unit initial outputs and ramping capabilities.
 
@@ -1489,8 +1504,10 @@ class SpotMarket:
 
         raise_reg_units = \
             bid_variables[bid_variables['service'] == 'raise_reg'].loc[:,['unit', 'dispatch_type', 'service']]
+        raise_reg_units = raise_reg_units.drop_duplicates()
         lower_reg_units = \
             bid_variables[bid_variables['service'] == 'lower_reg'].loc[:,['unit', 'dispatch_type', 'service']]
+        lower_reg_units = lower_reg_units.drop_duplicates()
 
         ramp_rates = scada_ramp_rates.rename(
             columns={'scada_ramp_up_rate': 'ramp_up_rate',
@@ -1516,12 +1533,13 @@ class SpotMarket:
         ramp_up_rates_for_raise_reg = ramp_up_rates_for_raise_reg[
             ~ramp_up_rates_for_raise_reg['unit'].isin(self._bidirectional_units)]
 
-        rhs_and_type, variable_map = \
-            fcas_constraints.joint_ramping_constraints_raise_reg(
-                ramp_up_rates_for_raise_reg, self.dispatch_interval, self._next_constraint_id)
-        self._constraints_rhs_and_type['joint_ramping_raise_reg'] = rhs_and_type
-        self._constraint_to_variable_map['unit_level']['joint_ramping_raise_reg'] = variable_map
-        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        if not ramp_up_rates_for_raise_reg.empty:
+            rhs_and_type, variable_map = \
+                fcas_constraints.joint_ramping_constraints_raise_reg(
+                    ramp_up_rates_for_raise_reg, self.dispatch_interval, self._next_constraint_id)
+            self._constraints_rhs_and_type['joint_ramping_raise_reg'] = rhs_and_type
+            self._constraint_to_variable_map['unit_level']['joint_ramping_raise_reg'] = variable_map
+            self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
         if not ramp_up_rates_for_raise_reg_bdu.empty:
             ramp_up_rates_for_raise_reg_bdu = \
@@ -1548,12 +1566,13 @@ class SpotMarket:
         ramp_down_rates_for_lower_reg = ramp_down_rates_for_lower_reg[
             ~ramp_down_rates_for_lower_reg['unit'].isin(self._bidirectional_units)]
 
-        rhs_and_type, variable_map = \
-            fcas_constraints.joint_ramping_constraints_lower_reg(
-                ramp_down_rates_for_lower_reg, self.dispatch_interval, self._next_constraint_id)
-        self._constraints_rhs_and_type['joint_ramping_lower_reg'] = rhs_and_type
-        self._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'] = variable_map
-        self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
+        if not ramp_down_rates_for_lower_reg.empty:
+            rhs_and_type, variable_map = \
+                fcas_constraints.joint_ramping_constraints_lower_reg(
+                    ramp_down_rates_for_lower_reg, self.dispatch_interval, self._next_constraint_id)
+            self._constraints_rhs_and_type['joint_ramping_lower_reg'] = rhs_and_type
+            self._constraint_to_variable_map['unit_level']['joint_ramping_lower_reg'] = variable_map
+            self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
         if not ramp_down_rates_for_lower_reg_bdu.empty:
             ramp_down_rates_for_lower_reg_bdu = \
@@ -2306,7 +2325,7 @@ class SpotMarket:
                            (as `np.float64`)
             =============  ===========================================
 
-        violation_cost : float
+        violation_cost : float | pd.DataFrame
             Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
 
         Returns
@@ -2886,9 +2905,9 @@ class SpotMarket:
         Now the market dispatch can be retrieved.
 
         >>> print(market.get_unit_dispatch())
-          unit service  dispatch
-        0    A  energy      45.0
-        1    B  energy      55.0
+          unit dispatch_type service  dispatch
+        0    A     generator  energy      45.0
+        1    B     generator  energy      55.0
 
         And the market prices can be retrieved.
 
@@ -3203,9 +3222,9 @@ class SpotMarket:
         Now the market dispatch can be retrieved.
 
         >>> print(market.get_unit_dispatch())
-          unit service  dispatch
-        0    A  energy      45.0
-        1    B  energy      55.0
+          unit dispatch_type service  dispatch
+        0    A     generator  energy      45.0
+        1    B     generator  energy      55.0
 
         Returns
         -------
@@ -3373,8 +3392,8 @@ class SpotMarket:
         Now the market dispatch can be retrieved.
 
         >>> print(market.get_unit_dispatch())
-          unit service  dispatch
-        0    A  energy      90.0
+          unit dispatch_type service  dispatch
+        0    A     generator  energy      90.0
 
         And the interconnector flows can be retrieved.
 
@@ -3733,12 +3752,12 @@ class SpotMarket:
         Return the total dispatch of each unit in MW.
 
         >>> print(market.get_unit_dispatch())
-          unit    service  dispatch
-        0    A     energy     100.0
-        1    A   raise_6s       5.0
-        2    B     energy      95.0
-        3    B   raise_6s       5.0
-        4    B  raise_reg      10.0
+          unit dispatch_type    service  dispatch
+        0    A     generator     energy     100.0
+        1    A     generator   raise_6s       5.0
+        2    B     generator     energy      95.0
+        3    B     generator   raise_6s       5.0
+        4    B     generator  raise_reg      10.0
 
         Return the constrained availability of each units fcas service.
 

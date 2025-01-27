@@ -20,7 +20,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2024_07/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = True
+download_inputs = False
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
@@ -106,12 +106,11 @@ for interval in get_test_intervals(number=100):
         )
         cost = constraint_inputs.get_constraint_violation_prices()['fcas_profile']
         market.set_joint_ramping_constraints_reg(
-            scada_ramp_rates, fsp, run_type="fast_start_first_run", violation_cost=cost
+            scada_ramp_rates, fsp, run_type=run_type, violation_cost=cost
         )
 
 
     set_ramp_rates('fast_start_first_run', initial_fast_start_profiles)
-
 
     # Set unit FCAS trapezium constraints.
     unit_inputs.add_fcas_trapezium_constraints()
@@ -173,7 +172,10 @@ for interval in get_test_intervals(number=100):
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
     set_ramp_rates('fast_start_second_run', fast_start_profiles)
     cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
-    market.set_fast_start_constraints(fast_start_profiles, violation_cost=cost)
+    cols = ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+            'mode_four_length', 'min_loading']
+    fsp = fast_start_profiles.loc[:, cols]
+    market.set_fast_start_constraints(fsp, violation_cost=cost)
 
     # First run of Basslink switch runs
     market.dispatch()  # First dispatch without allowing over constrained dispatch re-run to get objective function.
@@ -212,7 +214,10 @@ for interval in get_test_intervals(number=100):
     fast_start_profiles = unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
     set_ramp_rates('fast_start_second_run', fast_start_profiles)
     cost = constraint_inputs.get_constraint_violation_prices()['fast_start']
-    market.set_fast_start_constraints(fast_start_profiles, violation_cost=cost)
+    cols = ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+            'mode_four_length', 'min_loading']
+    fsp = fast_start_profiles.loc[:, cols]
+    market.set_fast_start_constraints(fsp, violation_cost=cost)
 
     market.dispatch()  # First dispatch without allowing over constrained dispatch re-run to get objective function.
     objective_value_run_two = market.objective_value
@@ -258,10 +263,11 @@ print('Median price error: {}'.format(outputs['error'].quantile(0.5)))
 print('5% percentile price error: {}'.format(outputs['error'].quantile(0.05)))
 print('95% percentile price error: {}'.format(outputs['error'].quantile(0.95)))
 
-#  Summary of error in energy price volume weighted average price.
+# Summary of error in energy price volume weighted average price.
 # Comparison is against ROP, the price prior to
 # any post dispatch adjustments, scaling, capping etc.
-# Mean price error: -0.3284696359015098
+# Mean price error: 0.15175124971435794
 # Median price error: 0.0
-# 5% percentile price error: -0.5389930178124978
-# 95% percentile price error: 0.13746097842649457
+# 5% percentile price error: -0.2187800690807549
+# 95% percentile price error: 0.027599033294391225
+

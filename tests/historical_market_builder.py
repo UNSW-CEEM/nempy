@@ -53,7 +53,10 @@ class SpotMarketBuilder:
         dispatch = self.market.get_unit_dispatch()
         cost = self.constraint_inputs.get_constraint_violation_prices()['fast_start']
         self.fast_start_profiles = self.unit_inputs.get_fast_start_profiles_for_dispatch(dispatch)
-        self.market.set_fast_start_constraints(self.fast_start_profiles, violation_cost=cost)
+        cols = ['unit', 'end_mode', 'time_in_end_mode', 'mode_two_length',
+                'mode_four_length', 'min_loading']
+        fsp = self.fast_start_profiles.loc[:, cols]
+        self.market.set_fast_start_constraints(fsp, violation_cost=cost)
 
         ramp_rates = self.unit_inputs.get_bid_ramp_rates()
         scada_ramp_rates = self.unit_inputs.get_scada_ramp_rates()

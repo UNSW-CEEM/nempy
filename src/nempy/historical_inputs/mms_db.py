@@ -60,13 +60,12 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
-           DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR  SCHEDULE_TYPE
-    0    AGLHAL  2019/07/01 00:00:00  2020/01/20 00:00:00    GENERATOR             SHPS1      SA1                  0.9748                  1.0000      SCHEDULED
-    1   AGLNOW1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             NDT12     NSW1                  0.9929                  1.0000  NON-SCHEDULED
-    2  AGLSITA1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR            NLP13K     NSW1                  1.0009                  1.0000  NON-SCHEDULED
-    3    AGLSOM  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             VTTS1     VIC1                  0.9915                  0.9891      SCHEDULED
-    4   ANGAST1  2019/07/01 00:00:00  2999/12/31 00:00:00    GENERATOR             SDRN1      SA1                  0.9517                  0.9890      SCHEDULED
-
+           DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR SCHEDULE_TYPE SECONDARY_TLF
+    0    AGLHAL  2019/07/01 00:00:00  2020/01/20 00:00:00    GENERATOR             SHPS1      SA1                  0.9748                     1.0     SCHEDULED          None
+    338  RT_SA6  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART6      SA1                  1.0000                     1.0     SCHEDULED          None
+    337  RT_SA5  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART5      SA1                  1.0000                     1.0     SCHEDULED          None
+    336  RT_SA4  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART4      SA1                  1.0000                     1.0     SCHEDULED          None
+    335  RT_SA3  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART3      SA1                  1.0000                     1.0     SCHEDULED          None
 
     Clean up by deleting database created.
 
@@ -273,7 +272,7 @@ class DBManager:
             start_month -= 1
 
         # Download data were inputs are needed on a monthly basis.
-        finished = False
+        # finished = False
         # for year in range(start_year, end_year + 1):
         #     for month in range(start_month, 13):
         #         if year == end_year and month == end_month + 1:
@@ -288,11 +287,11 @@ class DBManager:
         #         self.DISPATCHLOAD.add_data(year=year, month=month)
         #         self.DISPATCHCONSTRAINT.add_data(year=year, month=month)
         #         self.DISPATCHPRICE.add_data(year=year, month=month)
-
-            # if finished:
-            #     break
-            #
-            # start_month = 1
+        #
+        #     if finished:
+        #         break
+        #
+        #     start_month = 1
 
         # Download data where inputs are just needed from the latest month.
         # self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
@@ -300,7 +299,6 @@ class DBManager:
         # self.LOSSMODEL.set_data(year=end_year, month=end_month)
         self.DUDETAILSUMMARY.create_table_in_sqlite_db()
         self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
-        # self.DUDETAIL.set_data(year=end_year, month=end_month)
         # self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
         # self.GENCONDATA.set_data(year=end_year, month=end_month)
         # self.SPDCONNECTIONPOINTCONSTRAINT.set_data(year=end_year, month=end_month)
