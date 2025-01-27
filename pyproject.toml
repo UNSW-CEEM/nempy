@@ -1,6 +1,6 @@
 [project]
 name = "nempy"
-version = "2.2.0"
+version = "3.0.0"
 description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure."
 authors = [
     { name = "nick-gorman", email = "n.gorman305@gmail.com" },
@@ -10,7 +10,6 @@ dependencies = [
     "pandas>=2.2.2",
     "xmltodict==0.12.0",
     "requests>=2.0.0",
-    "repopack>=0.1.4",
 ]
 readme = "README.md"
 requires-python = ">= 3.9"

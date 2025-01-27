@@ -19,7 +19,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('nemde_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = True
+download_inputs = False
 
 if download_inputs:
     # This requires approximately 5 GB of storage.
@@ -67,7 +67,7 @@ for interval in dispatch_intervals:
     market.set_unit_bid_capacity_constraints(unit_bid_limit)
 
     unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
-    market.set_unconstrained_intermitent_generation_forecast_constraint(
+    market.set_unconstrained_intermittent_generation_forecast_constraint(
         unit_uigf_limit)
 
     regional_demand = demand_inputs.get_operational_demand()

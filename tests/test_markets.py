@@ -50,6 +50,7 @@ def test_one_region_energy_market():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [40.0, 20.0]
     })
@@ -105,6 +106,7 @@ def test_two_region_energy_market():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [60.0, 80.0]
     })
@@ -190,6 +192,7 @@ def test_one_interconnector():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A'],
+        'dispatch_type': ['generator'],
         'service': ['energy'],
         'dispatch': [(90.0 / 0.975) + (90.0 / 0.975) * 0.025]
     })
@@ -288,6 +291,7 @@ def test_one_region_energy_and_raise_regulation_markets():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B', 'B'],
+        'dispatch_type': ['generator', 'generator', 'generator'],
         'service': ['energy', 'energy', 'raise_reg'],
         'dispatch': [40.0, 60.0, 10.0]
     })
@@ -387,6 +391,7 @@ def test_raise_6s_and_raise_reg():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'A', 'B', 'B', 'B'],
+        'dispatch_type': ['generator', 'generator', 'generator', 'generator', 'generator'],
         'service': ['energy', 'raise_6s', 'energy', 'raise_6s', 'raise_reg'],
         'dispatch': [100.0, 5.0, 95.0, 5.0, 10.0]
     })
@@ -486,6 +491,7 @@ def test_raise_1s_and_raise_reg():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'A', 'B', 'B', 'B'],
+        'dispatch_type': ['generator', 'generator', 'generator', 'generator', 'generator'],
         'service': ['energy', 'raise_1s', 'energy', 'raise_1s', 'raise_reg'],
         'dispatch': [100.0, 5.0, 95.0, 5.0, 10.0]
     })
@@ -585,6 +591,7 @@ def test_lower_1s_and_lower_reg():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'A', 'B', 'B', 'B'],
+        'dispatch_type': ['generator', 'generator', 'generator', 'generator', 'generator'],
         'service': ['energy', 'lower_1s', 'energy', 'lower_1s', 'lower_reg'],
         'dispatch': [100.0, 0.0, 95.0, 10.0, 10.0]
     })
@@ -677,6 +684,7 @@ def test_two_region_energy_market_with_regional_generic_constraints():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [65.0, 75.0]
     })
@@ -755,6 +763,7 @@ def test_two_region_energy_market_with_unit_generic_constraints():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [65.0, 75.0]
     })
@@ -832,6 +841,7 @@ def test_two_region_energy_market_with_interconnector_generic_constraints():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [70.0, 70.0]
     })
@@ -902,6 +912,7 @@ def test_use_unit_generic_constraints_to_exclude_unit_from_providing_raise_reg()
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'A', 'B', 'B', 'B'],
+        'dispatch_type': ['generator', 'generator', 'generator', 'generator', 'generator'],
         'service': ['energy', 'raise_6s', 'energy', 'raise_6s', 'raise_reg'],
         'dispatch': [100.0, 10.0, 95.0, 0.0, 10.0]
     })
@@ -975,6 +986,7 @@ def test_one_region_energy_market_with_elastic_unit_generic_constraints():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [65.0, 15.0]
     })
@@ -1031,6 +1043,7 @@ def test_setting_constraint_on_unit_with_no_bid_volume_doesnt_raise_error():
 
     expected_dispatch = pd.DataFrame({
         'unit': ['A', 'B'],
+        'dispatch_type': ['generator', 'generator'],
         'service': ['energy', 'energy'],
         'dispatch': [40.0, 80.0]
     })
