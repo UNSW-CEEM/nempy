@@ -263,7 +263,7 @@ class DBManager:
 
     def populate(self, start_year, start_month, end_year, end_month, verbose=True):
 
-        # self.create_tables()
+        self.create_tables()
 
         if start_month == 1:
             start_year -= 1
@@ -297,7 +297,6 @@ class DBManager:
         self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
         self.LOSSFACTORMODEL.set_data(year=end_year, month=end_month)
         self.LOSSMODEL.set_data(year=end_year, month=end_month)
-        self.DUDETAILSUMMARY.create_table_in_sqlite_db()
         self.DUDETAILSUMMARY.set_data(year=end_year, month=end_month)
         self.INTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
         self.GENCONDATA.set_data(year=end_year, month=end_month)
@@ -305,9 +304,7 @@ class DBManager:
         self.SPDREGIONCONSTRAINT.set_data(year=end_year, month=end_month)
         self.SPDINTERCONNECTORCONSTRAINT.set_data(year=end_year, month=end_month)
         self.INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.MNSP_INTERCONNECTOR.create_table_in_sqlite_db()
         self.MNSP_INTERCONNECTOR.set_data(year=end_year, month=end_month)
-        self.DUDETAIL.create_table_in_sqlite_db()
         self.DUDETAIL.set_data(year=end_year, month=end_month)
 
 
@@ -435,9 +432,6 @@ class _MMSTable:
         self.table_name = table_name
         self.table_columns = table_columns
         self.table_primary_keys = table_primary_keys
-        # url that sub classes will use to pull MMS tables from nemweb.
-        self.url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' + \
-                   'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip'
         self.columns_types = {
             'INTERVAL_DATETIME': 'TEXT', 'DUID': 'TEXT', 'BIDTYPE': 'TEXT', 'BANDAVAIL1': 'REAL', 'BANDAVAIL2': 'REAL',
             'BANDAVAIL3': 'REAL', 'BANDAVAIL4': 'REAL', 'BANDAVAIL5': 'REAL', 'BANDAVAIL6': 'REAL',
@@ -474,6 +468,17 @@ class _MMSTable:
             'FROMREGION': 'TEXT', 'TOREGION': 'TEXT', 'REGISTEREDCAPACITY': 'REAL', 'LHSFACTOR': 'FACTOR',
             'ROP': 'REAL', 'SECONDARY_TLF': 'REAL'
         }
+
+    def get_url(self, year, month):
+        if int(year) > 2024 or (int(year) == 2024 and int(month) >= 8):
+            url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' + \
+                   'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_ARCHIVE#{table}#FILE01#{year}{month}010000.zip'
+            url = url.replace('#', '%23')
+        else:
+            url = 'http://nemweb.com.au/Data_Archive/Wholesale_Electricity/MMSDM/{year}/MMSDM_{year}_{month}/' + \
+                   'MMSDM_Historical_Data_SQLLoader/DATA/PUBLIC_DVD_{table}_{year}{month}010000.zip'
+
+        return url
 
     def create_table_in_sqlite_db(self):
         """Creates a table in the sqlite database that the object has a connection to.
@@ -607,7 +612,8 @@ class _SingleDataSource(_MMSTable):
         ------
         None
         """
-        data = _download_to_df(self.url, self.table_name, year, month)
+        url = self.get_url(year, month)
+        data = _download_to_df(url, self.table_name, year, month)
         cols_to_add = [col for col in self.table_columns if col not in data.columns]
         data.loc[:, cols_to_add] = np.nan
         data = data.loc[:, self.table_columns]
@@ -687,7 +693,8 @@ class _MultiDataSource(_MMSTable):
         ------
         None
         """
-        data = _download_to_df(self.url, self.table_name, year, month)
+        url = self.get_url(year, month)
+        data = _download_to_df(url, self.table_name, year, month)
         if 'INTERVENTION' in data.columns:
             data = data[data['INTERVENTION'] == 0]
         columns = [col for col in self.table_columns if col in data.columns]
@@ -775,7 +782,8 @@ class _AllHistDataSource(_MMSTable):
                 if y == year and m > month:
                     continue
                 try:
-                    data = _download_to_df(self.url, self.table_name, y, m)
+                    url = self.get_url(y, m)
+                    data = _download_to_df(url, self.table_name, y, m)
                     if not set(self.table_columns) < set(data.columns):
                         continue
                     data = data.loc[:, self.table_columns]
