@@ -12,7 +12,7 @@ from nempy import markets
 from nempy.historical_inputs import loaders, mms_db, \
     xml_cache, units, demand, interconnectors, constraints
 
-con = sqlite3.connect('D:/nempy_2024_07/historical_mms.db')
+con = sqlite3.connect('D:/nempy_2024_07/historical_mms_new.db')
 mms_db_manager = mms_db.DBManager(connection=con)
 
 xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2024_07/xml_cache')
@@ -38,7 +38,7 @@ raw_inputs_loader = loaders.RawInputsLoader(
 # A list of intervals we want to recreate historical dispatch for.
 def get_test_intervals(number=100):
     start_time = datetime(year=2024, month=7, day=1, hour=0, minute=0)
-    end_time = datetime(year=2024, month=8, day=1, hour=0, minute=0)
+    end_time = datetime(year=2025, month=1, day=1, hour=0, minute=0)
     difference = end_time - start_time
     difference_in_5_min_intervals = difference.days * 12 * 24
     random.seed(1)
@@ -52,7 +52,7 @@ def get_test_intervals(number=100):
 outputs = []
 c = 0
 # Create and dispatch the spot market for each dispatch interval.
-for interval in get_test_intervals(number=100):
+for interval in get_test_intervals(number=1000):
 
     c += 1
     print(str(c) + ' ' + str(interval))
@@ -183,6 +183,11 @@ for interval in get_test_intervals(number=100):
 
     # Save prices from this interval
     prices = market.get_energy_prices()
+
+    prices = pd.merge(
+        prices, regional_demand, on='region'
+    )
+
     prices['time'] = interval
 
     # Getting historical prices for comparison. Note, ROP price, which is
@@ -194,8 +199,10 @@ for interval in get_test_intervals(number=100):
                       left_on=['time', 'region'],
                       right_on=['SETTLEMENTDATE', 'REGIONID'])
 
+
+
     outputs.append(
-        prices.loc[:, ['time', 'region', 'price', 'ROP']])
+        prices.loc[:, ['time', 'region', 'price', 'ROP', 'demand']])
 
 con.close()
 
@@ -203,7 +210,7 @@ outputs = pd.concat(outputs)
 
 outputs['error'] = outputs['price'] - outputs['ROP']
 
-outputs.to_csv("bdu_prices.csv")
+outputs.to_csv("bdu_prices_1000.csv")
 
 print('\n Summary of error in energy price volume weighted average price. \n'
       'Comparison is against ROP, the price prior to \n'

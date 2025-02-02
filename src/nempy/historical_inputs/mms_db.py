@@ -1096,8 +1096,7 @@ class InputsStartAndEnd(_SingleDataSource):
         -------
         pd.DataFrame
         """
-
-        query = "Select * from {table} where START_DATE <= '{datetime}' and END_DATE >= '{datetime}'"
+        query = "Select * from {table} where START_DATE <= '{datetime}'"
         query = query.format(table=self.table_name, datetime=date_time)
         data = pd.read_sql_query(query, con=self.con)
         data = data.sort_values('START_DATE')

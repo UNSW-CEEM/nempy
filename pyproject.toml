@@ -36,4 +36,10 @@ addopts = "-ra --doctest-modules"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[dependency-groups]
+dev = [
+    "kaleido==0.2.0",
+    "plotly>=6.0.0",
+]
+
 
