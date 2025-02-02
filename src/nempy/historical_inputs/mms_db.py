@@ -1080,7 +1080,7 @@ class InputsStartAndEnd(_SingleDataSource):
 
         >>> print(table.get_data(date_time='2019/01/02 00:12:00'))
           DUID           START_DATE             END_DATE  INITIALMW
-        0    A  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
+        1    A  2019/01/02 00:00:00  2019/01/03 00:00:00        2.0
 
         Clean up by closing the database and deleting if its no longer needed.
 
