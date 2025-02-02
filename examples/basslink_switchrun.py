@@ -20,7 +20,7 @@ xml_cache_manager = xml_cache.XMLCacheManager('D:/nempy_2024_07/xml_cache')
 
 # The second time this example is run on a machine this flag can
 # be set to false to save downloading the data again.
-download_inputs = False
+download_inputs = True
 
 if download_inputs:
     # This requires approximately 4 GB of storage.
