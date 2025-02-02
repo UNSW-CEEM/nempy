@@ -60,12 +60,12 @@ class DBManager:
     Data for a specific 5 min dispatch interval can then be retrieved.
 
     >>> print(historical.DUDETAILSUMMARY.get_data('2020/01/10 12:35:00').head())
-           DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR SCHEDULE_TYPE SECONDARY_TLF
-    0    AGLHAL  2019/07/01 00:00:00  2020/01/20 00:00:00    GENERATOR             SHPS1      SA1                  0.9748                     1.0     SCHEDULED          None
-    338  RT_SA6  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART6      SA1                  1.0000                     1.0     SCHEDULED          None
-    337  RT_SA5  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART5      SA1                  1.0000                     1.0     SCHEDULED          None
-    336  RT_SA4  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART4      SA1                  1.0000                     1.0     SCHEDULED          None
-    335  RT_SA3  2019/07/01 00:00:00  2999/12/31 00:00:00         LOAD             SART3      SA1                  1.0000                     1.0     SCHEDULED          None
+             DUID           START_DATE             END_DATE DISPATCHTYPE CONNECTIONPOINTID REGIONID  TRANSMISSIONLOSSFACTOR  DISTRIBUTIONLOSSFACTOR SCHEDULE_TYPE SECONDARY_TLF
+    5628  PLAYFB2  1998/10/25 00:00:00  1999/05/26 00:00:00    GENERATOR             SPSD2      SA1                  0.9580                     1.0     SCHEDULED          None
+    5629  PLAYFB3  1998/10/25 00:00:00  1999/05/26 00:00:00    GENERATOR             SPSD3      SA1                  0.9580                     1.0     SCHEDULED          None
+    5627  PLAYFB1  1998/10/25 00:00:00  1999/05/26 00:00:00    GENERATOR             SPSD1      SA1                  0.9580                     1.0     SCHEDULED          None
+    5630  PLAYFB4  1998/10/25 00:00:00  1999/05/26 00:00:00    GENERATOR             SPSD4      SA1                  0.9580                     1.0     SCHEDULED          None
+    1380  CLOVER1  1999/07/01 00:00:00  1999/10/14 00:00:00    GENERATOR             VMBT1     VIC1                  1.0244                     1.0     SCHEDULED          None
 
     Clean up by deleting database created.
 
