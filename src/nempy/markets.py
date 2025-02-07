@@ -13,6 +13,14 @@ pd.set_option('display.width', None)
 class SpotMarket:
     """Class for constructing and dispatching the spot market on an interval basis.
 
+    Note: bidirectional units are defined by including the unit twice in the unit_info
+    input, once with the dispatch type "generator" and once with the type "load". Then
+    energy and FCAS regulation bids (and FCAS trapezium paramters) can be provided for
+    both the generation and the load components of the unit. Note only a single set of
+    bids can be provided for FCAS contigency, these should be given the dispatch_type
+    "generator", but both the load and generator side can contribute to delivery.
+
+
     Examples
     --------
     Define the unit information data needed to initialise the market, in this example all units are in the same
