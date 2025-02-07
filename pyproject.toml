@@ -1,6 +1,6 @@
 [project]
 name = "nempy"
-version = "3.0.1"
+version = "3.0.2"
 description="A flexible tool kit for modelling Australia's National Electricity Market dispatch procedure."
 authors = [
     { name = "nick-gorman", email = "n.gorman305@gmail.com" },
