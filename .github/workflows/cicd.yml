@@ -42,27 +42,29 @@ jobs:
   publish:
     if: github.event_name == 'release' && github.event.action == 'created'
     needs: test
+    name: Upload release to PyPI
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/nempy/
+    permissions:
+      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
     steps:
-      # Checkout the repo so the workflow can access it
+      # Checkout repo
       - name: Checkout
         uses: actions/checkout@v3
-
-      # Install the specified version of poetry
+      # Install uv with cache
       - name: Install the latest version of uv
         uses: astral-sh/setup-uv@v3
         with:
           enable-cache: true
-
+      # Sync dependencies
       - name: Sync dependencies
         run: uv sync
-
+      # Build
       - name: Build
         run: uv build
+      # Publish to PyPI
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
 
-      # Build and publish to PyPI
-      - name: Build and publish # publish tsgen to PyPI
-        env:
-          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          PYPI_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: uv publish -u $PYPI_USERNAME -p $PYPI_PASSWORD
