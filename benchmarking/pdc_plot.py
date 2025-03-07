@@ -79,9 +79,9 @@ fig['layout']['yaxis1']['title'] = ''
 
 fig.update_layout(
     yaxis1_type="log",
-    yaxis1_range=[math.log10(299.0), math.log10(15500.0)],
+    yaxis1_range=[math.log10(299.0), math.log10(17500.0)],
     yaxis1_tickmode='array',
-    yaxis1_tickvals=[300.0, 500.0, 1000, 15500.0],
+    yaxis1_tickvals=[300.0, 500.0, 1000, 17500.0],
     xaxis1_range=[0, 100],
     xaxis1_tickvals=[0, 50, 100],
     xaxis1_showticklabels=True,

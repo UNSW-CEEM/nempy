@@ -5,7 +5,6 @@ from nempy.help_functions import helper_functions as hf
 
 
 def _calculate_composite_ramp_rates(ramp_rates, dispatch_interval, bidirectional_units):
-    duplicates = ramp_rates['unit'].value_counts()
     not_bidirectional_units = ramp_rates[~(ramp_rates['unit'].isin(bidirectional_units))].copy()
     bidirectional_units = ramp_rates[ramp_rates['unit'].isin(bidirectional_units)].copy()
 
@@ -53,6 +52,12 @@ def _calculate_composite_ramp_rates(ramp_rates, dispatch_interval, bidirectional
 
     bidirectional_ramp_down['ramp_down_rate'] = bidirectional_ramp_down.apply(
         lambda row: calc_composite_ramp_down_rate(row.to_dict()), axis=1)
+
+    bidirectional_units = pd.merge(
+        bidirectional_ramp_down.loc[:, ["unit", "ramp_down_rate"]],
+        bidirectional_ramp_up.loc[:, ["unit", "ramp_up_rate", "initial_output"]],
+        on="unit",
+    )
 
     return not_bidirectional_units, bidirectional_units
 
@@ -132,12 +137,24 @@ def _bidirectional_ramp_constraints(ramp_rates, type, next_constraint_id, dispat
     rhs_and_type['service'] = 'energy'
     rhs_and_type = rhs_and_type.loc[:, ['unit', 'service', 'dispatch_type', 'constraint_id', 'type', 'rhs']]
 
-    variable_map = ramp_rates.loc[:, ['unit', 'dispatch_type']]
+    variable_map = ramp_rates.loc[:, ['unit']]
     variable_map['coefficient'] = 1.0
     variable_map = pd.merge(
         variable_map,
         rhs_and_type.loc[:, ['unit', 'service', 'constraint_id']],
         on=['unit']
     )
+
+    variable_map_load = variable_map.copy()
+    variable_map_load["dispatch_type"] = "load"
+
+    variable_map_gen = variable_map.copy()
+    variable_map_gen["dispatch_type"] = "generator"
+
+    variable_map = pd.concat([
+        variable_map_load,
+        variable_map_gen
+    ])
+
     variable_map = variable_map.loc[:, ['constraint_id', 'unit', 'service', 'dispatch_type', 'coefficient']]
     return rhs_and_type, variable_map
