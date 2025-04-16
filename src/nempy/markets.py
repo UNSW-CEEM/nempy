@@ -3167,7 +3167,7 @@ class SpotMarket:
             df = df.iloc[3:, :]
             return df
 
-        vars_to_remove = vars.groupby(['interconnector', 'link'], as_index=False).apply(not_closest_three, include_groups=False)
+        vars_to_remove = vars.groupby(['interconnector', 'link'], as_index=False)[['distance', 'variable_id']].apply(not_closest_three)
         si.disable_variables(vars_to_remove.loc[:, ['variable_id']])
 
     def get_constraint_set_names(self):
