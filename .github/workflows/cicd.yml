@@ -22,7 +22,7 @@ jobs:
         version-constraints:
           - ""
           - "'pandas==1.*' 'numpy==1.*'"
-	exclude:
+        exclude:
           - os: macos-latest
             python-version: '3.13'
             version-constraints: "'pandas==1.*' 'numpy==1.*'"
