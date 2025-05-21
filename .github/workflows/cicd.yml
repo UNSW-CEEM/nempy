@@ -30,10 +30,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
@@ -61,10 +61,10 @@ jobs:
     steps:
       # Checkout repo
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       # Install uv with cache
       - name: Install the latest version of uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
       # Sync dependencies
