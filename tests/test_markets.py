@@ -55,8 +55,14 @@ def test_one_region_energy_market():
         'dispatch': [40.0, 20.0]
     })
 
+    expected_region_dispatch_summary = pd.DataFrame({
+        'region': ['NSW'],
+        'dispatch': [60.0],
+    })
+
     assert_frame_equal(market.get_energy_prices(), expected_prices)
     assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
+    assert_frame_equal(market.get_region_dispatch_summary(), expected_region_dispatch_summary)
 
 
 def test_two_region_energy_market():
@@ -111,8 +117,14 @@ def test_two_region_energy_market():
         'dispatch': [60.0, 80.0]
     })
 
+    expected_region_dispatch_summary = pd.DataFrame({
+        'region': ['NSW', 'VIC'],
+        'dispatch': [60.0, 80.0],
+    })
+
     assert_frame_equal(market.get_energy_prices(), expected_prices)
     assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
+    assert_frame_equal(market.get_region_dispatch_summary(), expected_region_dispatch_summary)
 
 
 def test_one_interconnector():
@@ -204,9 +216,18 @@ def test_one_interconnector():
         'losses': [(90.0/0.975) * 0.05]
     })
 
+    expected_region_dispatch_summary = pd.DataFrame({
+        'region': ['NSW', 'VIC'],
+        'dispatch': [94.615385, 0.0],
+        'inflow': [-92.307692, 92.307692],
+        'transmission_losses': [0.0, 0.0],
+        'interconnector_losses': [2.307692, 2.307692],
+    })
+
     assert_frame_equal(market.get_energy_prices(), expected_prices)
     assert_frame_equal(market.get_unit_dispatch(), expected_dispatch)
     assert_frame_equal(market.get_interconnector_flows(), expected_interconnector_flow)
+    assert_frame_equal(market.get_region_dispatch_summary(), expected_region_dispatch_summary)
 
 
 def test_one_region_energy_and_raise_regulation_markets():

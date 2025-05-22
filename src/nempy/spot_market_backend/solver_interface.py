@@ -114,26 +114,24 @@ class InterfaceToSolver:
 
         """
 
-        # Function that adds sets to mip model.
-        def add_sos_vars(sos_group):
-            self.mip_model.add_sos(list(zip(sos_group['vars'], sos_group[position_column])), 2)
-
         # For each variable_id get the variable object from the mip model
         sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: self.variables[x])
+
         # Break up the sets based on their id and add them to the model separately.
-        sos_variables.groupby(sos_id_columns).apply(add_sos_vars, include_groups=False)
+        for _, sos_group in sos_variables.groupby(sos_id_columns):
+            self.mip_model.add_sos(list(zip(sos_group['vars'], sos_group[position_column])), 2)
+
         # This is a hack to make sure mip knows there are binary constraints.
         self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
     def add_sos_type_1(self, sos_variables):
-        # Function that adds sets to mip model.
-        def add_sos_vars(sos_group):
-            self.mip_model.add_sos(list(zip(sos_group['vars'], [1.0 for i in range(len(sos_variables['vars']))])), 1)
-
         # For each variable_id get the variable object from the mip model
         sos_variables['vars'] = sos_variables['variable_id'].apply(lambda x: self.variables[x])
+
         # Break up the sets based on their id and add them to the model separately.
-        sos_variables.groupby('sos_id').apply(add_sos_vars)
+        for _, sos_group in sos_variables.groupby('sos_id'):
+            self.mip_model.add_sos(list(zip(sos_group['vars'], [1.0 for i in range(len(sos_variables['vars']))])), 1)
+
         # This is a hack to make mip knows there are binary constraints.
         self.mip_model.add_var(var_type=BINARY, obj=0.0)
 
