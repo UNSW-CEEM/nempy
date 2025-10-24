@@ -339,7 +339,7 @@ class SpotMarket:
 
         >>> market.set_unit_price_bids(price_bids)
 
-        The variable assocaited with each bid should now have a cost.
+        The variable associated with each bid should now have a cost.
 
         >>> print(market._objective_function_components['bids'])
            variable_id unit service dispatch_type capacity_band   cost
@@ -496,7 +496,7 @@ class SpotMarket:
             =============  ======================================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -611,7 +611,7 @@ class SpotMarket:
             ========  ================================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -801,7 +801,7 @@ class SpotMarket:
             'fast_start_first_run', or 'fast_start_second_run'.
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1000,7 +1000,7 @@ class SpotMarket:
             ================  ==========================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1115,7 +1115,7 @@ class SpotMarket:
             ========  ================================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1220,7 +1220,7 @@ class SpotMarket:
             ========   ===============================================
 
         violation_cost : float | pd.DataFrame
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1318,7 +1318,7 @@ class SpotMarket:
             ================   =======================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1483,7 +1483,7 @@ class SpotMarket:
             'fast_start_first_run', or 'fast_start_second_run'.
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1697,7 +1697,7 @@ class SpotMarket:
             ================   =======================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -1833,7 +1833,7 @@ class SpotMarket:
             ================   =======================================
 
         violation_cost : float
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------
@@ -2334,7 +2334,7 @@ class SpotMarket:
             =============  ===========================================
 
         violation_cost : float | pd.DataFrame
-            Makes assocaited constrainst elastic using the given violation_cost (in $/MW).
+            Makes associated constraints elastic using the given violation_cost (in $/MW).
 
         Returns
         -------

@@ -14,7 +14,7 @@ def capacity(unit_limits, next_constraint_id, bidirectional_units):
     Examples
     --------
 
-    >>> import pandas
+    >>> import pandas as pd
 
     Defined the unit capacities.
 
@@ -108,7 +108,7 @@ def uigf(unit_limits, next_constraint_id):
     Examples
     --------
 
-    >>> import pandas
+    >>> import pandas as pd
 
     Defined the unit capacities.
 
@@ -192,7 +192,7 @@ def ramp_up(unit_limits, next_constraint_id, dispatch_interval):
     Examples
     --------
 
-    >>> import pandas
+    >>> import pandas as pd
 
     Defined the unit capacities.
 
@@ -280,7 +280,7 @@ def ramp_down(unit_limits, next_constraint_id, dispatch_interval):
     Examples
     --------
 
-    >>> import pandas
+    >>> import pandas as pd
 
     Defined the unit capacities.
 
@@ -367,7 +367,7 @@ def fcas_max_availability(fcas_availability, next_constraint_id):
     Examples
     --------
 
-    >>> import pandas
+    >>> import pandas as pd
 
     Defined the unit fcas availability.
 
