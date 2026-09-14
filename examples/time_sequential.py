@@ -72,11 +72,11 @@ for interval in dispatch_intervals:
     violation_cost = \
         constraint_inputs.get_constraint_violation_prices()['unit_capacity']
     unit_bid_limit = unit_inputs.get_unit_bid_availability()
-    market.set_unit_bid_capacity_constraints(unit_bid_limit, violation_cost)
+    market.set_unit_bid_capacity_constraints(unit_bid_limit, violation_cost=violation_cost)
 
     unit_uigf_limit = unit_inputs.get_unit_uigf_limits()
     market.set_unconstrained_intermittent_generation_forecast_constraint(
-        unit_uigf_limit, violation_cost)
+        unit_uigf_limit, violation_cost=violation_cost)
 
     ramp_rates = unit_inputs.get_bid_ramp_rates()
 
@@ -93,7 +93,7 @@ for interval in dispatch_intervals:
         ramp_rates = time_sequential.construct_ramp_rate_parameters(
             unit_dispatch, ramp_rates)
 
-    market.set_unit_ramp_rate_constraints(ramp_rates, violation_cost)
+    market.set_unit_ramp_rate_constraints(ramp_rates, violation_cost=violation_cost)
 
     regional_demand = demand_inputs.get_operational_demand()
     market.set_demand_constraints(regional_demand)
