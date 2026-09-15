@@ -380,9 +380,10 @@ wheels = [
 
 [[package]]
 name = "nempy"
-version = "3.0.1"
+version = "3.0.3"
 source = { editable = "." }
 dependencies = [
+    { name = "cffi", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
     { name = "mip" },
     { name = "pandas" },
     { name = "requests" },
@@ -401,8 +402,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cffi", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", specifier = ">=1.17.1,<2" },
     { name = "mip", specifier = "==1.16rc0" },
-    { name = "pandas", specifier = ">=2.2.2" },
+    { name = "pandas", specifier = ">=1.5" },
     { name = "requests", specifier = ">=2.0.0" },
     { name = "xmltodict", specifier = "==0.12.0" },
 ]

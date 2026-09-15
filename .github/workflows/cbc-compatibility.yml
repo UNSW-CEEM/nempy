@@ -1,0 +1,49 @@
+name: CBC dependency compatibility
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  installed-wheel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python: '3.9'
+            data_dependencies: 'pandas==1.5.3 numpy==1.24.4'
+          - python: '3.12'
+            data_dependencies: 'pandas==3.0.5 numpy==2.5.3'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Build and install the wheel in a fresh environment
+        run: |
+          python -m pip install build
+          python -m build --wheel
+          python -m venv "$RUNNER_TEMP/installed-env"
+          "$RUNNER_TEMP/installed-env/bin/pip" install dist/*.whl pytest ${{ matrix.data_dependencies }}
+          "$RUNNER_TEMP/installed-env/bin/pip" check
+          "$RUNNER_TEMP/installed-env/bin/pip" freeze
+      - name: Exercise the existing offline solver and market tests outside the checkout
+        run: |
+          mkdir "$RUNNER_TEMP/installed-tests"
+          cp tests/test_markets.py tests/test_solver_interface.py \
+             tests/test_variable_ids.py tests/test_unit_constraints.py \
+             tests/test_market_constraints.py tests/test_objective_function.py \
+             tests/test_interconnector_loss_functions.py tests/test_rpn_calc.py \
+             "$RUNNER_TEMP/installed-tests/"
+          cd "$RUNNER_TEMP/installed-tests"
+          "$RUNNER_TEMP/installed-env/bin/python" -I -c 'import nempy; assert "site-packages" in nempy.__file__, nempy.__file__'
+          "$RUNNER_TEMP/installed-env/bin/python" -I -m pytest -q \
+            --junitxml="$RUNNER_TEMP/cbc-compatibility.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cbc-compatibility-python-${{ matrix.python }}
+          path: ${{ runner.temp }}/cbc-compatibility.xml

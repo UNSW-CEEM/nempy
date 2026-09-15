@@ -7,6 +7,8 @@ authors = [
 ]
 dependencies = [
     "mip==1.16rc0",
+    # mip's bundled Linux x86-64 CBC crashes on SOS2 models with CFFI 2.x.
+    "cffi>=1.17.1,<2; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "pandas>=1.5",
     "xmltodict==0.12.0",
     "requests>=2.0.0",
@@ -41,5 +43,4 @@ dev = [
     "kaleido==0.2.0",
     "plotly>=6.0.0",
 ]
-
 
