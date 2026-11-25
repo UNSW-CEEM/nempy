@@ -1535,6 +1535,9 @@ class SpotMarket:
         ramp_up_rates_for_raise_reg = \
             ramp_up_rates_for_raise_reg.loc[:, ['unit', 'dispatch_type', 'service', 'ramp_up_rate', 'initial_output']]
         ramp_up_rates_for_raise_reg = ramp_up_rates_for_raise_reg.rename(columns={'ramp_up_rate': 'ramp_rate'})
+        # filter out units without ramp rates to avoid nans in constraints
+        ramp_up_rates_for_raise_reg = \
+            ramp_up_rates_for_raise_reg.loc[~ramp_up_rates_for_raise_reg.ramp_rate.isna()]
 
         ramp_up_rates_for_raise_reg_bdu = ramp_up_rates_for_raise_reg[
             ramp_up_rates_for_raise_reg['unit'].isin(self._bidirectional_units)]
@@ -1550,8 +1553,6 @@ class SpotMarket:
             self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
         if not ramp_up_rates_for_raise_reg_bdu.empty:
-            ramp_up_rates_for_raise_reg_bdu = \
-                ramp_up_rates_for_raise_reg_bdu[~ramp_up_rates_for_raise_reg_bdu.isna()]
             rhs_and_type, variable_map = \
                 fcas_constraints.joint_ramping_constraints_raise_reg_bdu(
                     ramp_up_rates_for_raise_reg_bdu, self.dispatch_interval, self._next_constraint_id)
@@ -1568,6 +1569,9 @@ class SpotMarket:
         ramp_down_rates_for_lower_reg = \
             ramp_down_rates_for_lower_reg.loc[:, ['unit', 'dispatch_type', 'service', 'ramp_down_rate', 'initial_output']]
         ramp_down_rates_for_lower_reg = ramp_down_rates_for_lower_reg.rename(columns={'ramp_down_rate': 'ramp_rate'})
+        # filter out units without ramp rates to avoid nans in constraints
+        ramp_down_rates_for_lower_reg = \
+            ramp_down_rates_for_lower_reg.loc[~ramp_down_rates_for_lower_reg.ramp_rate.isna()]
 
         ramp_down_rates_for_lower_reg_bdu = ramp_down_rates_for_lower_reg[
             ramp_down_rates_for_lower_reg['unit'].isin(self._bidirectional_units)]
@@ -1583,8 +1587,6 @@ class SpotMarket:
             self._next_constraint_id = max(rhs_and_type['constraint_id']) + 1
 
         if not ramp_down_rates_for_lower_reg_bdu.empty:
-            ramp_down_rates_for_lower_reg_bdu = \
-                ramp_down_rates_for_lower_reg_bdu[~ramp_down_rates_for_lower_reg_bdu.isna()]
             rhs_and_type, variable_map = \
                 fcas_constraints.joint_ramping_constraints_lower_reg_bdu(
                     ramp_down_rates_for_lower_reg_bdu, self.dispatch_interval, self._next_constraint_id)
