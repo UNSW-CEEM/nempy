@@ -2,6 +2,11 @@ import numpy as np
 import pandas as pd
 from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, CBC, GUROBI, LP_Method
 
+MAX_MIP_GAP = 0.0
+MAX_MIP_GAP_ABS = 1e-10
+OPT_TOL = 1e-8
+VERBOSE = 0
+
 
 class InterfaceToSolver:
     """A wrapper for the mip model class, allows interaction with mip using pd.DataFrames."""
@@ -20,14 +25,19 @@ class InterfaceToSolver:
         else:
             raise ValueError("Solver '{}' not recognised.")
 
-        self.mip_model.verbose = 0
-        self.mip_model.solver.set_mip_gap_abs(1e-10)
-        self.mip_model.solver.set_mip_gap(1e-20)
+        self.mip_model.verbose = VERBOSE
+        # Set on the model, not through solver.set_mip_gap() as python-mip reapplies
+        # these attributes inside optimize(), overwriting anything set on the CBC
+        # model directly (and its relative-gap default of 1e-4 would reduce accuracy)
+        self.mip_model.max_mip_gap = MAX_MIP_GAP
+        self.mip_model.max_mip_gap_abs = MAX_MIP_GAP_ABS
+        self.mip_model.opt_tol = OPT_TOL
         self.mip_model.lp_method = LP_Method.DUAL
 
-        self.linear_mip_model.verbose = 0
-        self.linear_mip_model.solver.set_mip_gap_abs(1e-10)
-        self.linear_mip_model.solver.set_mip_gap(1e-20)
+        self.linear_mip_model.verbose = VERBOSE
+        self.linear_mip_model.max_mip_gap = MAX_MIP_GAP
+        self.linear_mip_model.max_mip_gap_abs = MAX_MIP_GAP_ABS
+        self.linear_mip_model.opt_tol = OPT_TOL
         self.linear_mip_model.lp_method = LP_Method.DUAL
 
     def add_variables(self, decision_variables):
