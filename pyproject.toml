@@ -5,8 +5,16 @@ description="A flexible tool kit for modelling Australia's National Electricity 
 authors = [
     { name = "nick-gorman", email = "n.gorman305@gmail.com" },
 ]
+maintainers = [
+    { name = "Gabe Hackebeil", email = "ghackebeil@tesla.com" },
+    { name = "Alex Yee", email = "aleyee@tesla.com" },
+    { name = "Rahul Khandur", email = "rkhandurbhanuprakash@tesla.com" },
+]
 dependencies = [
-    "mip==1.16rc0",
+    # Split at 3.10 because that is mip 1.17's floor, not 1.16rc0's ceiling
+    # (requires-python <3.13). 1.16rc0's CBC aborts on 3.11+, so 3.10+ takes 1.17.
+    "mip==1.16rc0; python_version < '3.10'",
+    "mip>=1.17,<2; python_version >= '3.10'",
     "pandas>=1.5",
     "xmltodict==0.12.0",
     "requests>=2.0.0",
