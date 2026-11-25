@@ -28,10 +28,22 @@ dev-dependencies = [
 ]
 
 [tool.pytest.ini_options]
-# path to tests for pytest
+# Paths collected by a bare `pytest`. `src` is required for the doctests, which
+# carry a large share of the suite.
 testpaths = ["src", "tests"]
-# addopts = add options
-addopts = "-ra --doctest-modules"
+addopts = [
+    "-ra",
+    "--doctest-modules",
+    # Require a locally built MMSDM database and NEMDE XML cache at hardcoded
+    # Windows paths (D:/nempy_2024_07/...), so they cannot run here.
+    "--ignore=tests/test_historical.py",
+    "--ignore=tests/test_historical_2021.py",
+    # Scripts, not tests.
+    "--ignore=tests/get_violation_times.py",
+    "--ignore=tests/build_historical_test_data_cache_and_db.py",
+    # Data fixtures.
+    "--ignore=tests/test_files",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

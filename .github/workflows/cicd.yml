@@ -61,8 +61,10 @@ jobs:
         run: |
           uv pip install ${{ matrix.version-constraints }} --reinstall --strict
 
+      # --no-sync keeps the constrained install from the previous step; a plain
+      # `uv run` re-syncs from pyproject.toml and reverts it.
       - name: Run tests
-        run: uv run --frozen pytest tests src -ra --doctest-modules
+        run: uv run --no-sync pytest tests src -ra --doctest-modules
 
   publish:
     if: github.event_name == 'release' && github.event.action == 'created'
