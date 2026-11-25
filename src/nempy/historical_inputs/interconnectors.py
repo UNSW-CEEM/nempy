@@ -71,7 +71,7 @@ class InterconnectorData:
         #
         # While Basslink was an MNSP its from region loss share was not properly defined in the AEMO
         # data sources, so to best replicate NEMDE outcomes it is set to one - but only for the MNSP
-        # period. From 2026-07-01, once Basslink is regulated, the AEMO data value is used with no
+        # period. From 2026-07-01, Basslink is regulated and nempy uses the AEMO data value with no
         # override, exactly as for every other regulated interconnector.
         self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'] = \
             np.where((self.INTERCONNECTORCONSTRAINT['INTERCONNECTORID'] == 'T-V-MNSP1') &
@@ -272,7 +272,7 @@ class InterconnectorData:
 
         market_interconnectors = self._get_market_interconnector_links()
 
-        # empty after July 1st, 2026
+        # should be empty after 1 July, 2026
         if not market_interconnectors.empty:
             interconnectors = pd.concat([regulated_interconnectors, market_interconnectors])
         else:
@@ -287,7 +287,8 @@ class InterconnectorData:
         MNSP_INTERCONNECTOR = self.raw_input_loader.get_market_interconnectors()
         mnsp_transmission_loss_factors = _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
                                                                                 self.INTERCONNECTORCONSTRAINT)
-        # empty after July 1st, 2026
+
+        # should be empty after 1 July, 2026
         if mnsp_bids.empty:
             return mnsp_transmission_loss_factors
         mnsp_transmission_loss_factors = \
