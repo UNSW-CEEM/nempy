@@ -3515,10 +3515,15 @@ class SpotMarket:
 
         Now the region dispatch summary can be retreived.
 
-        >>> print(market.get_region_dispatch_summary())
-          region   dispatch     inflow  transmission_losses  interconnector_losses
-        0    NSW  94.615385 -92.307692                  0.0               2.307692
-        1    VIC   0.000000  92.307692                  0.0               2.307692
+        The values are rounded because they come from the solver. There appears to be a degenerate
+        optimum, and CBC picks between equally good vertices differently across platforms and runner
+        images. The difference is around 1e-6, so four decimal places still detect a real change in
+        behaviour without the test depending on which machine ran it.
+
+        >>> print(market.get_region_dispatch_summary().round(4))
+          region  dispatch   inflow  transmission_losses  interconnector_losses
+        0    NSW   94.6154 -92.3077                  0.0                 2.3077
+        1    VIC    0.0000  92.3077                  0.0                 2.3077
 
         Returns
         -------
