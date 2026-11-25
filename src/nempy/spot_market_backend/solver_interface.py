@@ -3,8 +3,11 @@ import pandas as pd
 from mip import Model, xsum, minimize, CONTINUOUS, OptimizationStatus, BINARY, CBC, GUROBI, LP_Method
 
 MAX_MIP_GAP = 0.0
-MAX_MIP_GAP_ABS = 1e-10
+# The objective is of order 1e9, so a smaller absolute gap is below its floating point resolution.
+MAX_MIP_GAP_ABS = 1e-6
 OPT_TOL = 1e-8
+# Primal feasibility tolerance, in MW, so far finer than any dispatch target.
+INFEAS_TOL = 1e-7
 VERBOSE = 0
 
 
@@ -32,13 +35,22 @@ class InterfaceToSolver:
         self.mip_model.max_mip_gap = MAX_MIP_GAP
         self.mip_model.max_mip_gap_abs = MAX_MIP_GAP_ABS
         self.mip_model.opt_tol = OPT_TOL
+        self.mip_model.infeas_tol = INFEAS_TOL
         self.mip_model.lp_method = LP_Method.DUAL
 
         self.linear_mip_model.verbose = VERBOSE
         self.linear_mip_model.max_mip_gap = MAX_MIP_GAP
         self.linear_mip_model.max_mip_gap_abs = MAX_MIP_GAP_ABS
         self.linear_mip_model.opt_tol = OPT_TOL
+        self.linear_mip_model.infeas_tol = INFEAS_TOL
         self.linear_mip_model.lp_method = LP_Method.DUAL
+
+        if solver_name == 'CBC':
+            from mip.cbc import cbc_set_parameter
+            # lp_method does not reach the root LP of a mip solve, where CBC picks its own method (primal
+            # sprint for the dispatch model) that took several times longer than dual simplex. CBC builds
+            # without this parameter ignore it.
+            cbc_set_parameter(self.mip_model.solver, 'lpMethod', 'dual')
 
     def add_variables(self, decision_variables):
         """Add decision variables to the model.
