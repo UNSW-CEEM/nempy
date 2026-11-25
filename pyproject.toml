@@ -16,7 +16,7 @@ dependencies = [
     "mip==1.16rc0; python_version < '3.10'",
     "mip>=1.17,<2; python_version >= '3.10'",
     "pandas>=1.5",
-    "xmltodict==0.12.0",
+    "xmltodict",
     "requests>=2.0.0",
 ]
 readme = "README.md"
