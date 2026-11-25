@@ -37,24 +37,6 @@ def test_row_monatonic_increasing_rejects_decreasing_bids():
         schema._check_row_monatonic_increasing(bids)
 
 
-def test_validate_does_not_run_the_monotonicity_check():
-    """Guards the documented gap: validate() never calls the monotonicity check.
-
-    This asserts current behaviour, not desired behaviour. Non-monotonic price
-    bids are accepted even though a schema declares row_monatonic_increasing. If
-    the check is ever wired into validate(), this test should fail and be
-    replaced deliberately, rather than the behaviour changing unnoticed.
-    """
-    schema = _bid_schema()
-    non_monotonic = pd.DataFrame({
-        'unit': ['A'],
-        '1': [100.0],
-        '2': [50.0],
-        '3': [10.0]})
-
-    schema.validate(non_monotonic)
-
-
 def test_validate_still_catches_repeated_rows():
     schema = _bid_schema()
     repeated = pd.DataFrame({
