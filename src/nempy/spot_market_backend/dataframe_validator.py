@@ -31,6 +31,13 @@ class DataFrameSchema:
         if self.primary_keys is not None:
             self._check_for_repeated_rows(df)
 
+        # NOTE: _check_row_monatonic_increasing is deliberately NOT called here.
+        # Callers (e.g. SpotMarket._validate_price_bids) pass
+        # row_monatonic_increasing, so the check looks active, but it has never
+        # been invoked and non-monotonic price bids are therefore accepted.
+        # Enabling it is a breaking change for anyone currently submitting such
+        # bids, so it is left off until that is decided deliberately.
+
     def _check_for_repeated_rows(self, df):
         cols_in_df = [col for col in self.primary_keys if col in df.columns]
         if len(df.index) != len(df.drop_duplicates(cols_in_df)):
@@ -42,7 +49,7 @@ class DataFrameSchema:
         df.index = pd.to_numeric(df.index)
         df = df.sort_index()
         for col in df.columns:
-            if not df[col].is_monotonic:
+            if not df[col].is_monotonic_increasing:
                 raise BidsNotMonotonicIncreasing('Bids of each unit are not monotonic increasing.')
 
 

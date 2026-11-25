@@ -55,7 +55,7 @@ def bid_prices_monotonic_increasing(func, arg=1):
         bids.index = pd.to_numeric(bids.index)
         bids = bids.sort_index()
         for col in bids.columns:
-            if not bids[col].is_monotonic:
+            if not bids[col].is_monotonic_increasing:
                 raise BidsNotMonotonicIncreasing('Bids of each unit are not monotonic increasing.')
         func(*args)
 
