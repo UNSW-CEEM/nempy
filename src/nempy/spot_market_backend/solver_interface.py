@@ -47,9 +47,7 @@ class InterfaceToSolver:
 
         if solver_name == 'CBC':
             from mip.cbc import cbc_set_parameter
-            # lp_method does not reach the root LP of a mip solve, where CBC picks its own method (primal
-            # sprint for the dispatch model) that took several times longer than dual simplex. CBC builds
-            # without this parameter ignore it.
+            # dual simplex has empirically been faster than primal simplex
             cbc_set_parameter(self.mip_model.solver, 'lpMethod', 'dual')
 
     def add_variables(self, decision_variables):

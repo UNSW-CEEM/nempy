@@ -11,8 +11,7 @@ maintainers = [
     { name = "Rahul Khandur", email = "rkhandurbhanuprakash@tesla.com" },
 ]
 dependencies = [
-    # Split at 3.10 because that is mip 1.17's floor, not 1.16rc0's ceiling
-    # (requires-python <3.13). 1.16rc0's CBC aborts on 3.11+, so 3.10+ takes 1.17.
+    # mip 1.17 requires Python 3.10+. 1.16rc0's CBC aborts on Python 3.11+.
     "mip==1.16rc0; python_version < '3.10'",
     "mip>=1.17,<2; python_version >= '3.10'",
     "pandas>=1.5",

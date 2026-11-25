@@ -19,7 +19,6 @@ jobs:
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
-        # "" resolves freely -- today that means the newest pandas.
         version-constraints:
           - ""
           - "'pandas==3.*'"
@@ -75,8 +74,7 @@ jobs:
         run: |
           uv pip install ${{ matrix.version-constraints }} --reinstall --strict
 
-      # --no-sync keeps the constrained install from the previous step; a plain
-      # `uv run` re-syncs from pyproject.toml and reverts it.
+      # --no-sync keeps the constrained install from the previous step
       - name: Report resolved versions
         run: uv run --no-sync python -c "import sys, pandas, numpy; print(sys.version); print('pandas', pandas.__version__); print('numpy', numpy.__version__)"
 
