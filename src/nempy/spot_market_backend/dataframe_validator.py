@@ -42,7 +42,7 @@ class DataFrameSchema:
         df.index = pd.to_numeric(df.index)
         df = df.sort_index()
         for col in df.columns:
-            if not df[col].is_monotonic:
+            if not df[col].is_monotonic_increasing:
                 raise BidsNotMonotonicIncreasing('Bids of each unit are not monotonic increasing.')
 
 

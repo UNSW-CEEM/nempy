@@ -18,13 +18,26 @@ jobs:
       fail-fast: true
       matrix:
         os: ["ubuntu-latest", "macos-latest", "windows-latest"]
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14", "3.15"]
         version-constraints:
           - ""
+          - "'pandas==3.*'"
+          - "'pandas==2.*'"
           - "'pandas==1.*' 'numpy==1.*'"
         exclude:
-          # pandas 1.x is not compatible python 3.13
+          # pandas 3 requires Python 3.11+.
+          - python-version: "3.9"
+            version-constraints: "'pandas==3.*'"
+          - python-version: "3.10"
+            version-constraints: "'pandas==3.*'"
+          # pandas 1.5.3 has no 3.12+ wheels and fails to build from source.
+          - python-version: "3.12"
+            version-constraints: "'pandas==1.*' 'numpy==1.*'"
           - python-version: "3.13"
+            version-constraints: "'pandas==1.*' 'numpy==1.*'"
+          - python-version: "3.14"
+            version-constraints: "'pandas==1.*' 'numpy==1.*'"
+          - python-version: "3.15"
             version-constraints: "'pandas==1.*' 'numpy==1.*'"
           # uv run segfaults for windows on python 3.13
           - os: "windows-latest"
@@ -61,8 +74,12 @@ jobs:
         run: |
           uv pip install ${{ matrix.version-constraints }} --reinstall --strict
 
+      # --no-sync keeps the constrained install from the previous step
+      - name: Report resolved versions
+        run: uv run --no-sync python -c "import sys, pandas, numpy; print(sys.version); print('pandas', pandas.__version__); print('numpy', numpy.__version__)"
+
       - name: Run tests
-        run: uv run --frozen pytest tests src -ra --doctest-modules
+        run: uv run --no-sync pytest tests src -ra --doctest-modules
 
   publish:
     if: github.event_name == 'release' && github.event.action == 'created'

@@ -298,7 +298,7 @@ def joint_capacity_constraints(contingency_trapeziums, bidirectional_units, next
     regulation_mapping_lower_slope_load_side_of_bidirectionals = (
         regulation_mapping_lower_slope[regulation_mapping_lower_slope['unit'].isin(bidirectional_units)].copy())
     regulation_mapping_lower_slope_load_side_of_bidirectionals['dispatch_type'] = 'load'
-    regulation_mapping_lower_slope_load_side_of_bidirectionals['coefficient'] = 1.0
+    regulation_mapping_lower_slope_load_side_of_bidirectionals['coefficient'] = -1.0
 
     # Combine type_and_rhs and variable_mapping.
     type_and_rhs = pd.concat([type_and_rhs_upper_slope, type_and_rhs_lower_slope])

@@ -62,11 +62,21 @@ class InterconnectorData:
 
         self.INTERCONNECTORCONSTRAINT = self.raw_input_loader.get_interconnector_constraint_parameters()
 
-        # The from region loss share for Basslink is not properly defined in the AEMO data sources, for nempy to best
-        # replicate NEMDE outcomes the from region loss share is set to one.
+        # Basslink (T-V-MNSP1) transitioned from a market (MNSP) interconnector to a regulated
+        # interconnector on 1 July 2026. AEMO records interconnector type in the effective-dated
+        # INTERCONNECTORCONSTRAINT table (ICTYPE='MNSP' before 2026-07-01, 'REGULATED' from
+        # 2026-07-01), so nempy picks up the correct classification, limits and (subject to the note
+        # below) loss share for the dispatch interval straight from the AEMO data - no type override
+        # is applied.
+        #
+        # While Basslink was an MNSP its from region loss share was not properly defined in the AEMO
+        # data sources, so to best replicate NEMDE outcomes it is set to one - but only for the MNSP
+        # period. From 2026-07-01, Basslink is regulated and nempy uses the AEMO data value with no
+        # override, exactly as for every other regulated interconnector.
         self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'] = \
-            np.where(self.INTERCONNECTORCONSTRAINT['INTERCONNECTORID'] == 'T-V-MNSP1', 1.0,
-                     self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'])
+            np.where((self.INTERCONNECTORCONSTRAINT['INTERCONNECTORID'] == 'T-V-MNSP1') &
+                     (self.INTERCONNECTORCONSTRAINT['ICTYPE'] == 'MNSP'),
+                     1.0, self.INTERCONNECTORCONSTRAINT['FROMREGIONLOSSSHARE'])
 
         self.INTERCONNECTOR = self.raw_input_loader.get_interconnector_definitions()
 
@@ -262,7 +272,11 @@ class InterconnectorData:
 
         market_interconnectors = self._get_market_interconnector_links()
 
-        interconnectors = pd.concat([regulated_interconnectors, market_interconnectors])
+        # should be empty after 1 July, 2026
+        if not market_interconnectors.empty:
+            interconnectors = pd.concat([regulated_interconnectors, market_interconnectors])
+        else:
+            interconnectors = regulated_interconnectors.copy()
 
         interconnectors['generic_constraint_factor'] = interconnectors['generic_constraint_factor'].astype(np.int64)
 
@@ -273,6 +287,10 @@ class InterconnectorData:
         MNSP_INTERCONNECTOR = self.raw_input_loader.get_market_interconnectors()
         mnsp_transmission_loss_factors = _format_mnsp_transmission_loss_factors(MNSP_INTERCONNECTOR,
                                                                                 self.INTERCONNECTORCONSTRAINT)
+
+        # should be empty after 1 July, 2026
+        if mnsp_bids.empty:
+            return mnsp_transmission_loss_factors
         mnsp_transmission_loss_factors = \
             pd.merge(mnsp_transmission_loss_factors, mnsp_bids, on=['interconnector', 'to_region'])
         mnsp_transmission_loss_factors['max'] = np.where(~mnsp_transmission_loss_factors['availability'].isna(),
